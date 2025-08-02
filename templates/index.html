@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fake News Detector</title>
+    <title>Advanced News Analyzer</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <style>
@@ -43,10 +43,10 @@
         <header class="text-center mb-12">
             <h1 class="text-5xl font-bold text-white mb-4">
                 <i class="bi bi-shield-check"></i>
-                Fake News Detector
+                Advanced News Analyzer
             </h1>
             <p class="text-xl text-white opacity-90">
-                AI-powered tool to detect fake news from text or article URLs
+                AI-powered tool for fake news detection and political news classification
             </p>
         </header>
 
@@ -55,34 +55,6 @@
             <div class="flex items-center justify-center">
                 <i class="bi bi-hourglass-split spin text-blue-600 mr-2"></i>
                 <span class="text-gray-700">Checking model status...</span>
-            </div>
-        </div>
-
-        <!-- Feedback Stats -->
-        <div id="feedbackStats" class="hidden glass-effect rounded-xl p-4 mb-8">
-            <h3 class="text-lg font-semibold text-gray-800 mb-3">
-                <i class="bi bi-graph-up-arrow"></i>
-                Model Learning Progress
-            </h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-blue-600" id="totalFeedback">0</div>
-                    <div class="text-sm text-gray-600">Total Feedback</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-green-600" id="usedFeedback">0</div>
-                    <div class="text-sm text-gray-600">Used for Training</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-orange-600" id="pendingFeedback">0</div>
-                    <div class="text-sm text-gray-600">Pending Training</div>
-                </div>
-            </div>
-            <div id="retrainStatus" class="hidden mt-3 p-3 bg-orange-100 border border-orange-300 rounded-lg">
-                <div class="flex items-center text-orange-800">
-                    <i class="bi bi-info-circle mr-2"></i>
-                    <span>Model will retrain automatically when 10 feedback entries are collected.</span>
-                </div>
             </div>
         </div>
 
@@ -102,6 +74,31 @@
                     <button id="urlBtn" class="input-type-btn bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">
                         <i class="bi bi-link-45deg mr-2"></i>
                         Article URL
+                    </button>
+                </div>
+            </div>
+
+            <!-- Analysis Type Selector -->
+            <div class="mb-8">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                    <i class="bi bi-gear"></i>
+                    Choose Analysis Type
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button id="fakeNewsBtn" class="analysis-type-btn bg-red-600 text-white px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500">
+                        <i class="bi bi-shield-exclamation mr-2"></i>
+                        <div>Fake News Detection</div>
+                        <div class="text-sm opacity-80">Detect if news is fake or real</div>
+                    </button>
+                    <button id="politicalBtn" class="analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                        <i class="bi bi-bank mr-2"></i>
+                        <div>Political Classification</div>
+                        <div class="text-sm opacity-80">Classify as political or non-political</div>
+                    </button>
+                    <button id="bothBtn" class="analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                        <i class="bi bi-layers mr-2"></i>
+                        <div>Both Analyses</div>
+                        <div class="text-sm opacity-80">Run both fake news and political analysis</div>
                     </button>
                 </div>
             </div>
@@ -138,17 +135,17 @@
                     <i class="bi bi-link absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 </div>
                 <p class="text-sm text-gray-600 mt-2">
-                    <i class="bi bi-info-circle"></i>
-                    We'll extract the article content automatically
+                    <i class="bi bi-info-circle mr-1"></i>
+                    Enter a news article URL to extract and analyze its content
                 </p>
             </div>
 
             <!-- Analyze Button -->
             <div class="mt-8 text-center">
                 <button 
-                    id="analyzeBtn" 
-                    class="bg-gradient-to-r from-green-500 to-blue-600 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:from-green-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    id="analyzeBtn"
                     disabled
+                    class="bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-8 rounded-lg shadow-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 >
                     <i class="bi bi-search mr-2"></i>
                     Analyze News
@@ -158,8 +155,8 @@
             <!-- Loading Indicator -->
             <div id="loading" class="hidden mt-8 text-center">
                 <div class="inline-flex items-center">
-                    <i class="bi bi-arrow-clockwise spin text-blue-600 text-2xl mr-3"></i>
-                    <span class="text-lg text-gray-700">Analyzing content...</span>
+                    <i class="bi bi-hourglass-split spin text-blue-600 text-2xl mr-3"></i>
+                    <span class="text-gray-700 text-lg">Analyzing content...</span>
                 </div>
             </div>
 
@@ -170,91 +167,114 @@
                     Analysis Results
                 </h3>
                 
-                <!-- Prediction Card -->
-                <div id="predictionCard" class="rounded-xl p-6 mb-6 border-l-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h4 class="text-xl font-semibold mb-2">Prediction</h4>
-                            <p id="predictionText" class="text-2xl font-bold"></p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-sm text-gray-600 mb-1">Confidence</p>
-                            <p id="confidenceText" class="text-xl font-semibold"></p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Feedback Section -->
-                <div id="feedbackSection" class="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-6">
-                    <h4 class="text-lg font-semibold text-blue-800 mb-4">
-                        <i class="bi bi-chat-square-heart"></i>
-                        Help Improve the Model
+                <!-- Fake News Results -->
+                <div id="fakeNewsResults" class="hidden mb-8">
+                    <h4 class="text-xl font-semibold text-gray-800 mb-4">
+                        <i class="bi bi-shield-check"></i>
+                        Fake News Detection
                     </h4>
-                    <p class="text-blue-700 mb-4">
-                        Was this prediction correct? Your feedback helps train the model to be more accurate.
-                    </p>
                     
-                    <div class="flex flex-wrap gap-4 mb-4">
-                        <button id="correctBtn" class="feedback-btn bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors">
-                            <i class="bi bi-check-circle mr-2"></i>
-                            Correct Prediction
-                        </button>
-                        <button id="incorrectBtn" class="feedback-btn bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors">
-                            <i class="bi bi-x-circle mr-2"></i>
-                            Incorrect - It's <span id="oppositeLabel"></span>
-                        </button>
-                    </div>
-                    
-                    <!-- Feedback Form -->
-                    <div id="feedbackForm" class="hidden mt-4">
-                        <textarea id="feedbackComment" placeholder="Optional: Tell us why you think this prediction was wrong..." 
-                                class="w-full p-3 border border-gray-300 rounded-lg resize-none h-20 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                        <div class="flex gap-2 mt-3">
-                            <button id="submitFeedback" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                                <i class="bi bi-send mr-2"></i>
-                                Submit Feedback
-                            </button>
-                            <button id="cancelFeedback" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors">
-                                Cancel
-                            </button>
+                    <!-- Fake News Prediction Card -->
+                    <div id="fakeNewsPredictionCard" class="rounded-xl p-6 mb-6 border-l-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h5 class="text-lg font-semibold mb-2">Prediction</h5>
+                                <p id="fakeNewsPredictionText" class="text-2xl font-bold"></p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-gray-600 mb-1">Confidence</p>
+                                <p id="fakeNewsConfidenceText" class="text-xl font-semibold"></p>
+                            </div>
                         </div>
                     </div>
-                    
-                    <!-- Feedback Success -->
-                    <div id="feedbackSuccess" class="hidden bg-green-100 border border-green-300 rounded-lg p-3 mt-4">
-                        <div class="flex items-center text-green-800">
-                            <i class="bi bi-check-circle-fill mr-2"></i>
-                            <span>Thank you! Your feedback will help improve the model.</span>
+
+                    <!-- Fake News Probability Bars -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white rounded-lg p-4 shadow-md">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-medium text-red-700">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Fake
+                                </span>
+                                <span id="fakePercentage" class="font-semibold text-red-700"></span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div id="fakeBar" class="bg-red-500 h-3 rounded-full transition-all duration-500"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg p-4 shadow-md">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-medium text-green-700">
+                                    <i class="bi bi-check-circle"></i>
+                                    Real
+                                </span>
+                                <span id="realPercentage" class="font-semibold text-green-700"></span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div id="realBar" class="bg-green-500 h-3 rounded-full transition-all duration-500"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Probability Bars -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div class="bg-white rounded-lg p-4 shadow-md">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="font-medium text-red-700">
-                                <i class="bi bi-exclamation-triangle"></i>
-                                Fake
-                            </span>
-                            <span id="fakePercentage" class="font-semibold text-red-700"></span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-3">
-                            <div id="fakeBar" class="bg-red-500 h-3 rounded-full transition-all duration-500"></div>
+                <!-- Political Classification Results -->
+                <div id="politicalResults" class="hidden mb-8">
+                    <h4 class="text-xl font-semibold text-gray-800 mb-4">
+                        <i class="bi bi-bank"></i>
+                        Political Classification
+                    </h4>
+                    
+                    <!-- Political Prediction Card -->
+                    <div id="politicalPredictionCard" class="rounded-xl p-6 mb-6 border-l-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h5 class="text-lg font-semibold mb-2">Classification</h5>
+                                <p id="politicalPredictionText" class="text-2xl font-bold"></p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-gray-600 mb-1">Confidence</p>
+                                <p id="politicalConfidenceText" class="text-xl font-semibold"></p>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="bg-white rounded-lg p-4 shadow-md">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="font-medium text-green-700">
-                                <i class="bi bi-check-circle"></i>
-                                Real
-                            </span>
-                            <span id="realPercentage" class="font-semibold text-green-700"></span>
+
+                    <!-- Political Probability Bars -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white rounded-lg p-4 shadow-md">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-medium text-blue-700">
+                                    <i class="bi bi-bank"></i>
+                                    Political
+                                </span>
+                                <span id="politicalPercentage" class="font-semibold text-blue-700"></span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div id="politicalBar" class="bg-blue-500 h-3 rounded-full transition-all duration-500"></div>
+                            </div>
                         </div>
-                        <div class="w-full bg-gray-200 rounded-full h-3">
-                            <div id="realBar" class="bg-green-500 h-3 rounded-full transition-all duration-500"></div>
+                        
+                        <div class="bg-white rounded-lg p-4 shadow-md">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-medium text-gray-700">
+                                    <i class="bi bi-newspaper"></i>
+                                    Non-Political
+                                </span>
+                                <span id="nonPoliticalPercentage" class="font-semibold text-gray-700"></span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div id="nonPoliticalBar" class="bg-gray-500 h-3 rounded-full transition-all duration-500"></div>
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- Political Reasoning -->
+                    <div id="politicalReasoning" class="bg-gray-50 rounded-lg p-6 mb-6">
+                        <h5 class="text-lg font-semibold text-gray-800 mb-3">
+                            <i class="bi bi-lightbulb"></i>
+                            Analysis Reasoning
+                        </h5>
+                        <div id="reasoningText" class="text-gray-700 whitespace-pre-line"></div>
                     </div>
                 </div>
 
@@ -301,12 +321,15 @@
     <script>
         // State management
         let currentInputType = 'text';
-        let modelReady = false;
-        let lastPredictionData = null; // Store last prediction for feedback
+        let currentAnalysisType = 'fake_news';
+        let modelsReady = { fake_news: false, political: false };
 
         // DOM elements
         const textBtn = document.getElementById('textBtn');
         const urlBtn = document.getElementById('urlBtn');
+        const fakeNewsBtn = document.getElementById('fakeNewsBtn');
+        const politicalBtn = document.getElementById('politicalBtn');
+        const bothBtn = document.getElementById('bothBtn');
         const textInput = document.getElementById('textInput');
         const urlInput = document.getElementById('urlInput');
         const newsText = document.getElementById('newsText');
@@ -317,18 +340,6 @@
         const error = document.getElementById('error');
         const modelStatus = document.getElementById('modelStatus');
         const textCount = document.getElementById('textCount');
-        const feedbackStats = document.getElementById('feedbackStats');
-        
-        // Feedback elements
-        const feedbackSection = document.getElementById('feedbackSection');
-        const correctBtn = document.getElementById('correctBtn');
-        const incorrectBtn = document.getElementById('incorrectBtn');
-        const feedbackForm = document.getElementById('feedbackForm');
-        const feedbackComment = document.getElementById('feedbackComment');
-        const submitFeedback = document.getElementById('submitFeedback');
-        const cancelFeedback = document.getElementById('cancelFeedback');
-        const feedbackSuccess = document.getElementById('feedbackSuccess');
-        const oppositeLabel = document.getElementById('oppositeLabel');
 
         // Check model status
         async function checkModelStatus() {
@@ -336,56 +347,43 @@
                 const response = await fetch('/model-status');
                 const data = await response.json();
                 
-                if (data.is_trained) {
-                    modelReady = true;
-                    modelStatus.innerHTML = `
-                        <div class="flex items-center justify-center">
-                            <i class="bi bi-check-circle text-green-600 mr-2"></i>
-                            <span class="text-gray-700">${data.status}</span>
-                        </div>
+                modelsReady.fake_news = data.fake_news_model?.is_trained || false;
+                modelsReady.political = data.political_model?.is_trained || false;
+                
+                let statusText = '';
+                let statusClass = 'glass-effect rounded-xl p-4 mb-8 text-center';
+                
+                if (modelsReady.fake_news && modelsReady.political) {
+                    statusText = `
+                        <i class="bi bi-check-circle text-green-600 mr-2"></i>
+                        <span class="text-gray-700">Both models ready! Choose your analysis type.</span>
                     `;
-                    modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center border border-green-200';
-                    updateAnalyzeButton();
-                    
-                    // Update feedback stats if available
-                    if (data.feedback) {
-                        updateFeedbackStats(data.feedback);
-                    }
+                    statusClass += ' border-green-200';
+                } else if (modelsReady.fake_news) {
+                    statusText = `
+                        <i class="bi bi-check-circle text-blue-600 mr-2"></i>
+                        <span class="text-gray-700">Fake news model ready. Political classifier loading...</span>
+                    `;
+                    statusClass += ' border-blue-200';
                 } else {
-                    setTimeout(checkModelStatus, 2000); // Check again in 2 seconds
+                    statusText = `
+                        <i class="bi bi-hourglass-split spin text-blue-600 mr-2"></i>
+                        <span class="text-gray-700">Models loading...</span>
+                    `;
                 }
+                
+                modelStatus.innerHTML = `<div class="flex items-center justify-center">${statusText}</div>`;
+                modelStatus.className = statusClass;
+                
+                updateAnalyzeButton();
             } catch (err) {
                 modelStatus.innerHTML = `
                     <div class="flex items-center justify-center">
                         <i class="bi bi-exclamation-triangle text-red-600 mr-2"></i>
-                        <span class="text-gray-700">Failed to load model</span>
+                        <span class="text-gray-700">Error loading models</span>
                     </div>
                 `;
                 modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center border border-red-200';
-            }
-        }
-
-        // Update feedback statistics display
-        function updateFeedbackStats(stats) {
-            if (stats.total_feedback > 0) {
-                document.getElementById('totalFeedback').textContent = stats.total_feedback;
-                document.getElementById('usedFeedback').textContent = stats.used_for_training;
-                document.getElementById('pendingFeedback').textContent = stats.pending_training;
-                
-                feedbackStats.classList.remove('hidden');
-                
-                const retrainStatus = document.getElementById('retrainStatus');
-                if (stats.needs_retraining) {
-                    retrainStatus.innerHTML = `
-                        <div class="flex items-center text-orange-800">
-                            <i class="bi bi-arrow-clockwise mr-2"></i>
-                            <span>Ready for retraining! Model will improve automatically.</span>
-                        </div>
-                    `;
-                    retrainStatus.classList.remove('hidden');
-                } else {
-                    retrainStatus.classList.add('hidden');
-                }
             }
         }
 
@@ -409,13 +407,39 @@
             hideResults();
         }
 
+        // Analysis type switching
+        function switchAnalysisType(type) {
+            currentAnalysisType = type;
+            
+            // Reset all buttons
+            fakeNewsBtn.className = 'analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500';
+            politicalBtn.className = 'analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500';
+            bothBtn.className = 'analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500';
+            
+            // Highlight selected button
+            if (type === 'fake_news') {
+                fakeNewsBtn.className = 'analysis-type-btn bg-red-600 text-white px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500';
+            } else if (type === 'political') {
+                politicalBtn.className = 'analysis-type-btn bg-blue-600 text-white px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
+            } else {
+                bothBtn.className = 'analysis-type-btn bg-purple-600 text-white px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500';
+            }
+            
+            updateAnalyzeButton();
+            hideResults();
+        }
+
         // Update analyze button state
         function updateAnalyzeButton() {
             const hasInput = currentInputType === 'text' 
                 ? newsText.value.trim().length > 0 
                 : articleUrl.value.trim().length > 0;
             
-            analyzeBtn.disabled = !modelReady || !hasInput;
+            const modelAvailable = currentAnalysisType === 'fake_news' ? modelsReady.fake_news
+                : currentAnalysisType === 'political' ? modelsReady.political
+                : modelsReady.fake_news && modelsReady.political;
+            
+            analyzeBtn.disabled = !modelAvailable || !hasInput;
         }
 
         // Hide results and errors
@@ -439,11 +463,40 @@
 
         // Display results
         function displayResults(data) {
-            lastPredictionData = data; // Store for feedback
+            // Hide individual result sections first
+            document.getElementById('fakeNewsResults').classList.add('hidden');
+            document.getElementById('politicalResults').classList.add('hidden');
             
-            const predictionCard = document.getElementById('predictionCard');
-            const predictionText = document.getElementById('predictionText');
-            const confidenceText = document.getElementById('confidenceText');
+            // Show fake news results if available
+            if (data.fake_news && !data.fake_news.error) {
+                displayFakeNewsResults(data.fake_news);
+                document.getElementById('fakeNewsResults').classList.remove('hidden');
+            }
+            
+            // Show political results if available
+            if (data.political_classification && !data.political_classification.error) {
+                displayPoliticalResults(data.political_classification);
+                document.getElementById('politicalResults').classList.remove('hidden');
+            }
+            
+            // Show extracted content if available
+            const extractedContent = document.getElementById('extractedContent');
+            if (data.extracted_content) {
+                document.getElementById('extractedTitle').textContent = data.extracted_content.title || 'No title available';
+                document.getElementById('extractedPreview').textContent = data.extracted_content.content_preview || 'No preview available';
+                extractedContent.classList.remove('hidden');
+            } else {
+                extractedContent.classList.add('hidden');
+            }
+            
+            results.classList.remove('hidden');
+            results.classList.add('fade-in');
+        }
+
+        function displayFakeNewsResults(data) {
+            const predictionCard = document.getElementById('fakeNewsPredictionCard');
+            const predictionText = document.getElementById('fakeNewsPredictionText');
+            const confidenceText = document.getElementById('fakeNewsConfidenceText');
             const fakeBar = document.getElementById('fakeBar');
             const realBar = document.getElementById('realBar');
             const fakePercentage = document.getElementById('fakePercentage');
@@ -455,17 +508,11 @@
             
             // Set card styling based on prediction
             if (data.prediction === 'Fake') {
-                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 border-red-500 bg-red-50';
+                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 bg-red-50 border-red-500';
                 predictionText.className = 'text-2xl font-bold text-red-700';
-                oppositeLabel.textContent = 'Real';
-            } else if (data.prediction === 'Real') {
-                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 border-green-500 bg-green-50';
-                predictionText.className = 'text-2xl font-bold text-green-700';
-                oppositeLabel.textContent = 'Fake';
             } else {
-                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 border-gray-500 bg-gray-50';
-                predictionText.className = 'text-2xl font-bold text-gray-700';
-                oppositeLabel.textContent = 'Unknown';
+                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 bg-green-50 border-green-500';
+                predictionText.className = 'text-2xl font-bold text-green-700';
             }
             
             // Set probability bars
@@ -476,77 +523,42 @@
             realBar.style.width = `${realProb}%`;
             fakePercentage.textContent = `${fakeProb.toFixed(1)}%`;
             realPercentage.textContent = `${realProb.toFixed(1)}%`;
+        }
+
+        function displayPoliticalResults(data) {
+            const predictionCard = document.getElementById('politicalPredictionCard');
+            const predictionText = document.getElementById('politicalPredictionText');
+            const confidenceText = document.getElementById('politicalConfidenceText');
+            const politicalBar = document.getElementById('politicalBar');
+            const nonPoliticalBar = document.getElementById('nonPoliticalBar');
+            const politicalPercentage = document.getElementById('politicalPercentage');
+            const nonPoliticalPercentage = document.getElementById('nonPoliticalPercentage');
+            const reasoningText = document.getElementById('reasoningText');
             
-            // Show extracted content if available
-            const extractedContent = document.getElementById('extractedContent');
-            if (data.extracted_content) {
-                document.getElementById('extractedTitle').textContent = data.extracted_content.title;
-                document.getElementById('extractedPreview').textContent = data.extracted_content.content_preview;
-                extractedContent.classList.remove('hidden');
+            // Set prediction
+            predictionText.textContent = data.prediction;
+            confidenceText.textContent = `${(data.confidence * 100).toFixed(1)}%`;
+            
+            // Set card styling based on prediction
+            if (data.prediction === 'Political') {
+                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 bg-blue-50 border-blue-500';
+                predictionText.className = 'text-2xl font-bold text-blue-700';
             } else {
-                extractedContent.classList.add('hidden');
+                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 bg-gray-50 border-gray-500';
+                predictionText.className = 'text-2xl font-bold text-gray-700';
             }
             
-            // Reset feedback section
-            resetFeedbackSection();
+            // Set probability bars
+            const politicalProb = data.probabilities.Political * 100;
+            const nonPoliticalProb = data.probabilities['Non-Political'] * 100;
             
-            results.classList.remove('hidden');
-            results.classList.add('fade-in');
-        }
-
-        // Reset feedback section
-        function resetFeedbackSection() {
-            feedbackForm.classList.add('hidden');
-            feedbackSuccess.classList.add('hidden');
-            feedbackComment.value = '';
-            correctBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-            incorrectBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-        }
-
-        // Handle feedback submission
-        async function submitUserFeedback(isCorrect, comment = '') {
-            if (!lastPredictionData) return;
+            politicalBar.style.width = `${politicalProb}%`;
+            nonPoliticalBar.style.width = `${nonPoliticalProb}%`;
+            politicalPercentage.textContent = `${politicalProb.toFixed(1)}%`;
+            nonPoliticalPercentage.textContent = `${nonPoliticalProb.toFixed(1)}%`;
             
-            try {
-                const actualLabel = isCorrect ? lastPredictionData.prediction : oppositeLabel.textContent;
-                
-                const feedbackData = {
-                    text: currentInputType === 'text' ? newsText.value : lastPredictionData.extracted_content?.title + ' ' + lastPredictionData.extracted_content?.content_preview || '',
-                    predicted_label: lastPredictionData.prediction,
-                    actual_label: actualLabel,
-                    confidence: lastPredictionData.confidence,
-                    comment: comment
-                };
-                
-                const response = await fetch('/submit-feedback', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(feedbackData)
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    feedbackSuccess.querySelector('span').textContent = result.message;
-                    feedbackSuccess.classList.remove('hidden');
-                    feedbackForm.classList.add('hidden');
-                    
-                    // Update feedback stats
-                    if (result.feedback_stats) {
-                        updateFeedbackStats(result.feedback_stats);
-                    }
-                    
-                    // Disable feedback buttons
-                    correctBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                    incorrectBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                } else {
-                    showError(result.error || 'Failed to submit feedback');
-                }
-            } catch (err) {
-                showError('Network error while submitting feedback');
-            }
+            // Set reasoning
+            reasoningText.textContent = data.reasoning || 'No reasoning available';
         }
 
         // Analyze content
@@ -558,8 +570,14 @@
             try {
                 const requestData = {
                     type: currentInputType,
-                    [currentInputType]: currentInputType === 'text' ? newsText.value : articleUrl.value
+                    analysis_type: currentAnalysisType
                 };
+                
+                if (currentInputType === 'text') {
+                    requestData.text = newsText.value.trim();
+                } else {
+                    requestData.url = articleUrl.value.trim();
+                }
                 
                 const response = await fetch('/predict', {
                     method: 'POST',
@@ -572,11 +590,7 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    if (data.error) {
-                        showError(data.error);
-                    } else {
-                        displayResults(data);
-                    }
+                    displayResults(data);
                 } else {
                     showError(data.error || 'An error occurred during analysis');
                 }
@@ -584,6 +598,7 @@
                 showError('Network error. Please try again.');
             } finally {
                 loading.classList.add('hidden');
+                analyzeBtn.disabled = false;
                 updateAnalyzeButton();
             }
         }
@@ -591,39 +606,22 @@
         // Event listeners
         textBtn.addEventListener('click', () => switchInputType('text'));
         urlBtn.addEventListener('click', () => switchInputType('url'));
+        fakeNewsBtn.addEventListener('click', () => switchAnalysisType('fake_news'));
+        politicalBtn.addEventListener('click', () => switchAnalysisType('political'));
+        bothBtn.addEventListener('click', () => switchAnalysisType('both'));
         newsText.addEventListener('input', () => {
             updateTextCount();
             updateAnalyzeButton();
         });
         articleUrl.addEventListener('input', updateAnalyzeButton);
         analyzeBtn.addEventListener('click', analyzeContent);
-        
-        // Feedback event listeners
-        correctBtn.addEventListener('click', () => {
-            if (!correctBtn.classList.contains('opacity-50')) {
-                submitUserFeedback(true);
-            }
-        });
-        
-        incorrectBtn.addEventListener('click', () => {
-            if (!incorrectBtn.classList.contains('opacity-50')) {
-                feedbackForm.classList.remove('hidden');
-            }
-        });
-        
-        submitFeedback.addEventListener('click', () => {
-            const comment = feedbackComment.value.trim();
-            submitUserFeedback(false, comment);
-        });
-        
-        cancelFeedback.addEventListener('click', () => {
-            feedbackForm.classList.add('hidden');
-            feedbackComment.value = '';
-        });
 
         // Initialize
         checkModelStatus();
         updateTextCount();
+        
+        // Refresh model status every 30 seconds
+        setInterval(checkModelStatus, 30000);
     </script>
 </body>
 </html>

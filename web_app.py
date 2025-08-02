@@ -2,16 +2,18 @@ from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import accuracy_score
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, classification_report
 from sklearn.pipeline import Pipeline
 import re
 import nltk
 from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
+from nltk.stem import PorterStemmer, WordNetLemmatizer
+from nltk.tokenize import word_tokenize
 import warnings
 import requests
 from bs4 import BeautifulSoup
@@ -27,10 +29,14 @@ warnings.filterwarnings('ignore')
 # Download required NLTK data
 try:
     nltk.data.find('tokenizers/punkt')
+    nltk.data.find('tokenizers/punkt_tab')
     nltk.data.find('corpora/stopwords')
+    nltk.data.find('corpora/wordnet')
 except LookupError:
     nltk.download('punkt')
+    nltk.download('punkt_tab')
     nltk.download('stopwords')
+    nltk.download('wordnet')
 
 app = Flask(__name__)
 
@@ -321,8 +327,215 @@ class FakeNewsDetector:
                 'error': str(e)
             }
 
-# Initialize the detector
+class PoliticalNewsDetector:
+    def __init__(self):
+        self.vectorizer = None
+        self.model = None
+        self.stemmer = PorterStemmer()
+        self.lemmatizer = WordNetLemmatizer()
+        self.stop_words = set(stopwords.words('english'))
+        self.is_trained = False
+        self.accuracy = None
+        self.political_categories = {
+            'POLITICS', 'U.S. NEWS', 'WORLD NEWS', 'CRIME'
+        }
+        self.political_keywords = {
+            'government', 'politics', 'political', 'election', 'vote', 'voting', 'candidate',
+            'president', 'senator', 'congress', 'parliament', 'minister', 'governor',
+            'democrat', 'republican', 'party', 'campaign', 'policy', 'legislation',
+            'bill', 'law', 'constitution', 'supreme court', 'federal', 'state',
+            'mayor', 'city council', 'constituency', 'ballot', 'primary', 'debate',
+            'administration', 'cabinet', 'house', 'senate', 'representative',
+            'diplomatic', 'foreign policy', 'domestic policy', 'budget', 'tax',
+            'reform', 'regulation', 'executive', 'judicial', 'legislative',
+            'courthouse', 'trial', 'lawsuit', 'justice', 'attorney general'
+        }
+    
+    def preprocess_text(self, text):
+        """Advanced text preprocessing for political news classification"""
+        if pd.isna(text) or text is None:
+            return ""
+        
+        # Convert to lowercase
+        text = text.lower()
+        
+        # Remove URLs
+        text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
+        
+        # Remove email addresses
+        text = re.sub(r'\S+@\S+', '', text)
+        
+        # Remove special characters but keep apostrophes for contractions
+        text = re.sub(r'[^a-zA-Z\s\']', '', text)
+        
+        # Handle contractions
+        contractions = {
+            "won't": "will not", "can't": "cannot", "n't": " not",
+            "'re": " are", "'ve": " have", "'ll": " will",
+            "'d": " would", "'m": " am"
+        }
+        for contraction, expansion in contractions.items():
+            text = text.replace(contraction, expansion)
+        
+        # Remove extra whitespace
+        text = ' '.join(text.split())
+        
+        # Tokenize
+        words = word_tokenize(text)
+        
+        # Remove stopwords and apply lemmatization
+        processed_words = []
+        for word in words:
+            if word not in self.stop_words and len(word) > 2:
+                lemmatized = self.lemmatizer.lemmatize(word)
+                processed_words.append(lemmatized)
+        
+        return ' '.join(processed_words)
+    
+    def extract_political_features(self, text):
+        """Extract political-specific features from text"""
+        features = {}
+        text_lower = text.lower()
+        
+        # Count political keywords
+        political_count = sum(1 for keyword in self.political_keywords if keyword in text_lower)
+        features['political_keyword_count'] = political_count
+        features['political_keyword_ratio'] = political_count / max(len(text.split()), 1)
+        
+        # Check for political entities
+        political_patterns = [
+            r'\b(?:president|senator|governor|mayor|minister)\s+\w+',
+            r'\b(?:mr\.|ms\.|mrs\.)\s+\w+',
+            r'\b\w+\s+(?:administration|campaign|party)',
+            r'\b(?:white house|congress|parliament|senate|house of representatives)'
+        ]
+        
+        political_entities = 0
+        for pattern in political_patterns:
+            political_entities += len(re.findall(pattern, text_lower))
+        
+        features['political_entities'] = political_entities
+        
+        return features
+    
+    def predict(self, text):
+        """Predict if text is political news"""
+        if not self.is_trained or self.model is None:
+            raise ValueError("Model not trained yet!")
+        
+        processed_text = self.preprocess_text(text)
+        if not processed_text:
+            return {
+                'prediction': 'Unknown',
+                'confidence': 0.5,
+                'probabilities': {'Non-Political': 0.5, 'Political': 0.5},
+                'reasoning': 'Unable to analyze: Text is empty after preprocessing',
+                'political_features': {},
+                'error': 'Text is empty after preprocessing'
+            }
+        
+        try:
+            prediction = self.model.predict([processed_text])[0]
+            probability = self.model.predict_proba([processed_text])[0]
+            
+            prediction_label = 'Political' if prediction == 1 else 'Non-Political'
+            
+            # Extract reasoning and features
+            reasoning = self.extract_reasoning(text, prediction)
+            political_features = self.extract_political_features(text)
+            
+            return {
+                'prediction': prediction_label,
+                'confidence': float(max(probability)),
+                'probabilities': {
+                    'Non-Political': float(probability[0]),
+                    'Political': float(probability[1])
+                },
+                'reasoning': reasoning,
+                'political_features': political_features
+            }
+        except Exception as e:
+            return {
+                'prediction': 'Unknown',
+                'confidence': 0.5,
+                'probabilities': {'Non-Political': 0.5, 'Political': 0.5},
+                'reasoning': f'Error during prediction: {str(e)}',
+                'political_features': {},
+                'error': str(e)
+            }
+    
+    def extract_reasoning(self, text, prediction):
+        """Extract reasoning for the classification"""
+        features = self.extract_political_features(text)
+        text_lower = text.lower()
+        
+        reasoning_parts = []
+        
+        if prediction == 1:  # Political
+            reasoning_parts.append(f"✓ Classified as POLITICAL news")
+            
+            if features['political_keyword_count'] > 0:
+                reasoning_parts.append(f"• Found {features['political_keyword_count']} political keywords")
+            
+            if features['political_entities'] > 0:
+                reasoning_parts.append(f"• Detected {features['political_entities']} political entities/references")
+            
+            # Check for specific political indicators
+            if any(term in text_lower for term in ['election', 'vote', 'campaign']):
+                reasoning_parts.append("• Contains election/voting related content")
+            
+            if any(term in text_lower for term in ['government', 'congress', 'senate', 'president']):
+                reasoning_parts.append("• References government institutions or officials")
+            
+            if any(term in text_lower for term in ['policy', 'legislation', 'bill', 'law']):
+                reasoning_parts.append("• Discusses policy or legislative matters")
+        
+        else:  # Non-Political
+            reasoning_parts.append(f"✓ Classified as NON-POLITICAL news")
+            
+            if features['political_keyword_count'] == 0:
+                reasoning_parts.append("• No political keywords detected")
+            else:
+                reasoning_parts.append(f"• Limited political content ({features['political_keyword_count']} keywords)")
+            
+            if features['political_entities'] == 0:
+                reasoning_parts.append("• No political entities or references found")
+            
+            # Check for non-political indicators
+            non_political_terms = ['sports', 'entertainment', 'technology', 'science', 'health', 'business']
+            found_terms = [term for term in non_political_terms if term in text_lower]
+            if found_terms:
+                reasoning_parts.append(f"• Contains {', '.join(found_terms)} related content")
+        
+        return '\n'.join(reasoning_parts)
+    
+    def load_model(self, filepath='political_news_classifier.pkl'):
+        """Load a pre-trained model"""
+        try:
+            if not os.path.exists(filepath):
+                print(f"Political news model file '{filepath}' not found.")
+                return False
+                
+            model_data = joblib.load(filepath)
+            self.model = model_data['model']
+            self.stemmer = model_data.get('stemmer', PorterStemmer())
+            self.lemmatizer = model_data.get('lemmatizer', WordNetLemmatizer())
+            self.stop_words = model_data.get('stop_words', set(stopwords.words('english')))
+            self.accuracy = model_data.get('accuracy', None)
+            self.is_trained = True
+            
+            print(f"Political news model loaded successfully")
+            if self.accuracy:
+                print(f"Model accuracy: {self.accuracy:.4f}")
+            
+            return True
+        except Exception as e:
+            print(f"Error loading political news model: {str(e)}")
+            return False
+
+# Initialize the detectors
 detector = FakeNewsDetector()
+political_detector = PoliticalNewsDetector()
 
 def extract_article_content(url):
     """Extract article content from URL"""
@@ -389,16 +602,29 @@ def predict():
         data = request.get_json()
         
         if not detector.is_trained:
-            return jsonify({'error': 'Model not trained yet. Please wait for training to complete.'}), 500
+            return jsonify({'error': 'Fake news model not trained yet. Please wait for training to complete.'}), 500
         
         input_type = data.get('type', 'text')
+        analysis_type = data.get('analysis_type', 'fake_news')  # 'fake_news', 'political', or 'both'
         
         if input_type == 'text':
             text = data.get('text', '').strip()
             if not text:
                 return jsonify({'error': 'No text provided'}), 400
             
-            result = detector.predict(text)
+            # Perform fake news detection
+            fake_result = detector.predict(text)
+            result = {'fake_news': fake_result}
+            
+            # Perform political classification if requested
+            if analysis_type in ['political', 'both'] and political_detector.is_trained:
+                political_result = political_detector.predict(text)
+                result['political_classification'] = political_result
+            elif analysis_type in ['political', 'both']:
+                result['political_classification'] = {
+                    'error': 'Political classification model not available'
+                }
+            
             return jsonify(result)
         
         elif input_type == 'url':
@@ -416,11 +642,24 @@ def predict():
             if not combined_text.strip():
                 return jsonify({'error': 'No content could be extracted from the URL'}), 400
             
-            result = detector.predict(combined_text)
-            result['extracted_content'] = {
-                'title': article_data['title'],
-                'content_preview': combined_text[:500] + '...' if len(combined_text) > 500 else combined_text
+            # Perform fake news detection
+            fake_result = detector.predict(combined_text)
+            result = {
+                'fake_news': fake_result,
+                'extracted_content': {
+                    'title': article_data['title'],
+                    'content_preview': combined_text[:500] + '...' if len(combined_text) > 500 else combined_text
+                }
             }
+            
+            # Perform political classification if requested
+            if analysis_type in ['political', 'both'] and political_detector.is_trained:
+                political_result = political_detector.predict(combined_text)
+                result['political_classification'] = political_result
+            elif analysis_type in ['political', 'both']:
+                result['political_classification'] = {
+                    'error': 'Political classification model not available'
+                }
             
             return jsonify(result)
         
@@ -433,13 +672,28 @@ def predict():
 @app.route('/model-status')
 def model_status():
     status_info = {
-        'is_trained': detector.is_trained,
-        'status': 'Model is ready' if detector.is_trained else 'Model is training...'
+        'fake_news_model': {
+            'is_trained': detector.is_trained,
+            'status': 'Model is ready' if detector.is_trained else 'Model is training...'
+        },
+        'political_model': {
+            'is_trained': political_detector.is_trained,
+            'status': 'Model is ready' if political_detector.is_trained else 'Model not loaded'
+        }
     }
     
     if detector.is_trained and detector.accuracy:
-        status_info['accuracy'] = f"{detector.accuracy:.4f}"
-        status_info['status'] = f"Model ready (Accuracy: {detector.accuracy:.1%})"
+        status_info['fake_news_model']['accuracy'] = f"{detector.accuracy:.4f}"
+        status_info['fake_news_model']['status'] = f"Model ready (Accuracy: {detector.accuracy:.1%})"
+    
+    if political_detector.is_trained and political_detector.accuracy:
+        status_info['political_model']['accuracy'] = f"{political_detector.accuracy:.4f}"
+        status_info['political_model']['status'] = f"Model ready (Accuracy: {political_detector.accuracy:.1%})"
+    
+    # Overall status
+    both_ready = detector.is_trained and political_detector.is_trained
+    status_info['overall_status'] = 'Both models ready' if both_ready else 'Models loading...'
+    status_info['is_trained'] = detector.is_trained  # Keep for backward compatibility
     
     # Add feedback statistics
     feedback_stats = detector.get_feedback_stats()
@@ -514,42 +768,49 @@ def trigger_retrain():
     except Exception as e:
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
-def initialize_model():
-    """Initialize and train the model"""
+def initialize_models():
+    """Initialize and load both models"""
     try:
         print("Initializing fake news detection model...")
         
-        # First try to load existing model
+        # First try to load existing fake news model
         if detector.load_model():
-            print("Using existing pre-trained model.")
-            return
+            print("Using existing pre-trained fake news model.")
+        else:
+            print("No existing fake news model found. Training new model...")
+            print("This may take a few minutes...")
+            
+            # If no existing model, train a new one
+            df = detector.load_and_prepare_data('WELFake_Dataset.csv')
+            accuracy = detector.train_best_model(df)
+            print(f"Fake news model training completed with accuracy: {accuracy:.4f}")
+            
+            # Save the newly trained model
+            model_data = {
+                'model': detector.model,
+                'accuracy': accuracy,
+                'stemmer': detector.stemmer,
+                'stop_words': detector.stop_words
+            }
+            joblib.dump(model_data, 'fake_news_model.pkl')
+            print("Fake news model saved as 'fake_news_model.pkl'")
         
-        print("No existing model found. Training new model...")
-        print("This may take a few minutes...")
-        
-        # If no existing model, train a new one
-        df = detector.load_and_prepare_data('WELFake_Dataset.csv')
-        accuracy = detector.train_best_model(df)
-        print(f"Model training completed with accuracy: {accuracy:.4f}")
-        
-        # Save the newly trained model
-        model_data = {
-            'model': detector.model,
-            'accuracy': accuracy,
-            'stemmer': detector.stemmer,
-            'stop_words': detector.stop_words
-        }
-        joblib.dump(model_data, 'fake_news_model.pkl')
-        print("Model saved as 'fake_news_model.pkl'")
+        # Try to load political news classifier
+        print("Initializing political news classification model...")
+        if political_detector.load_model('political_news_classifier.pkl'):
+            print("Political news classifier loaded successfully.")
+        else:
+            print("Political news classifier not found. Political classification will be unavailable.")
+            print("To enable political classification, ensure 'political_news_classifier.pkl' is available.")
         
     except Exception as e:
-        print(f"Error initializing model: {str(e)}")
+        print(f"Error initializing models: {str(e)}")
         print("Please ensure 'WELFake_Dataset.csv' is in the project directory.")
 
 if __name__ == '__main__':
-    # Initialize model in a separate thread to avoid blocking
+    # Initialize models in a separate thread to avoid blocking
     import threading
-    model_thread = threading.Thread(target=initialize_model)
+    model_thread = threading.Thread(target=initialize_models)
     model_thread.daemon = True
     model_thread.start()
     

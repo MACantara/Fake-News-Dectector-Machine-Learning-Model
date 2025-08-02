@@ -1,0 +1,254 @@
+/* Advanced News Analyzer Styles */
+
+/* Custom animations */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Background gradients */
+.gradient-bg {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.glass-effect {
+    backdrop-filter: blur(16px) saturate(180%);
+    background-color: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(209, 213, 219, 0.3);
+}
+
+/* Button styles */
+.input-type-btn {
+    transition: all 0.2s ease-in-out;
+}
+
+.input-type-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.analysis-type-btn {
+    transition: all 0.2s ease-in-out;
+    text-align: center;
+}
+
+.analysis-type-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.analysis-type-btn.active {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Input section styles */
+.input-section {
+    transition: opacity 0.3s ease-in-out;
+}
+
+/* Results section styles */
+.prediction-card {
+    transition: all 0.3s ease-in-out;
+}
+
+.prediction-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Progress bar animations */
+.progress-bar {
+    transition: width 0.8s ease-in-out;
+    border-radius: 0.25rem;
+}
+
+.progress-bar.fake {
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.progress-bar.real {
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.progress-bar.political {
+    background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+
+.progress-bar.non-political {
+    background: linear-gradient(90deg, #6b7280, #4b5563);
+}
+
+/* Model status indicators */
+.status-loading {
+    border-left: 4px solid #3b82f6;
+}
+
+.status-ready {
+    border-left: 4px solid #22c55e;
+}
+
+.status-error {
+    border-left: 4px solid #ef4444;
+}
+
+.status-partial {
+    border-left: 4px solid #f59e0b;
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+    .analysis-type-btn {
+        padding: 1rem;
+        font-size: 0.875rem;
+    }
+    
+    .input-type-btn {
+        padding: 0.75rem 1rem;
+        font-size: 0.875rem;
+    }
+    
+    .gradient-bg {
+        padding: 1rem;
+    }
+    
+    .glass-effect {
+        margin: 0.5rem;
+        padding: 1.5rem;
+    }
+}
+
+/* Loading state styles */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    z-index: 10;
+}
+
+/* Error state styles */
+.error-shake {
+    animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+/* Success state styles */
+.success-pulse {
+    animation: pulse 1s ease-in-out;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* Tooltip styles */
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip .tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: #374151;
+    color: white;
+    text-align: center;
+    border-radius: 6px;
+    padding: 8px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 0.875rem;
+}
+
+.tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Card hover effects */
+.result-card {
+    transition: all 0.3s ease;
+}
+
+.result-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Scrollbar customization */
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Focus states for accessibility */
+.focus-ring:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Print styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .gradient-bg {
+        background: white !important;
+    }
+    
+    .glass-effect {
+        background: white !important;
+        border: 1px solid #e5e7eb !important;
+    }
+}

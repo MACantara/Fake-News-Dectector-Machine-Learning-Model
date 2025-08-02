@@ -4,38 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advanced News Analyzer</title>
+    
+    <!-- External CSS -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-    <style>
-        /* Custom animations */
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .spin {
-            animation: spin 1s linear infinite;
-        }
-        
-        .fade-in {
-            animation: fadeIn 0.5s ease-in;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .gradient-bg {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        
-        .glass-effect {
-            backdrop-filter: blur(16px) saturate(180%);
-            background-color: rgba(255, 255, 255, 0.75);
-            border: 1px solid rgba(209, 213, 219, 0.3);
-        }
-    </style>
+    <    <!-- JavaScript modules -->
+    <script src="{{ url_for('static', filename='js/config.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/advanced-features.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script> rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body class="min-h-screen gradient-bg">
     <div class="container mx-auto px-4 py-8">
@@ -51,7 +30,7 @@
         </header>
 
         <!-- Model Status -->
-        <div id="modelStatus" class="glass-effect rounded-xl p-4 mb-8 text-center">
+        <div id="modelStatus" class="glass-effect rounded-xl p-4 mb-8 text-center status-loading">
             <div class="flex items-center justify-center">
                 <i class="bi bi-hourglass-split spin text-blue-600 mr-2"></i>
                 <span class="text-gray-700">Checking model status...</span>
@@ -67,11 +46,11 @@
                     Choose Input Method
                 </h2>
                 <div class="flex space-x-4">
-                    <button id="textBtn" class="input-type-btn bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="textBtn" class="input-type-btn bg-blue-600 text-white px-6 py-3 rounded-lg font-medium focus-ring">
                         <i class="bi bi-textarea-t mr-2"></i>
                         Text Input
                     </button>
-                    <button id="urlBtn" class="input-type-btn bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                    <button id="urlBtn" class="input-type-btn bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium focus-ring">
                         <i class="bi bi-link-45deg mr-2"></i>
                         Article URL
                     </button>
@@ -85,17 +64,17 @@
                     Choose Analysis Type
                 </h2>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <button id="fakeNewsBtn" class="analysis-type-btn bg-red-600 text-white px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500">
+                    <button id="fakeNewsBtn" class="analysis-type-btn bg-red-600 text-white px-6 py-4 rounded-lg font-medium focus-ring">
                         <i class="bi bi-shield-exclamation mr-2"></i>
                         <div>Fake News Detection</div>
                         <div class="text-sm opacity-80">Detect if news is fake or real</div>
                     </button>
-                    <button id="politicalBtn" class="analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                    <button id="politicalBtn" class="analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium focus-ring">
                         <i class="bi bi-bank mr-2"></i>
                         <div>Political Classification</div>
                         <div class="text-sm opacity-80">Classify as political or non-political</div>
                     </button>
-                    <button id="bothBtn" class="analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                    <button id="bothBtn" class="analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium focus-ring">
                         <i class="bi bi-layers mr-2"></i>
                         <div>Both Analyses</div>
                         <div class="text-sm opacity-80">Run both fake news and political analysis</div>
@@ -109,12 +88,20 @@
                     <i class="bi bi-pencil-square"></i>
                     Enter News Text
                 </h3>
-                <textarea 
-                    id="newsText" 
-                    placeholder="Paste the news article text here..."
-                    class="w-full h-48 p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                ></textarea>
-                <div class="text-right mt-2">
+                <div class="tooltip">
+                    <textarea 
+                        id="newsText" 
+                        placeholder="Paste the news article text here... (Tip: Use Ctrl+Enter to analyze quickly)"
+                        class="w-full h-48 p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent custom-scrollbar"
+                        aria-label="News article text input"
+                    ></textarea>
+                    <span class="tooltip-text">Enter at least 10 characters for analysis</span>
+                </div>
+                <div class="flex justify-between items-center mt-2">
+                    <span class="text-xs text-gray-400">
+                        <i class="bi bi-info-circle mr-1"></i>
+                        Press Ctrl+Enter to analyze quickly
+                    </span>
                     <span id="textCount" class="text-sm text-gray-500">0 characters</span>
                 </div>
             </div>
@@ -131,6 +118,7 @@
                         id="articleUrl" 
                         placeholder="https://example.com/news-article"
                         class="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        aria-label="Article URL input"
                     />
                     <i class="bi bi-link absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 </div>
@@ -146,6 +134,7 @@
                     id="analyzeBtn"
                     disabled
                     class="bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-8 rounded-lg shadow-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    aria-label="Analyze news content"
                 >
                     <i class="bi bi-search mr-2"></i>
                     Analyze News
@@ -175,7 +164,7 @@
                     </h4>
                     
                     <!-- Fake News Prediction Card -->
-                    <div id="fakeNewsPredictionCard" class="rounded-xl p-6 mb-6 border-l-4">
+                    <div id="fakeNewsPredictionCard" class="prediction-card result-card rounded-xl p-6 mb-6 border-l-4">
                         <div class="flex items-center justify-between">
                             <div>
                                 <h5 class="text-lg font-semibold mb-2">Prediction</h5>
@@ -190,7 +179,7 @@
 
                     <!-- Fake News Probability Bars -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        <div class="bg-white rounded-lg p-4 shadow-md">
+                        <div class="bg-white rounded-lg p-4 shadow-md result-card">
                             <div class="flex items-center justify-between mb-2">
                                 <span class="font-medium text-red-700">
                                     <i class="bi bi-exclamation-triangle"></i>
@@ -199,11 +188,11 @@
                                 <span id="fakePercentage" class="font-semibold text-red-700"></span>
                             </div>
                             <div class="w-full bg-gray-200 rounded-full h-3">
-                                <div id="fakeBar" class="bg-red-500 h-3 rounded-full transition-all duration-500"></div>
+                                <div id="fakeBar" class="progress-bar fake h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
                             </div>
                         </div>
                         
-                        <div class="bg-white rounded-lg p-4 shadow-md">
+                        <div class="bg-white rounded-lg p-4 shadow-md result-card">
                             <div class="flex items-center justify-between mb-2">
                                 <span class="font-medium text-green-700">
                                     <i class="bi bi-check-circle"></i>
@@ -212,7 +201,7 @@
                                 <span id="realPercentage" class="font-semibold text-green-700"></span>
                             </div>
                             <div class="w-full bg-gray-200 rounded-full h-3">
-                                <div id="realBar" class="bg-green-500 h-3 rounded-full transition-all duration-500"></div>
+                                <div id="realBar" class="progress-bar real h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
                             </div>
                         </div>
                     </div>
@@ -226,7 +215,7 @@
                     </h4>
                     
                     <!-- Political Prediction Card -->
-                    <div id="politicalPredictionCard" class="rounded-xl p-6 mb-6 border-l-4">
+                    <div id="politicalPredictionCard" class="prediction-card result-card rounded-xl p-6 mb-6 border-l-4">
                         <div class="flex items-center justify-between">
                             <div>
                                 <h5 class="text-lg font-semibold mb-2">Classification</h5>
@@ -241,7 +230,7 @@
 
                     <!-- Political Probability Bars -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        <div class="bg-white rounded-lg p-4 shadow-md">
+                        <div class="bg-white rounded-lg p-4 shadow-md result-card">
                             <div class="flex items-center justify-between mb-2">
                                 <span class="font-medium text-blue-700">
                                     <i class="bi bi-bank"></i>
@@ -250,11 +239,11 @@
                                 <span id="politicalPercentage" class="font-semibold text-blue-700"></span>
                             </div>
                             <div class="w-full bg-gray-200 rounded-full h-3">
-                                <div id="politicalBar" class="bg-blue-500 h-3 rounded-full transition-all duration-500"></div>
+                                <div id="politicalBar" class="progress-bar political h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
                             </div>
                         </div>
                         
-                        <div class="bg-white rounded-lg p-4 shadow-md">
+                        <div class="bg-white rounded-lg p-4 shadow-md result-card">
                             <div class="flex items-center justify-between mb-2">
                                 <span class="font-medium text-gray-700">
                                     <i class="bi bi-newspaper"></i>
@@ -263,23 +252,23 @@
                                 <span id="nonPoliticalPercentage" class="font-semibold text-gray-700"></span>
                             </div>
                             <div class="w-full bg-gray-200 rounded-full h-3">
-                                <div id="nonPoliticalBar" class="bg-gray-500 h-3 rounded-full transition-all duration-500"></div>
+                                <div id="nonPoliticalBar" class="progress-bar non-political h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Political Reasoning -->
-                    <div id="politicalReasoning" class="bg-gray-50 rounded-lg p-6 mb-6">
+                    <div id="politicalReasoning" class="bg-gray-50 rounded-lg p-6 mb-6 result-card">
                         <h5 class="text-lg font-semibold text-gray-800 mb-3">
                             <i class="bi bi-lightbulb"></i>
                             Analysis Reasoning
                         </h5>
-                        <div id="reasoningText" class="text-gray-700 whitespace-pre-line"></div>
+                        <div id="reasoningText" class="text-gray-700 whitespace-pre-line custom-scrollbar"></div>
                     </div>
                 </div>
 
                 <!-- Extracted Content (for URL input) -->
-                <div id="extractedContent" class="hidden bg-gray-50 rounded-lg p-6">
+                <div id="extractedContent" class="hidden bg-gray-50 rounded-lg p-6 result-card">
                     <h4 class="text-lg font-semibold text-gray-800 mb-3">
                         <i class="bi bi-file-text"></i>
                         Extracted Content
@@ -287,11 +276,11 @@
                     <div class="space-y-3">
                         <div>
                             <p class="text-sm font-medium text-gray-600">Title:</p>
-                            <p id="extractedTitle" class="text-gray-800"></p>
+                            <p id="extractedTitle" class="text-gray-800 font-medium"></p>
                         </div>
                         <div>
                             <p class="text-sm font-medium text-gray-600">Content Preview:</p>
-                            <p id="extractedPreview" class="text-gray-700 text-sm"></p>
+                            <p id="extractedPreview" class="text-gray-700 text-sm custom-scrollbar max-h-32 overflow-y-auto"></p>
                         </div>
                     </div>
                 </div>
@@ -301,7 +290,7 @@
             <div id="error" class="hidden mt-8 bg-red-50 border border-red-200 rounded-lg p-4">
                 <div class="flex items-center">
                     <i class="bi bi-exclamation-circle text-red-500 text-xl mr-3"></i>
-                    <div>
+                    <div class="flex-1">
                         <h4 class="text-red-800 font-semibold">Error</h4>
                         <p id="errorMessage" class="text-red-700"></p>
                     </div>
@@ -310,318 +299,21 @@
         </div>
 
         <!-- Footer -->
-        <footer class="text-center mt-12 text-white opacity-75">
+        <footer class="text-center mt-12 text-white opacity-75 no-print">
             <p>
                 <i class="bi bi-cpu"></i>
                 Powered by Machine Learning • Built with Flask & Tailwind CSS
             </p>
+            <p class="text-sm mt-2">
+                <i class="bi bi-keyboard"></i>
+                Tip: Use Ctrl+Enter to analyze quickly
+            </p>
         </footer>
     </div>
 
-    <script>
-        // State management
-        let currentInputType = 'text';
-        let currentAnalysisType = 'fake_news';
-        let modelsReady = { fake_news: false, political: false };
-
-        // DOM elements
-        const textBtn = document.getElementById('textBtn');
-        const urlBtn = document.getElementById('urlBtn');
-        const fakeNewsBtn = document.getElementById('fakeNewsBtn');
-        const politicalBtn = document.getElementById('politicalBtn');
-        const bothBtn = document.getElementById('bothBtn');
-        const textInput = document.getElementById('textInput');
-        const urlInput = document.getElementById('urlInput');
-        const newsText = document.getElementById('newsText');
-        const articleUrl = document.getElementById('articleUrl');
-        const analyzeBtn = document.getElementById('analyzeBtn');
-        const loading = document.getElementById('loading');
-        const results = document.getElementById('results');
-        const error = document.getElementById('error');
-        const modelStatus = document.getElementById('modelStatus');
-        const textCount = document.getElementById('textCount');
-
-        // Check model status
-        async function checkModelStatus() {
-            try {
-                const response = await fetch('/model-status');
-                const data = await response.json();
-                
-                modelsReady.fake_news = data.fake_news_model?.is_trained || false;
-                modelsReady.political = data.political_model?.is_trained || false;
-                
-                let statusText = '';
-                let statusClass = 'glass-effect rounded-xl p-4 mb-8 text-center';
-                
-                if (modelsReady.fake_news && modelsReady.political) {
-                    statusText = `
-                        <i class="bi bi-check-circle text-green-600 mr-2"></i>
-                        <span class="text-gray-700">Both models ready! Choose your analysis type.</span>
-                    `;
-                    statusClass += ' border-green-200';
-                } else if (modelsReady.fake_news) {
-                    statusText = `
-                        <i class="bi bi-check-circle text-blue-600 mr-2"></i>
-                        <span class="text-gray-700">Fake news model ready. Political classifier loading...</span>
-                    `;
-                    statusClass += ' border-blue-200';
-                } else {
-                    statusText = `
-                        <i class="bi bi-hourglass-split spin text-blue-600 mr-2"></i>
-                        <span class="text-gray-700">Models loading...</span>
-                    `;
-                }
-                
-                modelStatus.innerHTML = `<div class="flex items-center justify-center">${statusText}</div>`;
-                modelStatus.className = statusClass;
-                
-                updateAnalyzeButton();
-            } catch (err) {
-                modelStatus.innerHTML = `
-                    <div class="flex items-center justify-center">
-                        <i class="bi bi-exclamation-triangle text-red-600 mr-2"></i>
-                        <span class="text-gray-700">Error loading models</span>
-                    </div>
-                `;
-                modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center border border-red-200';
-            }
-        }
-
-        // Input type switching
-        function switchInputType(type) {
-            currentInputType = type;
-            
-            if (type === 'text') {
-                textBtn.className = 'input-type-btn bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
-                urlBtn.className = 'input-type-btn bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500';
-                textInput.classList.remove('hidden');
-                urlInput.classList.add('hidden');
-            } else {
-                urlBtn.className = 'input-type-btn bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
-                textBtn.className = 'input-type-btn bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500';
-                urlInput.classList.remove('hidden');
-                textInput.classList.add('hidden');
-            }
-            
-            updateAnalyzeButton();
-            hideResults();
-        }
-
-        // Analysis type switching
-        function switchAnalysisType(type) {
-            currentAnalysisType = type;
-            
-            // Reset all buttons
-            fakeNewsBtn.className = 'analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500';
-            politicalBtn.className = 'analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500';
-            bothBtn.className = 'analysis-type-btn bg-gray-200 text-gray-700 px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500';
-            
-            // Highlight selected button
-            if (type === 'fake_news') {
-                fakeNewsBtn.className = 'analysis-type-btn bg-red-600 text-white px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500';
-            } else if (type === 'political') {
-                politicalBtn.className = 'analysis-type-btn bg-blue-600 text-white px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
-            } else {
-                bothBtn.className = 'analysis-type-btn bg-purple-600 text-white px-6 py-4 rounded-lg font-medium transition-all duration-200 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500';
-            }
-            
-            updateAnalyzeButton();
-            hideResults();
-        }
-
-        // Update analyze button state
-        function updateAnalyzeButton() {
-            const hasInput = currentInputType === 'text' 
-                ? newsText.value.trim().length > 0 
-                : articleUrl.value.trim().length > 0;
-            
-            const modelAvailable = currentAnalysisType === 'fake_news' ? modelsReady.fake_news
-                : currentAnalysisType === 'political' ? modelsReady.political
-                : modelsReady.fake_news && modelsReady.political;
-            
-            analyzeBtn.disabled = !modelAvailable || !hasInput;
-        }
-
-        // Hide results and errors
-        function hideResults() {
-            results.classList.add('hidden');
-            error.classList.add('hidden');
-        }
-
-        // Show error
-        function showError(message) {
-            document.getElementById('errorMessage').textContent = message;
-            error.classList.remove('hidden');
-            error.classList.add('fade-in');
-        }
-
-        // Update text count
-        function updateTextCount() {
-            const count = newsText.value.length;
-            textCount.textContent = `${count} characters`;
-        }
-
-        // Display results
-        function displayResults(data) {
-            // Hide individual result sections first
-            document.getElementById('fakeNewsResults').classList.add('hidden');
-            document.getElementById('politicalResults').classList.add('hidden');
-            
-            // Show fake news results if available
-            if (data.fake_news && !data.fake_news.error) {
-                displayFakeNewsResults(data.fake_news);
-                document.getElementById('fakeNewsResults').classList.remove('hidden');
-            }
-            
-            // Show political results if available
-            if (data.political_classification && !data.political_classification.error) {
-                displayPoliticalResults(data.political_classification);
-                document.getElementById('politicalResults').classList.remove('hidden');
-            }
-            
-            // Show extracted content if available
-            const extractedContent = document.getElementById('extractedContent');
-            if (data.extracted_content) {
-                document.getElementById('extractedTitle').textContent = data.extracted_content.title || 'No title available';
-                document.getElementById('extractedPreview').textContent = data.extracted_content.content_preview || 'No preview available';
-                extractedContent.classList.remove('hidden');
-            } else {
-                extractedContent.classList.add('hidden');
-            }
-            
-            results.classList.remove('hidden');
-            results.classList.add('fade-in');
-        }
-
-        function displayFakeNewsResults(data) {
-            const predictionCard = document.getElementById('fakeNewsPredictionCard');
-            const predictionText = document.getElementById('fakeNewsPredictionText');
-            const confidenceText = document.getElementById('fakeNewsConfidenceText');
-            const fakeBar = document.getElementById('fakeBar');
-            const realBar = document.getElementById('realBar');
-            const fakePercentage = document.getElementById('fakePercentage');
-            const realPercentage = document.getElementById('realPercentage');
-            
-            // Set prediction
-            predictionText.textContent = data.prediction;
-            confidenceText.textContent = `${(data.confidence * 100).toFixed(1)}%`;
-            
-            // Set card styling based on prediction
-            if (data.prediction === 'Fake') {
-                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 bg-red-50 border-red-500';
-                predictionText.className = 'text-2xl font-bold text-red-700';
-            } else {
-                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 bg-green-50 border-green-500';
-                predictionText.className = 'text-2xl font-bold text-green-700';
-            }
-            
-            // Set probability bars
-            const fakeProb = data.probabilities.Fake * 100;
-            const realProb = data.probabilities.Real * 100;
-            
-            fakeBar.style.width = `${fakeProb}%`;
-            realBar.style.width = `${realProb}%`;
-            fakePercentage.textContent = `${fakeProb.toFixed(1)}%`;
-            realPercentage.textContent = `${realProb.toFixed(1)}%`;
-        }
-
-        function displayPoliticalResults(data) {
-            const predictionCard = document.getElementById('politicalPredictionCard');
-            const predictionText = document.getElementById('politicalPredictionText');
-            const confidenceText = document.getElementById('politicalConfidenceText');
-            const politicalBar = document.getElementById('politicalBar');
-            const nonPoliticalBar = document.getElementById('nonPoliticalBar');
-            const politicalPercentage = document.getElementById('politicalPercentage');
-            const nonPoliticalPercentage = document.getElementById('nonPoliticalPercentage');
-            const reasoningText = document.getElementById('reasoningText');
-            
-            // Set prediction
-            predictionText.textContent = data.prediction;
-            confidenceText.textContent = `${(data.confidence * 100).toFixed(1)}%`;
-            
-            // Set card styling based on prediction
-            if (data.prediction === 'Political') {
-                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 bg-blue-50 border-blue-500';
-                predictionText.className = 'text-2xl font-bold text-blue-700';
-            } else {
-                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 bg-gray-50 border-gray-500';
-                predictionText.className = 'text-2xl font-bold text-gray-700';
-            }
-            
-            // Set probability bars
-            const politicalProb = data.probabilities.Political * 100;
-            const nonPoliticalProb = data.probabilities['Non-Political'] * 100;
-            
-            politicalBar.style.width = `${politicalProb}%`;
-            nonPoliticalBar.style.width = `${nonPoliticalProb}%`;
-            politicalPercentage.textContent = `${politicalProb.toFixed(1)}%`;
-            nonPoliticalPercentage.textContent = `${nonPoliticalProb.toFixed(1)}%`;
-            
-            // Set reasoning
-            reasoningText.textContent = data.reasoning || 'No reasoning available';
-        }
-
-        // Analyze content
-        async function analyzeContent() {
-            hideResults();
-            loading.classList.remove('hidden');
-            analyzeBtn.disabled = true;
-            
-            try {
-                const requestData = {
-                    type: currentInputType,
-                    analysis_type: currentAnalysisType
-                };
-                
-                if (currentInputType === 'text') {
-                    requestData.text = newsText.value.trim();
-                } else {
-                    requestData.url = articleUrl.value.trim();
-                }
-                
-                const response = await fetch('/predict', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    displayResults(data);
-                } else {
-                    showError(data.error || 'An error occurred during analysis');
-                }
-            } catch (err) {
-                showError('Network error. Please try again.');
-            } finally {
-                loading.classList.add('hidden');
-                analyzeBtn.disabled = false;
-                updateAnalyzeButton();
-            }
-        }
-
-        // Event listeners
-        textBtn.addEventListener('click', () => switchInputType('text'));
-        urlBtn.addEventListener('click', () => switchInputType('url'));
-        fakeNewsBtn.addEventListener('click', () => switchAnalysisType('fake_news'));
-        politicalBtn.addEventListener('click', () => switchAnalysisType('political'));
-        bothBtn.addEventListener('click', () => switchAnalysisType('both'));
-        newsText.addEventListener('input', () => {
-            updateTextCount();
-            updateAnalyzeButton();
-        });
-        articleUrl.addEventListener('input', updateAnalyzeButton);
-        analyzeBtn.addEventListener('click', analyzeContent);
-
-        // Initialize
-        checkModelStatus();
-        updateTextCount();
-        
-        // Refresh model status every 30 seconds
-        setInterval(checkModelStatus, 30000);
-    </script>
+    <!-- JavaScript Modules -->
+    <script src="{{ url_for('static', filename='js/config.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

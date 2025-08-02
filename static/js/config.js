@@ -4,7 +4,9 @@ const Config = {
     endpoints: {
         predict: '/predict',
         modelStatus: '/model-status',
-        submitFeedback: '/submit-feedback'
+        submitFeedback: '/submit-feedback',
+        crawlWebsite: '/crawl-website',
+        analyzeWebsite: '/analyze-website'
     },
     
     // UI update intervals
@@ -17,7 +19,8 @@ const Config = {
     validation: {
         minTextLength: 10,
         maxTextLength: 50000,
-        urlPattern: /^https?:\/\/.+/i
+        urlPattern: /^https?:\/\/.+/i,
+        websitePattern: /^https?:\/\/[^\/]+/i
     },
     
     // Animation durations (in milliseconds)
@@ -37,7 +40,14 @@ const Config = {
     // Input types
     inputTypes: {
         TEXT: 'text',
-        URL: 'url'
+        URL: 'url',
+        WEBSITE: 'website'
+    },
+    
+    // Crawling modes
+    crawlingModes: {
+        PREVIEW: 'preview',
+        ANALYZE: 'analyze'
     },
     
     // CSS classes for different states

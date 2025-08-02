@@ -24,6 +24,9 @@ import json
 from datetime import datetime
 import threading
 import time
+from urllib.parse import urljoin, urlparse, parse_qs
+import concurrent.futures
+from collections import defaultdict
 warnings.filterwarnings('ignore')
 
 # Download required NLTK data
@@ -533,9 +536,253 @@ class PoliticalNewsDetector:
             print(f"Error loading political news model: {str(e)}")
             return False
 
-# Initialize the detectors
+class NewsWebsiteCrawler:
+    def __init__(self):
+        self.common_article_selectors = [
+            'a[href*="/article/"]',
+            'a[href*="/news/"]',
+            'a[href*="/story/"]',
+            'a[href*="/posts/"]',
+            'a[href*="/blog/"]',
+            '.article-link',
+            '.news-link',
+            '.story-link',
+            '.headline a',
+            '.title a',
+            '.entry-title a',
+            'h2 a',
+            'h3 a',
+            '.post-title a'
+        ]
+        
+        self.news_indicators = [
+            'article', 'news', 'story', 'post', 'blog', 'headline',
+            'breaking', 'update', 'report', 'analysis', 'exclusive'
+        ]
+        
+        self.exclude_patterns = [
+            'mailto:', 'tel:', 'javascript:', '#',
+            'facebook.com', 'twitter.com', 'instagram.com',
+            'linkedin.com', 'youtube.com', 'pinterest.com',
+            'about', 'contact', 'privacy', 'terms', 'cookies',
+            'subscribe', 'newsletter', 'login', 'register',
+            'search', 'category', 'tag', 'author', 'archive'
+        ]
+    
+    def is_news_link(self, href, link_text):
+        """Determine if a link is likely a news article"""
+        if not href or any(pattern in href.lower() for pattern in self.exclude_patterns):
+            return False
+        
+        # Check if URL contains news indicators
+        url_lower = href.lower()
+        text_lower = link_text.lower() if link_text else ""
+        
+        # Look for news indicators in URL or link text
+        has_news_indicator = any(indicator in url_lower or indicator in text_lower 
+                               for indicator in self.news_indicators)
+        
+        # Check for date patterns (common in news URLs)
+        date_pattern = r'/\d{4}/\d{1,2}/\d{1,2}/'
+        has_date_pattern = bool(re.search(date_pattern, href))
+        
+        # Check for article ID patterns
+        id_pattern = r'/\d+/'
+        has_id_pattern = bool(re.search(id_pattern, href))
+        
+        return has_news_indicator or has_date_pattern or has_id_pattern
+    
+    def extract_article_links(self, url, max_links=10):
+        """Extract article links from a news website"""
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+            
+            article_links = []
+            seen_urls = set()
+            
+            # Try common article selectors first
+            for selector in self.common_article_selectors:
+                try:
+                    links = soup.select(selector)
+                    for link in links:
+                        href = link.get('href')
+                        if not href:
+                            continue
+                        
+                        # Convert relative URLs to absolute
+                        if href.startswith('/'):
+                            href = urljoin(base_url, href)
+                        elif not href.startswith('http'):
+                            href = urljoin(url, href)
+                        
+                        # Avoid duplicates
+                        if href in seen_urls:
+                            continue
+                        seen_urls.add(href)
+                        
+                        link_text = link.get_text(strip=True)
+                        
+                        if self.is_news_link(href, link_text) and len(article_links) < max_links:
+                            article_links.append({
+                                'url': href,
+                                'title': link_text[:100] + '...' if len(link_text) > 100 else link_text,
+                                'selector_used': selector
+                            })
+                except Exception as e:
+                    continue
+            
+            # If we didn't find enough links, try a broader search
+            if len(article_links) < max_links // 2:
+                all_links = soup.find_all('a', href=True)
+                for link in all_links:
+                    if len(article_links) >= max_links:
+                        break
+                    
+                    href = link.get('href')
+                    if not href:
+                        continue
+                    
+                    # Convert relative URLs to absolute
+                    if href.startswith('/'):
+                        href = urljoin(base_url, href)
+                    elif not href.startswith('http'):
+                        href = urljoin(url, href)
+                    
+                    # Avoid duplicates
+                    if href in seen_urls:
+                        continue
+                    seen_urls.add(href)
+                    
+                    link_text = link.get_text(strip=True)
+                    
+                    if self.is_news_link(href, link_text):
+                        article_links.append({
+                            'url': href,
+                            'title': link_text[:100] + '...' if len(link_text) > 100 else link_text,
+                            'selector_used': 'broad_search'
+                        })
+            
+            return {
+                'success': True,
+                'articles': article_links,
+                'total_found': len(article_links),
+                'website_title': soup.title.string if soup.title else urlparse(url).netloc
+            }
+            
+        except requests.RequestException as e:
+            return {
+                'success': False,
+                'error': f'Network error: {str(e)}',
+                'articles': []
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Parsing error: {str(e)}',
+                'articles': []
+            }
+    
+    def analyze_articles_batch(self, article_urls, analysis_type='both'):
+        """Analyze multiple articles in parallel"""
+        results = []
+        
+        def analyze_single_article(article_info):
+            try:
+                # Extract content from article
+                content_result = extract_article_content(article_info['url'])
+                
+                if 'error' in content_result:
+                    return {
+                        'url': article_info['url'],
+                        'title': article_info['title'],
+                        'error': content_result['error'],
+                        'status': 'failed'
+                    }
+                
+                # Analyze the content
+                text_to_analyze = content_result['combined']
+                if not text_to_analyze.strip():
+                    return {
+                        'url': article_info['url'],
+                        'title': article_info['title'],
+                        'error': 'No content extracted',
+                        'status': 'failed'
+                    }
+                
+                analysis_result = {
+                    'url': article_info['url'],
+                    'title': article_info['title'],
+                    'extracted_title': content_result.get('title', ''),
+                    'content_preview': text_to_analyze[:200] + '...' if len(text_to_analyze) > 200 else text_to_analyze,
+                    'status': 'success'
+                }
+                
+                # Perform fake news detection
+                if analysis_type in ['fake_news', 'both']:
+                    try:
+                        fake_result = detector.predict(text_to_analyze)
+                        analysis_result['fake_news'] = fake_result
+                    except Exception as e:
+                        analysis_result['fake_news'] = {'error': str(e)}
+                
+                # Perform political classification
+                if analysis_type in ['political', 'both']:
+                    try:
+                        political_result = political_detector.predict(text_to_analyze)
+                        analysis_result['political_classification'] = political_result
+                    except Exception as e:
+                        analysis_result['political_classification'] = {'error': str(e)}
+                
+                return analysis_result
+                
+            except Exception as e:
+                return {
+                    'url': article_info['url'],
+                    'title': article_info['title'],
+                    'error': str(e),
+                    'status': 'failed'
+                }
+        
+        # Use ThreadPoolExecutor for parallel processing
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_article = {executor.submit(analyze_single_article, article): article 
+                               for article in article_urls}
+            
+            for future in concurrent.futures.as_completed(future_to_article):
+                try:
+                    result = future.result(timeout=30)  # 30 second timeout per article
+                    results.append(result)
+                except concurrent.futures.TimeoutError:
+                    article = future_to_article[future]
+                    results.append({
+                        'url': article['url'],
+                        'title': article['title'],
+                        'error': 'Analysis timeout',
+                        'status': 'timeout'
+                    })
+                except Exception as e:
+                    article = future_to_article[future]
+                    results.append({
+                        'url': article['url'],
+                        'title': article['title'],
+                        'error': str(e),
+                        'status': 'failed'
+                    })
+        
+        return results
+
+# Initialize the detectors and crawler
 detector = FakeNewsDetector()
 political_detector = PoliticalNewsDetector()
+news_crawler = NewsWebsiteCrawler()
 
 def extract_article_content(url):
     """Extract article content from URL"""
@@ -668,6 +915,134 @@ def predict():
     
     except Exception as e:
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+
+@app.route('/crawl-website', methods=['POST'])
+def crawl_website():
+    """Crawl a news website for article links"""
+    try:
+        data = request.get_json()
+        website_url = data.get('website_url', '').strip()
+        max_articles = int(data.get('max_articles', 10))
+        
+        if not website_url:
+            return jsonify({'error': 'Website URL is required'}), 400
+        
+        # Validate URL
+        if not website_url.startswith(('http://', 'https://')):
+            website_url = 'https://' + website_url
+        
+        # Limit max articles to prevent abuse
+        max_articles = min(max_articles, 20)
+        
+        # Crawl the website
+        crawl_result = news_crawler.extract_article_links(website_url, max_articles)
+        
+        if not crawl_result['success']:
+            return jsonify({
+                'error': crawl_result['error'],
+                'articles': []
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'website_title': crawl_result['website_title'],
+            'total_found': crawl_result['total_found'],
+            'articles': crawl_result['articles']
+        })
+    
+    except Exception as e:
+        return jsonify({'error': f'Crawling failed: {str(e)}'}), 500
+
+@app.route('/analyze-website', methods=['POST'])
+def analyze_website():
+    """Crawl and analyze articles from a news website"""
+    try:
+        data = request.get_json()
+        website_url = data.get('website_url', '').strip()
+        max_articles = int(data.get('max_articles', 5))
+        analysis_type = data.get('analysis_type', 'both')
+        
+        if not website_url:
+            return jsonify({'error': 'Website URL is required'}), 400
+        
+        # Validate URL
+        if not website_url.startswith(('http://', 'https://')):
+            website_url = 'https://' + website_url
+        
+        # Limit max articles to prevent long processing times
+        max_articles = min(max_articles, 10)
+        
+        # First crawl the website to get article links
+        crawl_result = news_crawler.extract_article_links(website_url, max_articles)
+        
+        if not crawl_result['success']:
+            return jsonify({
+                'error': f"Failed to crawl website: {crawl_result['error']}",
+                'results': []
+            }), 400
+        
+        if not crawl_result['articles']:
+            return jsonify({
+                'error': 'No articles found on the website',
+                'results': []
+            }), 400
+        
+        # Analyze the found articles
+        analysis_results = news_crawler.analyze_articles_batch(
+            crawl_result['articles'], 
+            analysis_type
+        )
+        
+        # Calculate summary statistics
+        successful_analyses = [r for r in analysis_results if r['status'] == 'success']
+        failed_analyses = [r for r in analysis_results if r['status'] != 'success']
+        
+        summary = {
+            'total_articles': len(crawl_result['articles']),
+            'successful_analyses': len(successful_analyses),
+            'failed_analyses': len(failed_analyses),
+            'website_title': crawl_result['website_title']
+        }
+        
+        # Add aggregated statistics for successful analyses
+        if successful_analyses and analysis_type in ['fake_news', 'both']:
+            fake_predictions = []
+            for result in successful_analyses:
+                if 'fake_news' in result and 'error' not in result['fake_news']:
+                    fake_predictions.append(result['fake_news']['prediction'])
+            
+            if fake_predictions:
+                fake_count = fake_predictions.count('Fake')
+                real_count = fake_predictions.count('Real')
+                summary['fake_news_summary'] = {
+                    'fake_articles': fake_count,
+                    'real_articles': real_count,
+                    'fake_percentage': (fake_count / len(fake_predictions)) * 100 if fake_predictions else 0
+                }
+        
+        if successful_analyses and analysis_type in ['political', 'both']:
+            political_predictions = []
+            for result in successful_analyses:
+                if 'political_classification' in result and 'error' not in result['political_classification']:
+                    political_predictions.append(result['political_classification']['prediction'])
+            
+            if political_predictions:
+                political_count = political_predictions.count('Political')
+                non_political_count = political_predictions.count('Non-Political')
+                summary['political_summary'] = {
+                    'political_articles': political_count,
+                    'non_political_articles': non_political_count,
+                    'political_percentage': (political_count / len(political_predictions)) * 100 if political_predictions else 0
+                }
+        
+        return jsonify({
+            'success': True,
+            'summary': summary,
+            'results': analysis_results
+        })
+    
+    except Exception as e:
+        return jsonify({'error': f'Website analysis failed: {str(e)}'}), 500
 
 @app.route('/model-status')
 def model_status():

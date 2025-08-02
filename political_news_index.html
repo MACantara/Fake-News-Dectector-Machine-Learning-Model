@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Political News Classifier</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    <style>
+        /* Custom animations */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #1e40af 0%, #3730a3 50%, #581c87 100%);
+        }
+        
+        .glass-effect {
+            backdrop-filter: blur(16px) saturate(180%);
+            background-color: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(209, 213, 219, 0.3);
+        }
+        
+        .political-gradient {
+            background: linear-gradient(135deg, #dc2626 0%, #1d4ed8 100%);
+        }
+        
+        .non-political-gradient {
+            background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
+        }
+    </style>
+</head>
+<body class="min-h-screen gradient-bg">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="text-center mb-12">
+            <h1 class="text-5xl font-bold text-white mb-4">
+                <i class="bi bi-building"></i>
+                Political News Classifier
+            </h1>
+            <p class="text-xl text-white opacity-90">
+                AI-powered tool to identify political news content
+            </p>
+            <p class="text-md text-white opacity-75 mt-2">
+                Automatically classify news articles as political or non-political
+            </p>
+        </header>
+
+        <!-- Model Status -->
+        <div id="modelStatus" class="glass-effect rounded-xl p-4 mb-8 text-center">
+            <div class="flex items-center justify-center">
+                <i class="bi bi-hourglass-split spin text-blue-600 mr-2"></i>
+                <span class="text-gray-700">Checking model status...</span>
+            </div>
+        </div>
+
+        <!-- Main Card -->
+        <div class="max-w-4xl mx-auto glass-effect rounded-2xl shadow-2xl p-8">
+            <!-- Input Type Selector -->
+            <div class="mb-8">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                    <i class="bi bi-input-cursor"></i>
+                    Choose Input Method
+                </h2>
+                <div class="flex space-x-4">
+                    <button id="textBtn" class="input-type-btn bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <i class="bi bi-textarea-t mr-2"></i>
+                        Text Input
+                    </button>
+                    <button id="urlBtn" class="input-type-btn bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                        <i class="bi bi-link-45deg mr-2"></i>
+                        Article URL
+                    </button>
+                </div>
+            </div>
+
+            <!-- Text Input -->
+            <div id="textInput" class="mb-8">
+                <label for="newsText" class="block text-lg font-medium text-gray-700 mb-3">
+                    <i class="bi bi-pencil-square mr-2"></i>
+                    Enter News Text
+                </label>
+                <textarea 
+                    id="newsText" 
+                    rows="8" 
+                    class="w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Paste your news article text here to check if it's political news..."
+                ></textarea>
+                <div class="flex justify-between items-center mt-2">
+                    <small id="textCount" class="text-gray-500">0 characters</small>
+                    <small class="text-gray-500">Recommended: 50-1000 characters</small>
+                </div>
+            </div>
+
+            <!-- URL Input -->
+            <div id="urlInput" class="hidden mb-8">
+                <label for="articleUrl" class="block text-lg font-medium text-gray-700 mb-3">
+                    <i class="bi bi-globe mr-2"></i>
+                    Enter Article URL
+                </label>
+                <input 
+                    type="url" 
+                    id="articleUrl" 
+                    class="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="https://example.com/news-article"
+                />
+                <small class="text-gray-500 mt-2 block">
+                    <i class="bi bi-info-circle mr-1"></i>
+                    Enter a direct link to a news article
+                </small>
+            </div>
+
+            <!-- Analyze Button -->
+            <div class="text-center mb-8">
+                <button 
+                    id="analyzeBtn"
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled
+                >
+                    <i class="bi bi-search mr-2"></i>
+                    Classify News
+                </button>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loading" class="hidden mt-8 text-center">
+                <div class="inline-flex items-center">
+                    <i class="bi bi-arrow-clockwise spin text-blue-600 text-2xl mr-3"></i>
+                    <span class="text-lg text-gray-700">Analyzing content...</span>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results" class="hidden mt-8">
+                <h3 class="text-2xl font-semibold text-gray-800 mb-6">
+                    <i class="bi bi-clipboard-data"></i>
+                    Classification Results
+                </h3>
+                
+                <!-- Prediction Card -->
+                <div id="predictionCard" class="rounded-xl p-6 mb-6 border-l-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">Classification</h4>
+                            <p id="predictionText" class="text-2xl font-bold"></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm text-gray-600 mb-1">Confidence</p>
+                            <p id="confidenceText" class="text-xl font-semibold"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Probability Bars -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white rounded-lg p-4 shadow-md">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-medium text-green-700">
+                                <i class="bi bi-newspaper"></i>
+                                Non-Political
+                            </span>
+                            <span id="nonPoliticalPercentage" class="font-semibold text-green-700"></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div id="nonPoliticalBar" class="bg-green-500 h-3 rounded-full transition-all duration-500"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg p-4 shadow-md">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-medium text-blue-700">
+                                <i class="bi bi-building"></i>
+                                Political
+                            </span>
+                            <span id="politicalPercentage" class="font-semibold text-blue-700"></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div id="politicalBar" class="bg-blue-500 h-3 rounded-full transition-all duration-500"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reasoning Section -->
+                <div id="reasoningSection" class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 mb-6">
+                    <h4 class="text-lg font-semibold text-blue-800 mb-4">
+                        <i class="bi bi-lightbulb"></i>
+                        Classification Reasoning
+                    </h4>
+                    <div id="reasoningText" class="text-gray-700 whitespace-pre-line mb-4"></div>
+                    
+                    <!-- Political Features -->
+                    <div id="politicalFeatures" class="bg-white rounded-lg p-4 border border-blue-200">
+                        <h5 class="font-semibold text-blue-700 mb-3 flex items-center">
+                            <i class="bi bi-graph-up mr-2"></i>
+                            Political Content Analysis
+                        </h5>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-blue-600" id="keywordCount">0</div>
+                                <div class="text-sm text-gray-600">Political Keywords</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-purple-600" id="entityCount">0</div>
+                                <div class="text-sm text-gray-600">Political Entities</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-indigo-600" id="dateCount">0</div>
+                                <div class="text-sm text-gray-600">Time References</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Extracted Content (for URL input) -->
+                <div id="extractedContent" class="hidden bg-gray-50 rounded-lg p-6">
+                    <h4 class="text-lg font-semibold text-gray-800 mb-3">
+                        <i class="bi bi-file-text"></i>
+                        Extracted Content
+                    </h4>
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Title:</p>
+                            <p id="extractedTitle" class="text-gray-800"></p>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Content Preview:</p>
+                            <p id="extractedPreview" class="text-gray-700 text-sm"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Display -->
+            <div id="error" class="hidden mt-8 bg-red-50 border border-red-200 rounded-lg p-4">
+                <div class="flex items-center">
+                    <i class="bi bi-exclamation-circle text-red-500 text-xl mr-3"></i>
+                    <div>
+                        <h4 class="text-red-800 font-semibold">Error</h4>
+                        <p id="errorMessage" class="text-red-700"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sample Texts -->
+        <div class="max-w-4xl mx-auto mt-12">
+            <div class="glass-effect rounded-xl p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">
+                    <i class="bi bi-card-text"></i>
+                    Try Sample Texts
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h4 class="font-semibold text-blue-800 mb-2">Political Sample</h4>
+                        <p class="text-sm text-blue-700 mb-3">"Senator introduces new healthcare reform bill in Congress today. The legislation aims to expand coverage while reducing costs for middle-class families."</p>
+                        <button class="sample-btn bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600" data-sample="political">
+                            Try This Sample
+                        </button>
+                    </div>
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <h4 class="font-semibold text-green-800 mb-2">Non-Political Sample</h4>
+                        <p class="text-sm text-green-700 mb-3">"Scientists at the local university have discovered a new method for treating cancer using innovative gene therapy techniques."</p>
+                        <button class="sample-btn bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600" data-sample="non-political">
+                            Try This Sample
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center mt-12 text-white opacity-75">
+            <p>
+                <i class="bi bi-cpu"></i>
+                Powered by Machine Learning • Built with Flask & Tailwind CSS
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // State management
+        let currentInputType = 'text';
+        let modelReady = false;
+        let lastPredictionData = null;
+
+        // DOM elements
+        const textBtn = document.getElementById('textBtn');
+        const urlBtn = document.getElementById('urlBtn');
+        const textInput = document.getElementById('textInput');
+        const urlInput = document.getElementById('urlInput');
+        const newsText = document.getElementById('newsText');
+        const articleUrl = document.getElementById('articleUrl');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const error = document.getElementById('error');
+        const modelStatus = document.getElementById('modelStatus');
+        const textCount = document.getElementById('textCount');
+
+        // Sample buttons
+        const sampleBtns = document.querySelectorAll('.sample-btn');
+
+        // Check model status
+        async function checkModelStatus() {
+            try {
+                const response = await fetch('/model-status');
+                const data = await response.json();
+                
+                if (data.is_trained) {
+                    modelReady = true;
+                    modelStatus.innerHTML = `
+                        <div class="flex items-center justify-center">
+                            <i class="bi bi-check-circle text-green-600 mr-2"></i>
+                            <span class="text-gray-700">${data.status}</span>
+                        </div>
+                    `;
+                    modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center border border-green-200';
+                    updateAnalyzeButton();
+                } else {
+                    setTimeout(checkModelStatus, 2000);
+                }
+            } catch (err) {
+                setTimeout(checkModelStatus, 5000);
+            }
+        }
+
+        // Input type switching
+        function switchInputType(type) {
+            currentInputType = type;
+            
+            if (type === 'text') {
+                textBtn.className = 'input-type-btn bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
+                urlBtn.className = 'input-type-btn bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500';
+                textInput.classList.remove('hidden');
+                urlInput.classList.add('hidden');
+            } else {
+                urlBtn.className = 'input-type-btn bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
+                textBtn.className = 'input-type-btn bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500';
+                urlInput.classList.remove('hidden');
+                textInput.classList.add('hidden');
+            }
+            
+            updateAnalyzeButton();
+            hideResults();
+        }
+
+        // Update analyze button state
+        function updateAnalyzeButton() {
+            const hasInput = currentInputType === 'text' 
+                ? newsText.value.trim().length > 0 
+                : articleUrl.value.trim().length > 0;
+            
+            analyzeBtn.disabled = !modelReady || !hasInput;
+        }
+
+        // Hide results and errors
+        function hideResults() {
+            results.classList.add('hidden');
+            error.classList.add('hidden');
+        }
+
+        // Show error
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            error.classList.remove('hidden');
+            error.classList.add('fade-in');
+        }
+
+        // Update text count
+        function updateTextCount() {
+            const count = newsText.value.length;
+            textCount.textContent = `${count} characters`;
+        }
+
+        // Display results
+        function displayResults(data) {
+            lastPredictionData = data;
+            
+            const predictionCard = document.getElementById('predictionCard');
+            const predictionText = document.getElementById('predictionText');
+            const confidenceText = document.getElementById('confidenceText');
+            const nonPoliticalBar = document.getElementById('nonPoliticalBar');
+            const politicalBar = document.getElementById('politicalBar');
+            const nonPoliticalPercentage = document.getElementById('nonPoliticalPercentage');
+            const politicalPercentage = document.getElementById('politicalPercentage');
+            
+            // Set prediction
+            predictionText.textContent = data.prediction;
+            confidenceText.textContent = `${(data.confidence * 100).toFixed(1)}%`;
+            
+            // Set card styling based on prediction
+            if (data.prediction === 'Political') {
+                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 border-blue-500 bg-blue-50';
+                predictionText.className = 'text-2xl font-bold text-blue-700';
+            } else if (data.prediction === 'Non-Political') {
+                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 border-green-500 bg-green-50';
+                predictionText.className = 'text-2xl font-bold text-green-700';
+            } else {
+                predictionCard.className = 'rounded-xl p-6 mb-6 border-l-4 border-gray-500 bg-gray-50';
+                predictionText.className = 'text-2xl font-bold text-gray-700';
+            }
+            
+            // Set probability bars
+            const nonPoliticalProb = data.probabilities['Non-Political'] * 100;
+            const politicalProb = data.probabilities.Political * 100;
+            
+            nonPoliticalBar.style.width = `${nonPoliticalProb}%`;
+            politicalBar.style.width = `${politicalProb}%`;
+            nonPoliticalPercentage.textContent = `${nonPoliticalProb.toFixed(1)}%`;
+            politicalPercentage.textContent = `${politicalProb.toFixed(1)}%`;
+            
+            // Display reasoning and features
+            displayReasoning(data);
+            
+            // Show extracted content if available
+            const extractedContent = document.getElementById('extractedContent');
+            if (data.extracted_content) {
+                document.getElementById('extractedTitle').textContent = data.extracted_content.title;
+                document.getElementById('extractedPreview').textContent = data.extracted_content.content_preview;
+                extractedContent.classList.remove('hidden');
+            } else {
+                extractedContent.classList.add('hidden');
+            }
+            
+            results.classList.remove('hidden');
+            results.classList.add('fade-in');
+        }
+
+        // Display reasoning information
+        function displayReasoning(data) {
+            const reasoningText = document.getElementById('reasoningText');
+            const keywordCount = document.getElementById('keywordCount');
+            const entityCount = document.getElementById('entityCount');
+            const dateCount = document.getElementById('dateCount');
+            
+            // Display reasoning text
+            if (data.reasoning) {
+                reasoningText.textContent = data.reasoning;
+            } else {
+                reasoningText.textContent = 'Reasoning analysis not available for this prediction.';
+            }
+            
+            // Display political features
+            if (data.political_features) {
+                keywordCount.textContent = data.political_features.political_keyword_count || 0;
+                entityCount.textContent = data.political_features.political_entities || 0;
+                dateCount.textContent = data.political_features.date_references || 0;
+            } else {
+                keywordCount.textContent = '0';
+                entityCount.textContent = '0';
+                dateCount.textContent = '0';
+            }
+        }
+
+        // Analyze content
+        async function analyzeContent() {
+            hideResults();
+            loading.classList.remove('hidden');
+            analyzeBtn.disabled = true;
+            
+            try {
+                const requestData = {
+                    type: currentInputType,
+                    [currentInputType]: currentInputType === 'text' ? newsText.value : articleUrl.value
+                };
+                
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.error) {
+                        showError(data.error);
+                    } else {
+                        displayResults(data);
+                    }
+                } else {
+                    showError(data.error || 'An error occurred during analysis');
+                }
+            } catch (err) {
+                showError('Network error. Please try again.');
+            } finally {
+                loading.classList.add('hidden');
+                updateAnalyzeButton();
+            }
+        }
+
+        // Handle sample button clicks
+        function handleSampleClick(event) {
+            const sampleType = event.target.getAttribute('data-sample');
+            const samples = {
+                'political': "Senator introduces new healthcare reform bill in Congress today. The legislation aims to expand coverage while reducing costs for middle-class families.",
+                'non-political': "Scientists at the local university have discovered a new method for treating cancer using innovative gene therapy techniques."
+            };
+            
+            // Switch to text input if not already
+            if (currentInputType !== 'text') {
+                switchInputType('text');
+            }
+            
+            newsText.value = samples[sampleType];
+            updateTextCount();
+            updateAnalyzeButton();
+        }
+
+        // Event listeners
+        textBtn.addEventListener('click', () => switchInputType('text'));
+        urlBtn.addEventListener('click', () => switchInputType('url'));
+        newsText.addEventListener('input', () => {
+            updateTextCount();
+            updateAnalyzeButton();
+        });
+        articleUrl.addEventListener('input', updateAnalyzeButton);
+        analyzeBtn.addEventListener('click', analyzeContent);
+        
+        // Sample button event listeners
+        sampleBtns.forEach(btn => {
+            btn.addEventListener('click', handleSampleClick);
+        });
+
+        // Initialize
+        checkModelStatus();
+        updateTextCount();
+    </script>
+</body>
+</html>

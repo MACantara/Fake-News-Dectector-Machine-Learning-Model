@@ -151,12 +151,12 @@ class NewsAnalyzer {
                 const overallReady = result.fake_news_model.is_trained && result.political_model.is_trained;
                 
                 if (overallReady) {
-                    Utils.dom.setText(this.elements.modelStatus, 
+                    Utils.dom.setHTML(this.elements.modelStatus, 
                         '<i class="bi bi-check-circle text-green-600 mr-2"></i>Models ready for analysis'
                     );
                     this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center status-ready';
                 } else {
-                    Utils.dom.setText(this.elements.modelStatus, 
+                    Utils.dom.setHTML(this.elements.modelStatus, 
                         '<i class="bi bi-hourglass-split text-yellow-600 mr-2"></i>Models are loading...'
                     );
                     this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center status-loading';
@@ -165,7 +165,7 @@ class NewsAnalyzer {
         } catch (error) {
             console.error('Failed to check model status:', error);
             if (this.elements.modelStatus) {
-                Utils.dom.setText(this.elements.modelStatus, 
+                Utils.dom.setHTML(this.elements.modelStatus, 
                     '<i class="bi bi-exclamation-triangle text-red-600 mr-2"></i>Error checking model status'
                 );
                 this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center status-error';

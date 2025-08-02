@@ -104,6 +104,7 @@ class PoliticalNewsDetector:
                 processed_words.append(lemmatized)
         
         return ' '.join(processed_words)
+        return ' '.join(processed_words)
     
     def extract_political_features(self, text):
         """Extract political-specific features from text"""
@@ -419,19 +420,20 @@ class PoliticalNewsDetector:
         
         return '\n'.join(reasoning_parts)
     
-    def load_model(self, filepath='political_news_model.pkl'):
+    def load_model(self, filepath='political_news_classifier.pkl'):
         """Load a pre-trained model"""
         try:
             if not os.path.exists(filepath):
+                print(f"Model file '{filepath}' not found.")
                 return False
             
             model_data = joblib.load(filepath)
             self.model = model_data['model']
             self.accuracy = model_data['accuracy']
-            self.stemmer = model_data['stemmer']
-            self.lemmatizer = model_data['lemmatizer']
-            self.stop_words = model_data['stop_words']
-            self.political_keywords = model_data['political_keywords']
+            self.stemmer = model_data.get('stemmer', PorterStemmer())
+            self.lemmatizer = model_data.get('lemmatizer', WordNetLemmatizer())
+            self.stop_words = model_data.get('stop_words', set(stopwords.words('english')))
+            self.political_keywords = model_data.get('political_keywords', self.political_keywords)
             self.is_trained = True
             
             print(f"Model loaded successfully with accuracy: {self.accuracy:.4f}")
@@ -558,19 +560,26 @@ def model_status():
     return jsonify(status_info)
 
 def initialize_model():
-    """Initialize and train the model"""
+    """Initialize and load the existing model"""
     try:
         print("Initializing political news classification model...")
         
-        # First try to load existing model
-        if detector.load_model():
-            print("Using existing pre-trained model.")
+        # Try to load existing model
+        if detector.load_model('political_news_classifier.pkl'):
+            print("Using existing pre-trained model from 'political_news_classifier.pkl'")
             return
+        
+        # Fallback: try alternative model names
+        alternative_models = ['political_news_model.pkl']
+        for model_file in alternative_models:
+            if detector.load_model(model_file):
+                print(f"Using existing pre-trained model from '{model_file}'")
+                return
         
         print("No existing model found. Training new model...")
         print("This may take a few minutes...")
         
-        # Train a new model
+        # Train a new model only if no existing model is found
         accuracy = detector.prepare_and_train_model()
         print(f"Model training completed with accuracy: {accuracy:.4f}")
         
@@ -584,11 +593,12 @@ def initialize_model():
             'political_keywords': detector.political_keywords,
             'timestamp': datetime.now().isoformat()
         }
-        joblib.dump(model_data, 'political_news_model.pkl')
-        print("Model saved as 'political_news_model.pkl'")
+        joblib.dump(model_data, 'political_news_classifier.pkl')
+        print("Model saved as 'political_news_classifier.pkl'")
         
     except Exception as e:
         print(f"Error initializing model: {str(e)}")
+        print("Please ensure 'political_news_classifier.pkl' exists or 'News_Category_Dataset_v3.json' is available for training.")
 
 if __name__ == '__main__':
     # Initialize model in a separate thread to avoid blocking

@@ -137,8 +137,13 @@ class NewsAnalyzer {
     // Check model status
     async checkModelStatus() {
         try {
-            const result = await Utils.http.get(Config.endpoints.modelStatus);
+            const response = await Utils.http.get(Config.endpoints.modelStatus);
             
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to check model status');
+            }
+            
+            const result = response.data;
             if (result && result.fake_news_model && result.political_model) {
                 this.state.modelsReady.fake_news = result.fake_news_model.is_trained;
                 this.state.modelsReady.political = result.political_model.is_trained;
@@ -354,12 +359,17 @@ class NewsAnalyzer {
                 requestData.url = this.elements.articleUrl.value.trim();
             }
             
-            const result = await Utils.http.post(Config.endpoints.predict, requestData);
+            const response = await Utils.http.post(Config.endpoints.predict, requestData);
             
-            if (result.error) {
-                this.showError(result.error);
+            if (!response.success) {
+                this.showError(response.error || 'Analysis failed');
             } else {
-                this.displayResults(result);
+                const result = response.data;
+                if (result.error) {
+                    this.showError(result.error);
+                } else {
+                    this.displayResults(result);
+                }
             }
         } catch (error) {
             console.error('Analysis error:', error);
@@ -405,11 +415,16 @@ class NewsAnalyzer {
 
     // Crawl website for preview (just show links)
     async crawlWebsitePreview(websiteUrl, maxArticles) {
-        const result = await Utils.http.post(Config.endpoints.crawlWebsite, {
+        const response = await Utils.http.post(Config.endpoints.crawlWebsite, {
             website_url: websiteUrl,
             max_articles: maxArticles
         });
 
+        if (!response.success) {
+            throw new Error(response.error || 'Failed to crawl website');
+        }
+
+        const result = response.data;
         if (!result.success) {
             throw new Error(result.error || 'Failed to crawl website');
         }
@@ -419,12 +434,17 @@ class NewsAnalyzer {
 
     // Crawl and analyze website
     async crawlAndAnalyzeWebsite(websiteUrl, maxArticles) {
-        const result = await Utils.http.post(Config.endpoints.analyzeWebsite, {
+        const response = await Utils.http.post(Config.endpoints.analyzeWebsite, {
             website_url: websiteUrl,
             max_articles: maxArticles,
             analysis_type: this.state.currentAnalysisType
         });
 
+        if (!response.success) {
+            throw new Error(response.error || 'Failed to analyze website');
+        }
+
+        const result = response.data;
         if (!result.success) {
             throw new Error(result.error || 'Failed to analyze website');
         }
@@ -491,12 +511,17 @@ class NewsAnalyzer {
 
         try {
             const websiteUrl = this.elements.websiteUrl?.value.trim();
-            const result = await Utils.http.post(Config.endpoints.analyzeWebsite, {
+            const response = await Utils.http.post(Config.endpoints.analyzeWebsite, {
                 website_url: websiteUrl,
                 max_articles: this.crawledArticles.length,
                 analysis_type: this.state.currentAnalysisType
             });
 
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to analyze articles');
+            }
+
+            const result = response.data;
             if (!result.success) {
                 throw new Error(result.error || 'Failed to analyze articles');
             }
@@ -723,6 +748,100 @@ class NewsAnalyzer {
         } else {
             return this.elements.articleUrl?.value || '';
         }
+    }
+
+    // Display fake news detection results
+    displayFakeNewsResults(fakeNewsData) {
+        if (!fakeNewsData || fakeNewsData.error) {
+            console.error('Fake news data error:', fakeNewsData?.error);
+            return;
+        }
+
+        // Update prediction card
+        const predictionClass = fakeNewsData.prediction === 'Fake' ? 
+            Config.cssClasses.prediction.fake : Config.cssClasses.prediction.real;
+        const textClass = fakeNewsData.prediction === 'Fake' ? 
+            Config.cssClasses.text.fake : Config.cssClasses.text.real;
+        
+        if (this.elements.fakeNewsPredictionCard) {
+            this.elements.fakeNewsPredictionCard.className = predictionClass;
+        }
+
+        // Update prediction text and confidence
+        Utils.dom.setText(this.elements.fakeNewsPredictionText, fakeNewsData.prediction || 'Unknown');
+        if (this.elements.fakeNewsPredictionText) {
+            this.elements.fakeNewsPredictionText.className = textClass;
+        }
+        
+        Utils.dom.setText(this.elements.fakeNewsConfidenceText, 
+            Utils.format.confidence(fakeNewsData.confidence || 0));
+
+        // Update probability bars
+        const fakeProb = fakeNewsData.probabilities?.fake || 0;
+        const realProb = fakeNewsData.probabilities?.real || 0;
+
+        if (this.elements.fakeBar && this.elements.realBar) {
+            Utils.animations.animateProgressBar(this.elements.fakeBar, fakeProb * 100);
+            Utils.animations.animateProgressBar(this.elements.realBar, realProb * 100);
+        }
+
+        Utils.dom.setText(this.elements.fakePercentage, Utils.format.percentage(fakeProb));
+        Utils.dom.setText(this.elements.realPercentage, Utils.format.percentage(realProb));
+    }
+
+    // Display political classification results
+    displayPoliticalResults(politicalData) {
+        if (!politicalData || politicalData.error) {
+            console.error('Political data error:', politicalData?.error);
+            return;
+        }
+
+        // Update prediction card
+        const predictionClass = politicalData.prediction === 'Political' ? 
+            Config.cssClasses.prediction.political : Config.cssClasses.prediction.nonPolitical;
+        const textClass = politicalData.prediction === 'Political' ? 
+            Config.cssClasses.text.political : Config.cssClasses.text.nonPolitical;
+        
+        if (this.elements.politicalPredictionCard) {
+            this.elements.politicalPredictionCard.className = predictionClass;
+        }
+
+        // Update prediction text and confidence
+        Utils.dom.setText(this.elements.politicalPredictionText, politicalData.prediction || 'Unknown');
+        if (this.elements.politicalPredictionText) {
+            this.elements.politicalPredictionText.className = textClass;
+        }
+        
+        Utils.dom.setText(this.elements.politicalConfidenceText, 
+            Utils.format.confidence(politicalData.confidence || 0));
+
+        // Update probability bars
+        const politicalProb = politicalData.probabilities?.political || 0;
+        const nonPoliticalProb = politicalData.probabilities?.non_political || 0;
+
+        if (this.elements.politicalBar && this.elements.nonPoliticalBar) {
+            Utils.animations.animateProgressBar(this.elements.politicalBar, politicalProb * 100);
+            Utils.animations.animateProgressBar(this.elements.nonPoliticalBar, nonPoliticalProb * 100);
+        }
+
+        Utils.dom.setText(this.elements.politicalPercentage, Utils.format.percentage(politicalProb));
+        Utils.dom.setText(this.elements.nonPoliticalPercentage, Utils.format.percentage(nonPoliticalProb));
+
+        // Update reasoning if available
+        if (politicalData.reasoning && this.elements.reasoningText) {
+            Utils.dom.setText(this.elements.reasoningText, politicalData.reasoning);
+        }
+    }
+
+    // Display extracted content for URL analysis
+    displayExtractedContent(contentData) {
+        if (!contentData) {
+            return;
+        }
+
+        Utils.dom.setText(this.elements.extractedTitle, contentData.title || 'No title extracted');
+        Utils.dom.setText(this.elements.extractedPreview, 
+            Utils.format.truncate(contentData.combined || contentData.content || 'No content extracted', 300));
     }
 }
 

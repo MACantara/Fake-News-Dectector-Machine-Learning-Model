@@ -51,31 +51,43 @@ Add these environment variables in Render:
 - `FLASK_ENV`: production
 - `NLTK_DATA`: /opt/render/project/src/nltk_data
 
-### 4. Git LFS Configuration for Render
+### 4. Git LFS Configuration for Render (Enhanced)
 
-Since Render supports Git LFS, your model files should be automatically pulled during deployment. However, if you encounter issues:
+Render has full Git LFS support, and your application now includes enhanced LFS verification:
 
-1. Ensure your `.gitattributes` file is configured correctly:
-   ```
-   *.pkl filter=lfs diff=lfs merge=lfs -text
-   *.json filter=lfs diff=lfs merge=lfs -text
-   *.csv filter=lfs diff=lfs merge=lfs -text
-   ```
+#### Automatic LFS Verification:
+The application now automatically:
+- Verifies LFS files are properly downloaded (not just pointer files)
+- Checks file sizes to detect LFS pointer issues
+- Provides detailed error messages for LFS problems
+- Attempts alternative file locations if needed
 
-2. Verify files are in LFS:
+#### Health Check Endpoint:
+Monitor your LFS files status at: `your-app-url.com/health`
+
+This endpoint shows:
+- Which LFS files are available
+- File sizes and LFS pointer detection
+- Model loading status
+- Overall application health
+
+#### Enhanced Build Process:
+The build script now:
+- Explicitly pulls Git LFS files during deployment
+- Verifies LFS file integrity
+- Provides detailed status of all tracked files
+- Shows clear error messages for LFS issues
+
+#### Troubleshooting LFS Issues:
+
+1. **Check LFS Status**: Visit `/health` endpoint to see file status
+2. **Verify Repository**: Ensure your repository properly tracks LFS files:
    ```bash
-   git lfs ls-files
+   git lfs ls-files  # Should show your .pkl and .csv files
+   git lfs track "*.pkl" "*.csv" "*.json"  # If files aren't tracked
    ```
-
-3. If needed, manually add files to LFS:
-   ```bash
-   git lfs track "*.pkl"
-   git lfs track "*.csv"
-   git lfs track "*.json"
-   git add .gitattributes
-   git commit -m "Track large files with LFS"
-   git push
-   ```
+3. **Re-deploy**: If LFS files aren't pulled, try redeploying
+4. **Repository Access**: Ensure Render has proper access to your repository
 
 ### 5. Troubleshooting
 
@@ -108,7 +120,13 @@ Once deployed:
 1. Access your application via the Render-provided URL
 2. Test the fake news detection functionality
 3. Verify both text input and URL analysis work correctly
-4. Check the model status endpoint: `your-app-url.com/model-status`
+4. Check the health status: `your-app-url.com/health`
+5. Check the model status: `your-app-url.com/model-status`
+
+#### New Monitoring Endpoints:
+- `/health` - Overall application health with LFS file status
+- `/model-status` - Detailed model information and accuracy
+- `/feedback-stats` - User feedback statistics (if enabled)
 
 ### 7. Post-Deployment
 

@@ -181,14 +181,73 @@ class FakeNewsDetector:
             'needs_retraining': pending_count >= self.retrain_threshold
         }
     
-    def load_model(self, filepath='fake_news_model.pkl'):
-        """Load a pre-trained model from disk"""
+    def verify_lfs_file(self, filepath):
+        """Verify if a file is properly downloaded from Git LFS"""
         try:
             if not os.path.exists(filepath):
-                print(f"Model file '{filepath}' not found.")
-                return False
+                return False, f"File {filepath} does not exist"
+            
+            # Check file size - LFS pointer files are very small (~100 bytes)
+            file_size = os.path.getsize(filepath)
+            if file_size < 1000:  # Less than 1KB might be an LFS pointer
+                print(f"Warning: {filepath} is very small ({file_size} bytes), might be an LFS pointer file")
+                return False, f"File appears to be an LFS pointer (size: {file_size} bytes)"
+            
+            # Try to read the beginning of the file to check for LFS pointer content
+            with open(filepath, 'rb') as f:
+                first_bytes = f.read(100)
+                if b'version https://git-lfs.github.com/spec/' in first_bytes:
+                    return False, "File is a Git LFS pointer, not the actual file"
+            
+            print(f"✓ {filepath} verified as proper file (size: {file_size} bytes)")
+            return True, "File verified successfully"
+            
+        except Exception as e:
+            return False, f"Error verifying file: {str(e)}"
+
+    def load_model(self, filepath='fake_news_model.pkl'):
+        """Load a pre-trained model from disk with Git LFS verification"""
+        try:
+            print(f"Attempting to load model from: {filepath}")
+            
+            # First verify the file is properly downloaded from Git LFS
+            is_valid, message = self.verify_lfs_file(filepath)
+            if not is_valid:
+                print(f"LFS verification failed: {message}")
                 
+                # Try alternative locations for the model file
+                alternative_paths = [
+                    os.path.join(os.getcwd(), filepath),
+                    os.path.join(os.path.dirname(__file__), filepath),
+                    os.path.join('/tmp', filepath),  # Sometimes files might be in tmp during deployment
+                ]
+                
+                for alt_path in alternative_paths:
+                    if os.path.exists(alt_path):
+                        print(f"Trying alternative path: {alt_path}")
+                        is_valid, message = self.verify_lfs_file(alt_path)
+                        if is_valid:
+                            filepath = alt_path
+                            break
+                
+                if not is_valid:
+                    print(f"Model file '{filepath}' not found or not properly downloaded from Git LFS.")
+                    print("This might be due to:")
+                    print("1. Git LFS not being properly configured")
+                    print("2. Model files not being pulled during deployment")
+                    print("3. Insufficient permissions to access the files")
+                    return False
+            
+            print(f"Loading model from verified file: {filepath}")
             model_data = joblib.load(filepath)
+            
+            # Validate model data structure
+            required_keys = ['model', 'stemmer', 'stop_words', 'accuracy']
+            missing_keys = [key for key in required_keys if key not in model_data]
+            if missing_keys:
+                print(f"Warning: Model file missing keys: {missing_keys}")
+                return False
+            
             self.model = model_data['model']
             self.stemmer = model_data['stemmer']
             self.stop_words = model_data['stop_words']
@@ -200,14 +259,20 @@ class FakeNewsDetector:
             feedback_samples = model_data.get('feedback_samples', 0)
             last_retrain = model_data.get('last_retrain', 'Unknown')
             
-            print(f"Model loaded successfully with accuracy: {self.accuracy:.4f}")
-            print(f"Training samples: {training_samples}, Feedback samples: {feedback_samples}")
+            print(f"✓ Model loaded successfully with accuracy: {self.accuracy:.4f}")
+            print(f"  Training samples: {training_samples}, Feedback samples: {feedback_samples}")
             if last_retrain != 'Unknown':
-                print(f"Last retrained: {last_retrain}")
+                print(f"  Last retrained: {last_retrain}")
             
             return True
+            
         except Exception as e:
             print(f"Error loading model: {str(e)}")
+            print(f"Error type: {type(e).__name__}")
+            if "No such file or directory" in str(e):
+                print("The model file was not found. This might indicate a Git LFS issue.")
+            elif "pickle" in str(e).lower() or "joblib" in str(e).lower():
+                print("The model file appears to be corrupted or incomplete.")
             return False
     
     def preprocess_text(self, text):
@@ -231,9 +296,35 @@ class FakeNewsDetector:
         return ' '.join(words)
     
     def load_and_prepare_data(self, filepath):
-        """Load and prepare the dataset"""
-        print("Loading dataset...")
+        """Load and prepare the dataset with Git LFS verification"""
+        print(f"Loading dataset from: {filepath}")
+        
+        # Verify LFS file before loading
+        is_valid, message = self.verify_lfs_file(filepath)
+        if not is_valid:
+            print(f"Dataset LFS verification failed: {message}")
+            
+            # Try alternative locations
+            alternative_paths = [
+                os.path.join(os.getcwd(), filepath),
+                os.path.join(os.path.dirname(__file__), filepath),
+            ]
+            
+            for alt_path in alternative_paths:
+                if os.path.exists(alt_path):
+                    print(f"Trying alternative dataset path: {alt_path}")
+                    is_valid, message = self.verify_lfs_file(alt_path)
+                    if is_valid:
+                        filepath = alt_path
+                        break
+            
+            if not is_valid:
+                raise FileNotFoundError(f"Dataset file '{filepath}' not found or not properly downloaded from Git LFS")
+        
+        print(f"Loading dataset from verified file: {filepath}")
         df = pd.read_csv(filepath)
+        
+        print(f"✓ Dataset loaded successfully: {len(df)} rows")
         
         # Handle missing values
         df['title'] = df['title'].fillna('')
@@ -248,6 +339,7 @@ class FakeNewsDetector:
         # Remove empty texts
         df = df[df['processed_text'].str.len() > 0]
         
+        print(f"✓ Dataset preprocessed: {len(df)} valid rows after cleaning")
         return df
     
     def train_best_model(self, df):
@@ -512,14 +604,62 @@ class PoliticalNewsDetector:
         
         return '\n'.join(reasoning_parts)
     
-    def load_model(self, filepath='political_news_classifier.pkl'):
-        """Load a pre-trained model"""
+    def verify_lfs_file(self, filepath):
+        """Verify if a file is properly downloaded from Git LFS"""
         try:
             if not os.path.exists(filepath):
-                print(f"Political news model file '{filepath}' not found.")
-                return False
+                return False, f"File {filepath} does not exist"
+            
+            # Check file size - LFS pointer files are very small (~100 bytes)
+            file_size = os.path.getsize(filepath)
+            if file_size < 1000:  # Less than 1KB might be an LFS pointer
+                print(f"Warning: {filepath} is very small ({file_size} bytes), might be an LFS pointer file")
+                return False, f"File appears to be an LFS pointer (size: {file_size} bytes)"
+            
+            # Try to read the beginning of the file to check for LFS pointer content
+            with open(filepath, 'rb') as f:
+                first_bytes = f.read(100)
+                if b'version https://git-lfs.github.com/spec/' in first_bytes:
+                    return False, "File is a Git LFS pointer, not the actual file"
+            
+            print(f"✓ {filepath} verified as proper file (size: {file_size} bytes)")
+            return True, "File verified successfully"
+            
+        except Exception as e:
+            return False, f"Error verifying file: {str(e)}"
+
+    def load_model(self, filepath='political_news_classifier.pkl'):
+        """Load a pre-trained model with Git LFS verification"""
+        try:
+            print(f"Attempting to load political model from: {filepath}")
+            
+            # First verify the file is properly downloaded from Git LFS
+            is_valid, message = self.verify_lfs_file(filepath)
+            if not is_valid:
+                print(f"LFS verification failed: {message}")
                 
+                # Try alternative locations for the model file
+                alternative_paths = [
+                    os.path.join(os.getcwd(), filepath),
+                    os.path.join(os.path.dirname(__file__), filepath),
+                    os.path.join('/tmp', filepath),
+                ]
+                
+                for alt_path in alternative_paths:
+                    if os.path.exists(alt_path):
+                        print(f"Trying alternative path: {alt_path}")
+                        is_valid, message = self.verify_lfs_file(alt_path)
+                        if is_valid:
+                            filepath = alt_path
+                            break
+                
+                if not is_valid:
+                    print(f"Political news model file '{filepath}' not found or not properly downloaded from Git LFS.")
+                    return False
+            
+            print(f"Loading political model from verified file: {filepath}")
             model_data = joblib.load(filepath)
+            
             self.model = model_data['model']
             self.stemmer = model_data.get('stemmer', PorterStemmer())
             self.lemmatizer = model_data.get('lemmatizer', WordNetLemmatizer())
@@ -527,13 +667,15 @@ class PoliticalNewsDetector:
             self.accuracy = model_data.get('accuracy', None)
             self.is_trained = True
             
-            print(f"Political news model loaded successfully")
+            print(f"✓ Political news model loaded successfully")
             if self.accuracy:
-                print(f"Model accuracy: {self.accuracy:.4f}")
+                print(f"  Model accuracy: {self.accuracy:.4f}")
             
             return True
+            
         except Exception as e:
             print(f"Error loading political news model: {str(e)}")
+            print(f"Error type: {type(e).__name__}")
             return False
 
 class NewsWebsiteCrawler:
@@ -1517,6 +1659,64 @@ def analyze_website():
     except Exception as e:
         return jsonify({'error': f'Website analysis failed: {str(e)}'}), 500
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint with Git LFS file status"""
+    try:
+        # Check Git LFS files
+        lfs_files = [
+            'fake_news_model.pkl',
+            'political_news_classifier.pkl', 
+            'WELFake_Dataset.csv',
+            'News_Category_Dataset_v3.json'
+        ]
+        
+        file_status = {}
+        for file_path in lfs_files:
+            if os.path.exists(file_path):
+                file_size = os.path.getsize(file_path)
+                file_status[file_path] = {
+                    'exists': True,
+                    'size': file_size,
+                    'is_lfs_pointer': file_size < 1000
+                }
+            else:
+                file_status[file_path] = {
+                    'exists': False,
+                    'size': 0,
+                    'is_lfs_pointer': False
+                }
+        
+        # Check model status
+        models_status = {
+            'fake_news_detector': {
+                'loaded': detector.is_trained,
+                'accuracy': detector.accuracy if detector.accuracy else None
+            },
+            'political_detector': {
+                'loaded': political_detector.is_trained,
+                'accuracy': political_detector.accuracy if political_detector.accuracy else None
+            }
+        }
+        
+        # Overall health
+        is_healthy = detector.is_trained or political_detector.is_trained
+        
+        return jsonify({
+            'status': 'healthy' if is_healthy else 'degraded',
+            'timestamp': datetime.now().isoformat(),
+            'models': models_status,
+            'lfs_files': file_status,
+            'message': 'All systems operational' if is_healthy else 'Some models unavailable'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'timestamp': datetime.now().isoformat(),
+            'error': str(e)
+        }), 500
+
 @app.route('/model-status')
 def model_status():
     status_info = {
@@ -1616,44 +1816,114 @@ def trigger_retrain():
     except Exception as e:
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
+def check_lfs_files():
+    """Check if Git LFS files are properly available"""
+    print("=== Checking Git LFS Files ===")
+    
+    lfs_files = [
+        'fake_news_model.pkl',
+        'political_news_classifier.pkl', 
+        'WELFake_Dataset.csv',
+        'News_Category_Dataset_v3.json'
+    ]
+    
+    available_files = []
+    missing_files = []
+    
+    for file_path in lfs_files:
+        if os.path.exists(file_path):
+            file_size = os.path.getsize(file_path)
+            if file_size > 1000:  # Larger than typical LFS pointer
+                print(f"✓ {file_path} - Available ({file_size:,} bytes)")
+                available_files.append(file_path)
+            else:
+                print(f"⚠ {file_path} - Possibly LFS pointer ({file_size} bytes)")
+                missing_files.append(file_path)
+        else:
+            print(f"✗ {file_path} - Not found")
+            missing_files.append(file_path)
+    
+    print(f"\nSummary: {len(available_files)} available, {len(missing_files)} missing/incomplete")
+    
+    if missing_files:
+        print("\nMissing or incomplete files:", missing_files)
+        print("\nThis might indicate:")
+        print("1. Git LFS is not properly configured")
+        print("2. Files were not pulled during deployment")
+        print("3. Repository access issues")
+        print("\nThe application will attempt to train models from available data.")
+    
+    return available_files, missing_files
+
 def initialize_models():
-    """Initialize and load both models"""
+    """Initialize and load both models with Git LFS verification"""
     try:
-        print("Initializing fake news detection model...")
+        print("=== Initializing Fake News Detector Models ===")
         
-        # First try to load existing fake news model
+        # Check Git LFS files first
+        available_files, missing_files = check_lfs_files()
+        
+        # Initialize fake news detection model
+        print("\n=== Fake News Detection Model ===")
         if detector.load_model():
-            print("Using existing pre-trained fake news model.")
+            print("✓ Using existing pre-trained fake news model.")
         else:
-            print("No existing fake news model found. Training new model...")
-            print("This may take a few minutes...")
+            print("⚠ No existing fake news model found. Attempting to train new model...")
             
-            # If no existing model, train a new one
-            df = detector.load_and_prepare_data('WELFake_Dataset.csv')
-            accuracy = detector.train_best_model(df)
-            print(f"Fake news model training completed with accuracy: {accuracy:.4f}")
-            
-            # Save the newly trained model
-            model_data = {
-                'model': detector.model,
-                'accuracy': accuracy,
-                'stemmer': detector.stemmer,
-                'stop_words': detector.stop_words
-            }
-            joblib.dump(model_data, 'fake_news_model.pkl')
-            print("Fake news model saved as 'fake_news_model.pkl'")
+            if 'WELFake_Dataset.csv' in available_files:
+                print("Dataset available. Training new model...")
+                print("⏳ This may take a few minutes...")
+                
+                try:
+                    df = detector.load_and_prepare_data('WELFake_Dataset.csv')
+                    accuracy = detector.train_best_model(df)
+                    print(f"✓ Fake news model training completed with accuracy: {accuracy:.4f}")
+                    
+                    # Save the newly trained model
+                    model_data = {
+                        'model': detector.model,
+                        'accuracy': accuracy,
+                        'stemmer': detector.stemmer,
+                        'stop_words': detector.stop_words,
+                        'training_samples': len(df),
+                        'created_date': datetime.now().isoformat()
+                    }
+                    joblib.dump(model_data, 'fake_news_model.pkl')
+                    print("✓ Fake news model saved as 'fake_news_model.pkl'")
+                    
+                except Exception as e:
+                    print(f"✗ Error training model: {str(e)}")
+                    print("The application will run with limited functionality.")
+            else:
+                print("✗ Training dataset not available. Fake news detection will be unavailable.")
+                print("Please ensure 'WELFake_Dataset.csv' is properly downloaded from Git LFS.")
         
-        # Try to load political news classifier
-        print("Initializing political news classification model...")
+        # Initialize political news classifier
+        print("\n=== Political News Classification Model ===")
         if political_detector.load_model('political_news_classifier.pkl'):
-            print("Political news classifier loaded successfully.")
+            print("✓ Political news classifier loaded successfully.")
         else:
-            print("Political news classifier not found. Political classification will be unavailable.")
-            print("To enable political classification, ensure 'political_news_classifier.pkl' is available.")
+            print("⚠ Political news classifier not found. Political classification will be unavailable.")
+            print("To enable political classification, ensure 'political_news_classifier.pkl' is properly downloaded from Git LFS.")
         
+        # Final status
+        print("\n=== Initialization Complete ===")
+        fake_ready = detector.is_trained
+        political_ready = political_detector.is_trained
+        
+        if fake_ready and political_ready:
+            print("✓ Both models are ready!")
+        elif fake_ready:
+            print("✓ Fake news detection ready, political classification unavailable")
+        elif political_ready:
+            print("✓ Political classification ready, fake news detection unavailable")
+        else:
+            print("⚠ No models available - limited functionality")
+            
     except Exception as e:
-        print(f"Error initializing models: {str(e)}")
-        print("Please ensure 'WELFake_Dataset.csv' is in the project directory.")
+        print(f"✗ Error initializing models: {str(e)}")
+        print("Please ensure Git LFS files are properly downloaded.")
+        print("Traceback:", str(e))
 
 if __name__ == '__main__':
     # Initialize models in a separate thread to avoid blocking

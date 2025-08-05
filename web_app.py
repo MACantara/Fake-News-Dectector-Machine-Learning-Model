@@ -1657,9 +1657,12 @@ def initialize_models():
 
 if __name__ == '__main__':
     # Initialize models in a separate thread to avoid blocking
-    import threading
     model_thread = threading.Thread(target=initialize_models)
     model_thread.daemon = True
     model_thread.start()
     
-    app.run(debug=True, port=5000)
+    # Get port from environment variable for production deployment
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') != 'production'
+    
+    app.run(host='0.0.0.0', port=port, debug=debug)

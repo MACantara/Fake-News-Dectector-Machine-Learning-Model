@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: fake-news-detector
+    env: python
+    buildCommand: |
+      pip install -r requirements.txt &&
+      python -c "
+      import nltk;
+      nltk.download('punkt', quiet=True);
+      nltk.download('punkt_tab', quiet=True);
+      nltk.download('stopwords', quiet=True);
+      nltk.download('wordnet', quiet=True);
+      nltk.download('omw-1.4', quiet=True);
+      print('NLTK data downloaded successfully')
+      "
+    startCommand: gunicorn web_app:app
+    plan: starter
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.4
+      - key: NLTK_DATA
+        value: /opt/render/project/src/nltk_data
+    disk:
+      name: fake-news-models
+      mountPath: /opt/render/project/src/models
+      sizeGB: 1

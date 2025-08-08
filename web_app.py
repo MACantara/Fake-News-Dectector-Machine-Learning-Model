@@ -1600,28 +1600,20 @@ class NewsWebsiteCrawler:
                     continue
                 
                 seen_urls.add(href)
-                link_text = link.get_text(strip=True)
                 
-                # Return in the exact format requested: <a href="url">title</a>
-                link_html = f'<a href="{href}">{link_text}</a>'
-                
-                all_links.append({
-                    'url': href,
-                    'title': link_text,
-                    'html_format': link_html,
-                    'raw_html': str(link)
-                })
+                # Only return the URL from href attribute
+                all_links.append(href)
             
-            print(f"🔗 Found {len(all_links)} total links (no filtering applied)")
+            print(f"🔗 Found {len(all_links)} total URLs (no filtering applied)")
             
-            # Return all links without any classification or filtering
+            # Return all URLs without any classification or filtering
             return {
                 'success': True,
-                'articles': all_links,
+                'articles': all_links,  # Now just a list of URLs
                 'total_found': len(all_links),
                 'total_candidates': len(all_links),
                 'website_title': soup.title.string if soup.title else urlparse(url).netloc,
-                'classification_method': 'No filtering - All links returned'
+                'classification_method': 'No filtering - All URLs returned'
             }
             
         except requests.RequestException as e:

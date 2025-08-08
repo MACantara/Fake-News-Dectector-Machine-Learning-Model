@@ -651,10 +651,26 @@ class NewsAnalyzer {
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center justify-between mb-2">
                                 <span class="text-sm font-medium text-gray-900">#${index + 1}</span>
-                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
-                                    <i class="bi bi-link mr-1"></i>
-                                    ${domainName}
-                                </span>
+                                <div class="flex items-center gap-2">
+                                    <!-- Feedback buttons moved to top -->
+                                    <div class="flex gap-1">
+                                        <button onclick="newsAnalyzer.submitUrlFeedback('${Utils.format.escape(articleUrl)}', true, 0.9)" 
+                                                class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs hover:bg-green-200 transition-colors"
+                                                title="Mark as News Article">
+                                            <i class="bi bi-check-circle"></i>
+                                        </button>
+                                        <button onclick="newsAnalyzer.submitUrlFeedback('${Utils.format.escape(articleUrl)}', false, 0.9)" 
+                                                class="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs hover:bg-red-200 transition-colors"
+                                                title="Mark as Not News Article">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                    </div>
+                                    <!-- Domain badge -->
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                                        <i class="bi bi-link mr-1"></i>
+                                        ${domainName}
+                                    </span>
+                                </div>
                             </div>
                             
                             ${articleText ? `
@@ -671,20 +687,6 @@ class NewsAnalyzer {
                             </div>
                             
                             ${classificationDisplay}
-
-                            <!-- Feedback buttons -->
-                            <div class="flex flex-wrap gap-2 mt-3">
-                                <button onclick="newsAnalyzer.submitUrlFeedback('${Utils.format.escape(articleUrl)}', true, 0.9)" 
-                                        class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs hover:bg-green-200 transition-colors">
-                                    <i class="bi bi-check-circle mr-1"></i>
-                                    Is News Article
-                                </button>
-                                <button onclick="newsAnalyzer.submitUrlFeedback('${Utils.format.escape(articleUrl)}', false, 0.9)" 
-                                        class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs hover:bg-red-200 transition-colors">
-                                    <i class="bi bi-x-circle mr-1"></i>
-                                    Not News Article
-                                </button>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1327,15 +1329,15 @@ class NewsAnalyzer {
             const articleUrl = articleElement.getAttribute('data-url');
             if (articleUrl === url) {
                 targetArticle = articleElement;
-                // Replace feedback buttons with confirmation
-                const feedbackDiv = articleElement.querySelector('.flex.flex-wrap.gap-2');
-                if (feedbackDiv) {
+                // Replace feedback buttons with confirmation in the top right area
+                const buttonContainer = articleElement.querySelector('.flex.gap-1');
+                if (buttonContainer) {
                     const icon = isCorrect ? 'check-circle' : 'x-circle';
                     const color = isCorrect ? 'green' : 'orange';
-                    const message = isCorrect ? 'Feedback: Correct' : 'Feedback: Incorrect';
+                    const message = isCorrect ? 'Correct' : 'Incorrect';
                     
-                    feedbackDiv.innerHTML = `
-                        <div class="text-xs text-${color}-600 flex items-center bg-${color}-50 px-3 py-1 rounded-full">
+                    buttonContainer.innerHTML = `
+                        <div class="text-xs text-${color}-600 flex items-center bg-${color}-50 px-2 py-1 rounded-full">
                             <i class="bi bi-${icon} mr-1"></i>
                             ${message}
                         </div>

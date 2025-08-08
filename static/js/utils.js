@@ -173,6 +173,14 @@ const Utils = {
         displayText(text) {
             if (!text) return '';
             return text.replace(/\n/g, '<br>');
+        },
+
+        // Escape HTML characters to prevent XSS
+        escape(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
     },
 

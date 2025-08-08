@@ -6,7 +6,14 @@ const Config = {
         modelStatus: '/model-status',
         submitFeedback: '/submit-feedback',
         crawlWebsite: '/crawl-website',
-        analyzeWebsite: '/analyze-website'
+        analyzeWebsite: '/analyze-website',
+        indexPhilippineArticle: '/index-philippine-article',
+        searchPhilippineNews: '/search-philippine-news',
+        philippineNewsAnalytics: '/philippine-news-analytics',
+        getPhilippineArticle: '/philippine-article/',
+        batchIndexPhilippineArticles: '/batch-index-philippine-articles',
+        philippineNewsCategories: '/philippine-news-categories',
+        philippineNewsSources: '/philippine-news-sources'
     },
     
     // UI update intervals
@@ -41,7 +48,8 @@ const Config = {
     inputTypes: {
         TEXT: 'text',
         URL: 'url',
-        WEBSITE: 'website'
+        WEBSITE: 'website',
+        SEARCH: 'search'
     },
     
     // Crawling modes

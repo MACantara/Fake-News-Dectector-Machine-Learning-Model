@@ -465,11 +465,14 @@ class NewsAnalyzer {
         Utils.dom.show(this.elements.loading);
         this.updateAnalyzeButton();
 
+        // Start timing the crawling operation
+        const startTime = performance.now();
+
         try {
             if (crawlingMode === Config.crawlingModes.PREVIEW) {
-                await this.crawlWebsitePreview(websiteUrl, maxArticles);
+                await this.crawlWebsitePreview(websiteUrl, maxArticles, startTime);
             } else {
-                await this.crawlAndAnalyzeWebsite(websiteUrl, maxArticles);
+                await this.crawlAndAnalyzeWebsite(websiteUrl, maxArticles, startTime);
             }
         } catch (error) {
             console.error('Website crawling error:', error);
@@ -482,7 +485,7 @@ class NewsAnalyzer {
     }
 
     // Crawl website for preview (just show links)
-    async crawlWebsitePreview(websiteUrl, maxArticles) {
+    async crawlWebsitePreview(websiteUrl, maxArticles, startTime) {
         const response = await Utils.http.post(Config.endpoints.crawlWebsite, {
             website_url: websiteUrl,
             max_articles: maxArticles
@@ -497,11 +500,16 @@ class NewsAnalyzer {
             throw new Error(result.error || 'Website crawling failed');
         }
 
+        // Calculate response time
+        const endTime = performance.now();
+        const responseTime = endTime - startTime;
+        result.responseTime = responseTime;
+
         this.displayCrawledArticles(result);
     }
 
     // Crawl and analyze website
-    async crawlAndAnalyzeWebsite(websiteUrl, maxArticles) {
+    async crawlAndAnalyzeWebsite(websiteUrl, maxArticles, startTime) {
         const response = await Utils.http.post(Config.endpoints.analyzeWebsite, {
             website_url: websiteUrl,
             max_articles: maxArticles,
@@ -516,6 +524,11 @@ class NewsAnalyzer {
         if (!result.success) {
             throw new Error(result.error || 'Website analysis failed');
         }
+
+        // Calculate response time
+        const endTime = performance.now();
+        const responseTime = endTime - startTime;
+        result.responseTime = responseTime;
 
         this.displayWebsiteAnalysisResults(result);
     }
@@ -539,6 +552,9 @@ class NewsAnalyzer {
 
         // Add classification method info if available
         if (data.classification_method) {
+            const responseTimeText = data.responseTime ? 
+                `Response time: ${this.formatResponseTime(data.responseTime)}` : '';
+            
             const summaryHtml = `
                 <div class="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
                     <div class="flex items-center space-x-2">
@@ -549,6 +565,24 @@ class NewsAnalyzer {
                     </div>
                     <div class="text-xs text-green-700 mt-1">
                         Extracted ${data.total_found} URLs from website
+                        ${data.responseTime ? ` • ${responseTimeText}` : ''}
+                    </div>
+                </div>
+            `;
+            this.elements.analyzedWebsiteTitle.insertAdjacentHTML('afterend', summaryHtml);
+        } else if (data.responseTime) {
+            // Show response time even if no classification method
+            const responseTimeText = `Response time: ${this.formatResponseTime(data.responseTime)}`;
+            const summaryHtml = `
+                <div class="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
+                    <div class="flex items-center space-x-2">
+                        <i class="bi bi-clock text-blue-600"></i>
+                        <span class="text-sm font-medium text-blue-800">
+                            URL Extraction Complete
+                        </span>
+                    </div>
+                    <div class="text-xs text-blue-700 mt-1">
+                        Extracted ${data.total_found} URLs • ${responseTimeText}
                     </div>
                 </div>
             `;
@@ -624,6 +658,22 @@ class NewsAnalyzer {
         }
     }
 
+    // Helper method to format response time
+    formatResponseTime(responseTimeMs) {
+        if (!responseTimeMs) return '';
+        
+        const seconds = (responseTimeMs / 1000).toFixed(2);
+        if (responseTimeMs < 1000) {
+            return `${Math.round(responseTimeMs)}ms`;
+        } else if (responseTimeMs < 60000) {
+            return `${seconds}s`;
+        } else {
+            const minutes = Math.floor(responseTimeMs / 60000);
+            const remainingSeconds = ((responseTimeMs % 60000) / 1000).toFixed(0);
+            return `${minutes}m ${remainingSeconds}s`;
+        }
+    }
+
     // Analyze found articles (when button is clicked in preview mode)
     async analyzeFoundArticles() {
         if (!this.crawledArticles || this.crawledArticles.length === 0) {
@@ -635,6 +685,9 @@ class NewsAnalyzer {
         Utils.dom.show(this.elements.loading);
         this.updateAnalyzeButton();
 
+        // Start timing the analysis operation
+        const startTime = performance.now();
+
         try {
             // Convert URLs to article objects for analysis
             const articleObjects = this.crawledArticles.map(url => ({ url: url }));
@@ -645,6 +698,11 @@ class NewsAnalyzer {
             });
 
             if (response.success) {
+                // Calculate response time and add it to the response data
+                const endTime = performance.now();
+                const responseTime = endTime - startTime;
+                response.data.responseTime = responseTime;
+                
                 this.displayWebsiteAnalysisResults(response.data);
             } else {
                 this.showError(response.error || 'Failed to analyze articles');
@@ -670,6 +728,25 @@ class NewsAnalyzer {
         Utils.dom.setText(this.elements.successfulAnalysesCount, summary.successful_analyses);
         Utils.dom.setText(this.elements.failedAnalysesCount, summary.failed_analyses);
         Utils.dom.setText(this.elements.analyzedWebsiteTitle, summary.website_title || 'Unknown Website');
+
+        // Add response time info if available
+        if (data.responseTime) {
+            const responseTimeText = `Analysis completed in ${this.formatResponseTime(data.responseTime)}`;
+            const responseTimeHtml = `
+                <div class="mt-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                    <div class="flex items-center space-x-2">
+                        <i class="bi bi-clock text-purple-600"></i>
+                        <span class="text-sm font-medium text-purple-800">
+                            Performance Metrics
+                        </span>
+                    </div>
+                    <div class="text-xs text-purple-700 mt-1">
+                        ${responseTimeText} • Analyzed ${summary.total_articles} articles
+                    </div>
+                </div>
+            `;
+            this.elements.analyzedWebsiteTitle.insertAdjacentHTML('afterend', responseTimeHtml);
+        }
 
         // Show/hide statistics based on analysis type
         const showFakeNews = this.state.currentAnalysisType === Config.analysisTypes.FAKE_NEWS || 

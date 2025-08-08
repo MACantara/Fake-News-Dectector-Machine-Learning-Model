@@ -675,19 +675,6 @@ class NewsAnalyzer {
                 `;
             }
 
-            // Add indexing status if available
-            if (result.indexing_status) {
-                const statusClass = result.indexing_status.includes('successfully') ? 'text-green-600' : 'text-blue-600';
-                resultHtml += `
-                    <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                        <div class="flex items-center">
-                            <i class="bi bi-database-add ${statusClass} mr-2"></i>
-                            <span class="text-sm text-blue-800">${result.indexing_status}</span>
-                        </div>
-                    </div>
-                `;
-            }
-
             resultHtml += `
                     <div class="flex justify-between items-center">
                         <button onclick="window.open('${result.url}', '_blank')" 
@@ -753,37 +740,9 @@ class NewsAnalyzer {
             Utils.dom.show(this.elements.extractedContent);
         }
         
-        // Show indexing status if available
-        if (actualData.indexing_status && this.state.currentInputType === Config.inputTypes.URL) {
-            this.displayIndexingStatus(actualData.indexing_status);
-        }
-        
         // Show results section
         Utils.dom.show(this.elements.results);
         Utils.animations.fadeIn(this.elements.results);
-    }
-
-    // Display indexing status for single article
-    displayIndexingStatus(indexingStatus) {
-        // Create or update indexing status message
-        const resultsContainer = this.elements.results;
-        let statusElement = resultsContainer.querySelector('.indexing-status');
-        
-        if (!statusElement) {
-            statusElement = document.createElement('div');
-            statusElement.className = 'indexing-status bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6';
-            resultsContainer.insertBefore(statusElement, resultsContainer.firstChild);
-        }
-        
-        const statusIcon = indexingStatus === 'Article queued for indexing in Philippine news database' ? 
-            'bi-database-add text-blue-600' : 'bi-info-circle text-blue-600';
-        
-        statusElement.innerHTML = `
-            <div class="flex items-center">
-                <i class="bi ${statusIcon} mr-2"></i>
-                <span class="text-blue-800 font-medium">${indexingStatus}</span>
-            </div>
-        `;
     }
 
     // Get current input text

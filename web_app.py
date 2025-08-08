@@ -2423,16 +2423,6 @@ def predict():
                     'error': 'No content could be extracted from the URL'
                 }), 400
             
-            # Automatically index the article in the Philippine news database (background task)
-            def index_article_background():
-                try:
-                    philippine_search_index.index_article(url, force_reindex=False)
-                except Exception as e:
-                    print(f"Background indexing error for {url}: {e}")
-            
-            # Start indexing in background thread (non-blocking)
-            threading.Thread(target=index_article_background, daemon=True).start()
-            
             # Perform fake news detection
             fake_result = detector.predict(combined_text)
             result = {
@@ -2442,8 +2432,7 @@ def predict():
                     'content_preview': combined_text[:500] + '...' if len(combined_text) > 500 else combined_text,
                     'combined': combined_text,
                     'word_count': len(combined_text.split()) if combined_text else 0
-                },
-                'indexing_status': 'Article queued for indexing in Philippine news database'
+                }
             }
             
             # Perform political classification if requested

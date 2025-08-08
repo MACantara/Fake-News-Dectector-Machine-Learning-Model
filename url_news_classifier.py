@@ -298,11 +298,22 @@ class URLNewsClassifier:
         y = []
         
         for feedback in self.feedback_data:
-            if feedback.get('feature_vector'):
-                X.append(feedback['feature_vector'])
-                y.append(1 if feedback['actual_label'] else 0)
+            feature_vector = feedback.get('feature_vector')
+            
+            # If feature_vector is empty or missing, generate it from the URL
+            if not feature_vector or len(feature_vector) == 0:
+                try:
+                    feature_vector, _ = self.create_feature_vector(feedback['url'])
+                    feature_vector = feature_vector.tolist()
+                except Exception as e:
+                    print(f"Error creating feature vector for {feedback['url']}: {e}")
+                    continue
+            
+            X.append(feature_vector)
+            y.append(1 if feedback['actual_label'] else 0)
         
         if len(X) < 3:
+            print(f"Not enough valid feature vectors ({len(X)}) to train model")
             return  # Not enough feature vectors
         
         X = np.array(X)

@@ -1204,13 +1204,38 @@ class NewsAnalyzer {
     async submitUrlFeedback(url, isCorrect, confidence) {
         try {
             // Find the current prediction for this URL
-            const article = this.crawledArticles?.find(a => a.url === url);
-            if (!article || !article.ai_classification) {
-                console.error('Article or classification not found for feedback');
+            const article = this.crawledArticles?.find(a => {
+                // Handle both URL strings and article objects
+                if (typeof a === 'string') {
+                    return a === url;
+                } else if (typeof a === 'object' && a.url) {
+                    return a.url === url;
+                }
+                return false;
+            });
+            
+            if (!article) {
+                console.error('Article not found for feedback:', url);
                 return;
             }
+            
+            // Get classification info from the article
+            let classificationInfo = null;
+            if (typeof article === 'object') {
+                // Try both old and new property names for compatibility
+                classificationInfo = article.classification || article.ai_classification;
+            }
+            
+            if (!classificationInfo) {
+                console.warn('No classification info found for article. Using default values.');
+                // Provide default classification when none exists
+                classificationInfo = {
+                    is_news_article: true, // Default assumption
+                    confidence: 0.5
+                };
+            }
 
-            const predictedLabel = article.ai_classification.is_news_article;
+            const predictedLabel = classificationInfo.is_news_article;
             const actualLabel = isCorrect ? predictedLabel : !predictedLabel;
 
             const response = await Utils.http.post('/url-classifier-feedback', {
@@ -1455,8 +1480,23 @@ class NewsAnalyzer {
     }
 
     getArticlePrediction(url) {
-        const article = this.crawledArticles?.find(a => a.url === url);
-        return article?.ai_classification?.prediction || false;
+        const article = this.crawledArticles?.find(a => {
+            // Handle both URL strings and article objects
+            if (typeof a === 'string') {
+                return a === url;
+            } else if (typeof a === 'object' && a.url) {
+                return a.url === url;
+            }
+            return false;
+        });
+        
+        if (!article || typeof article === 'string') {
+            return false; // Default for string URLs
+        }
+        
+        // Try both old and new property names for compatibility
+        const classificationInfo = article.classification || article.ai_classification;
+        return classificationInfo?.prediction || classificationInfo?.is_news_article || false;
     }
 
     updateBulkFeedbackButton() {

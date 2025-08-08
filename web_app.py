@@ -1557,350 +1557,18 @@ class PoliticalNewsDetector:
 
 class NewsWebsiteCrawler:
     def __init__(self):
-        # Enhanced article selectors with more comprehensive patterns
-        self.common_article_selectors = [
-            # Direct article links
-            'a[href*="/article/"]',
-            'a[href*="/articles/"]',
-            'a[href*="/news/"]',
-            'a[href*="/story/"]',
-            'a[href*="/stories/"]',
-            'a[href*="/posts/"]',
-            'a[href*="/post/"]',
-            'a[href*="/blog/"]',
-            'a[href*="/blogs/"]',
-            'a[href*="/content/"]',
-            'a[href*="/read/"]',
-            'a[href*="/feature/"]',
-            'a[href*="/features/"]',
-            'a[href*="/report/"]',
-            'a[href*="/reports/"]',
-            'a[href*="/analysis/"]',
-            'a[href*="/opinion/"]',
-            'a[href*="/editorial/"]',
-            'a[href*="/breaking/"]',
-            'a[href*="/latest/"]',
-            'a[href*="/update/"]',
-            'a[href*="/world/"]',
-            'a[href*="/politics/"]',
-            'a[href*="/business/"]',
-            'a[href*="/sports/"]',
-            'a[href*="/technology/"]',
-            'a[href*="/tech/"]',
-            'a[href*="/science/"]',
-            'a[href*="/health/"]',
-            'a[href*="/entertainment/"]',
-            'a[href*="/lifestyle/"]',
-            'a[href*="/local/"]',
-            'a[href*="/national/"]',
-            'a[href*="/international/"]',
-            
-            # Article container classes and IDs
-            'article a[href]',
-            '.article a[href]',
-            '.article-link',
-            '.article-title a',
-            '.article-headline a',
-            '.news-item a',
-            '.news-link',
-            '.news-title a',
-            '.news-headline a',
-            '.story-link',
-            '.story-title a',
-            '.story-headline a',
-            '.post-link',
-            '.post-title a',
-            '.post-headline a',
-            '.entry-title a',
-            '.entry-link',
-            '.content-title a',
-            '.content-link',
-            '.headline a',
-            '.headline-link',
-            '.title a',
-            '.title-link',
-            '.featured-article a',
-            '.featured-story a',
-            '.featured-news a',
-            '.breaking-news a',
-            '.latest-news a',
-            '.top-story a',
-            '.main-story a',
-            '.lead-story a',
-            
-            # Header tags with links
-            'h1 a[href]',
-            'h2 a[href]',
-            'h3 a[href]',
-            'h4 a[href]',
-            'h5 a[href]',
-            'h6 a[href]',
-            
-            # Common news website patterns
-            '.teaser a',
-            '.teaser-title a',
-            '.summary a',
-            '.excerpt a',
-            '.snippet a',
-            '.preview a',
-            '.card a[href]',
-            '.card-title a',
-            '.card-link',
-            '.item a[href]',
-            '.item-title a',
-            '.list-item a',
-            '.grid-item a',
-            '.feed-item a',
-            '.media a[href]',
-            '.media-title a',
-            '.thumbnail a',
-            '.link-overlay',
-            
-            # News aggregator patterns
-            '.article-list a',
-            '.news-list a',
-            '.story-list a',
-            '.content-list a',
-            '.feed a[href]',
-            '.stream a[href]',
-            '.listing a[href]',
-            
-            # WordPress and CMS patterns
-            '.entry a[href]',
-            '.post a[href]',
-            '.content a[href]',
-            '.wp-post a',
-            '.hentry a',
-            
-            # Bootstrap and framework patterns
-            '.list-group-item a',
-            '.nav-link[href*="article"]',
-            '.nav-link[href*="news"]',
-            '.nav-link[href*="story"]',
-            
-            # Data attribute selectors
-            'a[data-article]',
-            'a[data-story]',
-            'a[data-news]',
-            'a[data-post]',
-            'a[data-link-type="article"]',
-            'a[data-content-type="article"]',
-            'a[data-type="article"]',
-            
-            # Role-based selectors
-            'a[role="article"]',
-            'a[itemtype*="Article"]',
-            
-            # Specific news site patterns
-            '.story-card a',
-            '.article-card a',
-            '.news-card a',
-            '.content-card a',
-            '.promo a[href]',
-            '.promo-title a',
-            '.module a[href]',
-            '.widget a[href]',
-            '.section a[href]'
-        ]
-        
-        # Enhanced news indicators
-        self.news_indicators = [
-            'article', 'articles', 'news', 'story', 'stories', 'post', 'posts', 
-            'blog', 'blogs', 'headline', 'headlines', 'breaking', 'update', 
-            'updates', 'report', 'reports', 'analysis', 'exclusive', 'feature', 
-            'features', 'content', 'read', 'editorial', 'opinion', 'commentary',
-            'interview', 'review', 'preview', 'recap', 'roundup', 'digest',
-            'bulletin', 'brief', 'briefing', 'alert', 'flash', 'live',
-            'latest', 'recent', 'today', 'current', 'trending', 'popular',
-            'world', 'politics', 'political', 'business', 'economy', 'finance',
-            'sports', 'sport', 'technology', 'tech', 'science', 'health',
-            'entertainment', 'lifestyle', 'culture', 'local', 'national',
-            'international', 'global', 'breaking-news', 'top-story',
-            'main-story', 'lead-story', 'featured', 'spotlight'
-        ]
-        
-        # Enhanced exclude patterns
-        self.exclude_patterns = [
-            'mailto:', 'tel:', 'javascript:', '#', 'void(0)',
-            'facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com',
-            'linkedin.com', 'youtube.com', 'pinterest.com', 'snapchat.com',
-            'reddit.com', 'tumblr.com', 'whatsapp.com', 'telegram.me',
-            'about', 'contact', 'privacy', 'terms', 'cookies', 'policy',
-            'subscribe', 'newsletter', 'signup', 'login', 'register', 'account',
-            'search', 'category', 'categories', 'tag', 'tags', 'author', 'authors',
-            'archive', 'archives', 'sitemap', 'rss', 'feed', 'xml',
-            'advertisement', 'ads', 'sponsor', 'affiliate', 'promo',
-            'weather', 'horoscope', 'crossword', 'puzzle', 'game', 'games',
-            'job', 'jobs', 'career', 'careers', 'classified', 'marketplace',
-            'event', 'events', 'calendar', 'schedule', 'obituary', 'obituaries',
-            'comment', 'comments', 'forum', 'discussion', 'chat',
-            'photo', 'photos', 'gallery', 'galleries', 'video', 'videos',
-            'podcast', 'podcasts', 'audio', 'multimedia',
-            'subscription', 'paywall', 'premium', 'membership',
-            '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-            '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp',
-            '.mp3', '.mp4', '.avi', '.mov', '.wmv', '.flv'
-        ]
-        
-        # Title extraction patterns for better article identification
-        self.title_selectors = [
-            'title', 'h1', 'h2', 'h3', '.title', '.headline', '.article-title',
-            '.news-title', '.story-title', '.post-title', '.entry-title',
-            '.content-title', '.page-title', '[data-title]'
-        ]
+        # Simplified - no complex selectors, patterns, or filters
+        pass
     
     def is_news_link(self, href, link_text, link_element=None):
-        """Determine if a link is likely a news article with enhanced detection"""
-        if not href:
-            return False
-            
-        # Clean and normalize URL and text
-        href_lower = href.lower().strip()
-        text_lower = link_text.lower().strip() if link_text else ""
-        
-        # Exclude unwanted patterns
-        if any(pattern in href_lower for pattern in self.exclude_patterns):
-            return False
-        
-        # Skip if link text is too short or generic
-        if link_text and len(link_text.strip()) < 10:
-            generic_words = ['more', 'read', 'click', 'here', 'link', 'view', 'see', 'go', 'next', 'prev']
-            if text_lower in generic_words or text_lower.replace(' ', '') in ['readmore', 'clickhere', 'seemore']:
-                return False
-        
-        # Check for news indicators in URL
-        url_has_news_indicator = any(indicator in href_lower for indicator in self.news_indicators)
-        
-        # Check for news indicators in link text
-        text_has_news_indicator = any(indicator in text_lower for indicator in self.news_indicators)
-        
-        # Check for date patterns in URL (very common in news sites)
-        date_patterns = [
-            r'/\d{4}/\d{1,2}/\d{1,2}/',     # /2023/12/25/
-            r'/\d{4}-\d{1,2}-\d{1,2}/',     # /2023-12-25/
-            r'/\d{4}/\d{1,2}/',             # /2023/12/
-            r'/\d{8}/',                     # /20231225/
-            r'/\d{6}/',                     # /202312/
-            r'date=\d{4}-\d{1,2}-\d{1,2}',  # date=2023-12-25
-            r'year=\d{4}',                  # year=2023
-            r'month=\d{1,2}',               # month=12
-            r'day=\d{1,2}'                  # day=25
-        ]
-        has_date_pattern = any(re.search(pattern, href) for pattern in date_patterns)
-        
-        # Check for article ID patterns
-        id_patterns = [
-            r'/\d{6,}/',           # Long numeric IDs
-            r'/\d{4,}-',           # ID followed by dash
-            r'id=\d+',             # id parameter
-            r'article_id=\d+',     # article_id parameter
-            r'story_id=\d+',       # story_id parameter
-            r'post_id=\d+',        # post_id parameter
-            r'/p/\d+',             # /p/123456
-            r'/a/\d+',             # /a/123456
-            r'/s/\d+',             # /s/123456
-        ]
-        has_id_pattern = any(re.search(pattern, href) for pattern in id_patterns)
-        
-        # Check for slug patterns (article titles in URLs)
-        slug_patterns = [
-            r'/[a-z0-9-]{15,}',    # Long hyphenated slugs
-            r'/\w+-\w+-\w+',       # Multiple hyphenated words
-            r'/how-',              # How-to articles
-            r'/why-',              # Why articles
-            r'/what-',             # What articles
-            r'/when-',             # When articles
-            r'/where-',            # Where articles
-        ]
-        has_slug_pattern = any(re.search(pattern, href_lower) for pattern in slug_patterns)
-        
-        # Check for common news URL structures
-        news_url_patterns = [
-            r'/breaking/',
-            r'/latest/',
-            r'/trending/',
-            r'/featured/',
-            r'/spotlight/',
-            r'/exclusive/',
-            r'/developing/',
-            r'/update/',
-            r'/alert/',
-            r'/live/',
-            r'/today/',
-            r'/this-week/',
-            r'/this-month/',
-        ]
-        has_news_url_pattern = any(re.search(pattern, href_lower) for pattern in news_url_patterns)
-        
-        # Check if link element has news-related attributes
-        element_score = 0
-        if link_element:
-            # Check classes
-            classes = link_element.get('class', [])
-            if isinstance(classes, list):
-                class_text = ' '.join(classes).lower()
-            else:
-                class_text = str(classes).lower()
-            
-            if any(indicator in class_text for indicator in ['article', 'news', 'story', 'post', 'headline', 'title']):
-                element_score += 2
-            
-            # Check data attributes
-            for attr in link_element.attrs:
-                if attr.startswith('data-') and any(indicator in attr.lower() for indicator in ['article', 'news', 'story', 'post']):
-                    element_score += 1
-        
-        # Check if link text looks like a news headline
-        headline_indicators = [
-            len(text_lower.split()) >= 4,  # At least 4 words
-            any(word in text_lower for word in ['says', 'announces', 'reports', 'reveals', 'confirms', 'denies', 'claims']),
-            any(char in link_text for char in ['"', "'", ':', '?', '!']),  # Punctuation common in headlines
-            re.search(r'\b(new|latest|breaking|exclusive|update|first|last|next|final)\b', text_lower),
-            re.search(r'\b(will|could|should|may|might|can|must)\b', text_lower),
-            re.search(r'\b(after|before|during|since|while|when|where|why|how)\b', text_lower),
-        ]
-        headline_score = sum(1 for indicator in headline_indicators if indicator)
-        
-        # Calculate overall confidence score
-        confidence_score = 0
-        
-        # URL-based scoring
-        if url_has_news_indicator:
-            confidence_score += 3
-        if has_date_pattern:
-            confidence_score += 2
-        if has_id_pattern:
-            confidence_score += 1
-        if has_slug_pattern:
-            confidence_score += 1
-        if has_news_url_pattern:
-            confidence_score += 2
-        
-        # Text-based scoring
-        if text_has_news_indicator:
-            confidence_score += 2
-        confidence_score += headline_score
-        
-        # Element-based scoring
-        confidence_score += element_score
-        
-        # Length bonus for substantial link text
-        if link_text and 20 <= len(link_text) <= 200:
-            confidence_score += 1
-        
-        # Return True if confidence score meets threshold
-        return confidence_score >= 3
+        """Simplified - return True for all links (no filtering)"""
+        return True if href else False
     
     def extract_article_links(self, url, max_links=10):
-        """Extract article links from a news website with AI-powered URL classification"""
+        """Simplified method to extract ALL links from a website without any filtering"""
         try:
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
             
             response = requests.get(url, headers=headers, timeout=20)
@@ -1909,14 +1577,13 @@ class NewsWebsiteCrawler:
             soup = BeautifulSoup(response.content, 'html.parser')
             base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
             
-            article_links = []
-            seen_urls = set()
             all_links = []
+            seen_urls = set()
             
             print(f"🔍 Crawling website: {url}")
             print(f"📄 Website title: {soup.title.string if soup.title else 'No title found'}")
             
-            # Collect ALL links from the page for AI classification
+            # Find ALL links on the page - no filtering
             for link in soup.find_all('a', href=True):
                 href = link.get('href')
                 if not href:
@@ -1925,88 +1592,36 @@ class NewsWebsiteCrawler:
                 # Convert relative URLs to absolute
                 if href.startswith('/'):
                     href = urljoin(base_url, href)
-                elif not href.startswith('http'):
+                elif not href.startswith(('http://', 'https://')):
                     href = urljoin(url, href)
                 
-                # Skip invalid URLs and duplicates
+                # Skip only duplicates and invalid URLs
                 if not href.startswith(('http://', 'https://')) or href in seen_urls:
-                    continue
-                
-                # Basic exclusions (still needed for obvious non-articles)
-                if any(pattern in href.lower() for pattern in ['mailto:', 'tel:', 'javascript:', '#']):
                     continue
                 
                 seen_urls.add(href)
                 link_text = link.get_text(strip=True)
-                enhanced_title = self.extract_enhanced_title(link, link_text)
+                
+                # Return in the exact format requested: <a href="url">title</a>
+                link_html = f'<a href="{href}">{link_text}</a>'
                 
                 all_links.append({
                     'url': href,
-                    'title': enhanced_title[:150] + '...' if len(enhanced_title) > 150 else enhanced_title,
-                    'raw_title': enhanced_title,
-                    'link_text': link_text,
-                    'link_element': str(link)[:200] + '...' if len(str(link)) > 200 else str(link)
+                    'title': link_text,
+                    'html_format': link_html,
+                    'raw_html': str(link)
                 })
             
-            print(f"🔗 Found {len(all_links)} total links. Classifying with AI...")
+            print(f"🔗 Found {len(all_links)} total links (no filtering applied)")
             
-            # Use URL News Classifier to filter news articles
-            classified_links = []
-            for i, link_data in enumerate(all_links):
-                try:
-                    # Get AI classification for this URL
-                    classification = url_news_classifier.predict_with_confidence(link_data['url'])
-                    
-                    link_data['ai_classification'] = {
-                        'is_news_article': classification['is_news_article'],
-                        'confidence': classification['confidence'],
-                        'probability_news': classification['probability_news'],
-                        'heuristic_based': classification.get('heuristic_based', False)
-                    }
-                    
-                    # Only include links classified as news articles
-                    if classification['is_news_article']:
-                        classified_links.append(link_data)
-                        model_type = "🧠" if not classification.get('heuristic_based') else "📋"
-                        print(f"  ✓ {model_type} News article {len(classified_links)}: {link_data['title'][:50]}... "
-                              f"(confidence: {classification['confidence']:.3f})")
-                    
-                    # Limit processing for performance
-                    if len(classified_links) >= max_links * 2:  # Get extra for sorting
-                        break
-                        
-                except Exception as e:
-                    print(f"  ✗ Classification error for {link_data['url']}: {str(e)}")
-                    # On classification error, fall back to basic heuristics
-                    if self.is_news_link(link_data['url'], link_data['raw_title'], None):
-                        link_data['ai_classification'] = {
-                            'is_news_article': True,
-                            'confidence': 0.5,
-                            'probability_news': 0.5,
-                            'heuristic_based': True,
-                            'fallback': True
-                        }
-                        classified_links.append(link_data)
-            
-            # Sort by AI confidence and take the best ones
-            classified_links.sort(key=lambda x: x['ai_classification']['confidence'], reverse=True)
-            article_links = classified_links[:max_links]
-            
-            print(f"🎯 AI classified {len(classified_links)} news articles, returning top {len(article_links)}")
-            for i, article in enumerate(article_links[:5]):  # Log top 5
-                classification = article['ai_classification']
-                model_type = "🧠 AI model" if not classification.get('heuristic_based') else "📋 Heuristic"
-                print(f"  {i+1}. {article['title'][:50]}... "
-                      f"({model_type}, confidence: {classification['confidence']:.3f})")
-            
+            # Return all links without any classification or filtering
             return {
                 'success': True,
-                'articles': article_links,
-                'total_found': len(article_links),
+                'articles': all_links,
+                'total_found': len(all_links),
                 'total_candidates': len(all_links),
-                'ai_classified': len(classified_links),
                 'website_title': soup.title.string if soup.title else urlparse(url).netloc,
-                'classification_method': 'AI + Reinforcement Learning'
+                'classification_method': 'No filtering - All links returned'
             }
             
         except requests.RequestException as e:
@@ -2025,114 +1640,12 @@ class NewsWebsiteCrawler:
             }
     
     def extract_enhanced_title(self, link_element, fallback_text):
-        """Extract enhanced title from link and surrounding elements"""
-        title_text = fallback_text or ""
-        
-        # Try title attribute first
-        if not title_text and link_element.get('title'):
-            title_text = link_element.get('title').strip()
-        
-        # Try aria-label
-        if not title_text and link_element.get('aria-label'):
-            title_text = link_element.get('aria-label').strip()
-        
-        # Try data-title or similar attributes
-        for attr in ['data-title', 'data-headline', 'data-text']:
-            if not title_text and link_element.get(attr):
-                title_text = link_element.get(attr).strip()
-                break
-        
-        # Look for title in parent elements
-        if not title_text or len(title_text) < 15:
-            parent = link_element.parent
-            for _ in range(3):  # Check up to 3 levels up
-                if not parent:
-                    break
-                
-                # Check for title in parent's text content
-                parent_text = parent.get_text(strip=True)
-                if parent_text and len(parent_text) > len(title_text) and len(parent_text) < 300:
-                    # Make sure the parent text isn't just a container with multiple articles
-                    links_in_parent = parent.find_all('a')
-                    if len(links_in_parent) <= 2:  # Parent should contain mostly this article
-                        title_text = parent_text
-                        break
-                
-                # Check for specific title elements in parent
-                for selector in ['.title', '.headline', '.article-title', 'h1', 'h2', 'h3', 'h4']:
-                    title_elem = parent.select_one(selector)
-                    if title_elem:
-                        elem_text = title_elem.get_text(strip=True)
-                        if elem_text and len(elem_text) > len(title_text):
-                            title_text = elem_text
-                            break
-                
-                parent = parent.parent
-        
-        # Look for title in child elements
-        if not title_text or len(title_text) < 15:
-            for selector in ['.title', '.headline', '.text', 'span', 'div']:
-                child = link_element.select_one(selector)
-                if child:
-                    child_text = child.get_text(strip=True)
-                    if child_text and len(child_text) > len(title_text):
-                        title_text = child_text
-                        break
-        
-        # Clean up the title
-        if title_text:
-            # Remove extra whitespace
-            title_text = ' '.join(title_text.split())
-            # Remove common prefixes/suffixes
-            prefixes_to_remove = ['read more:', 'more:', 'full story:', 'story:', 'article:']
-            for prefix in prefixes_to_remove:
-                if title_text.lower().startswith(prefix):
-                    title_text = title_text[len(prefix):].strip()
-        
-        return title_text or "Untitled Article"
+        """Simplified title extraction - just return the text"""
+        return fallback_text or link_element.get('title', '') or ''
     
     def calculate_link_confidence(self, href, title, link_element, selector_used):
-        """Calculate confidence score for a link being a news article"""
-        confidence = 0
-        
-        # Base score from is_news_link checks
-        if self.is_news_link(href, title, link_element):
-            confidence += 3
-        
-        # Bonus for specific selectors
-        selector_bonuses = {
-            'article a[href]': 5,
-            '.article-title a': 5,
-            '.news-title a': 5,
-            '.story-title a': 5,
-            'h1 a[href]': 4,
-            'h2 a[href]': 4,
-            'h3 a[href]': 3,
-            '.headline a': 4,
-            '.featured-article a': 4,
-        }
-        
-        for pattern, bonus in selector_bonuses.items():
-            if pattern in selector_used:
-                confidence += bonus
-                break
-        
-        # Title quality bonus
-        if title and len(title) > 20:
-            confidence += 2
-        if title and any(word in title.lower() for word in ['breaking', 'exclusive', 'update', 'report']):
-            confidence += 1
-        
-        # URL quality bonus
-        href_lower = href.lower()
-        if any(pattern in href_lower for pattern in ['/article/', '/news/', '/story/', '/post/']):
-            confidence += 2
-        
-        # Date pattern bonus
-        if re.search(r'/\d{4}/\d{1,2}/\d{1,2}/', href):
-            confidence += 3
-        
-        return confidence
+        """Simplified confidence calculation - return 1.0 for all links"""
+        return 1.0
     
     def analyze_articles_batch(self, article_urls, analysis_type='both'):
         """Analyze multiple articles in parallel"""

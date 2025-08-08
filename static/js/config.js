@@ -14,7 +14,6 @@ const Config = {
         batchIndexPhilippineArticles: '/batch-index-philippine-articles',
         philippineNewsCategories: '/philippine-news-categories',
         philippineNewsSources: '/philippine-news-sources',
-        crawlAndIndexWebsite: '/crawl-and-index-website',
         getCrawlHistory: '/get-crawl-history'
     },
     

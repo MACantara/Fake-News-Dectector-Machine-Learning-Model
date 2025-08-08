@@ -2216,6 +2216,18 @@ class NewsWebsiteCrawler:
                     'status': 'success'
                 }
                 
+                # Automatically index the article in Philippine news database (background)
+                try:
+                    index_result = philippine_search_index.index_article(article_info['url'], force_reindex=False)
+                    analysis_result['indexing_status'] = index_result['status']
+                    if index_result['status'] == 'success':
+                        analysis_result['relevance_score'] = index_result.get('relevance_score', 0)
+                        analysis_result['locations_found'] = index_result.get('locations', [])
+                        analysis_result['government_entities_found'] = index_result.get('government_entities', [])
+                except Exception as e:
+                    analysis_result['indexing_status'] = 'failed'
+                    analysis_result['indexing_error'] = str(e)
+                
                 # Perform fake news detection
                 if analysis_type in ['fake_news', 'both']:
                     try:

@@ -45,7 +45,7 @@ class NewsAnalyzer {
             'searchQuery', 'searchCategory', 'searchSource', 'searchLimit',
             'performSearchBtn', 'viewAnalyticsBtn', 'addToIndexBtn', 'addArticleModal',
             'indexArticleUrl', 'submitIndexBtn', 'cancelIndexBtn',
-            'maxArticles', 'crawlOnlyBtn', 'crawlAnalyzeBtn', 'crawlIndexBtn', 'analyzeFoundArticlesBtn',
+            'maxArticles', 'crawlOnlyBtn', 'crawlAnalyzeBtn', 'analyzeFoundArticlesBtn',
             'analyzeBtn', 'loading', 'results', 'websiteResults', 'searchResults', 'analyticsResults',
             'error', 'modelStatus', 'textCount',
             'fakeNewsResults', 'politicalResults', 'extractedContent',
@@ -119,10 +119,6 @@ class NewsAnalyzer {
         }
         if (this.elements.crawlAnalyzeBtn) {
             this.elements.crawlAnalyzeBtn.addEventListener('click', () => this.switchCrawlingMode(Config.crawlingModes.ANALYZE));
-        }
-        
-        if (this.elements.crawlIndexBtn) {
-            this.elements.crawlIndexBtn.addEventListener('click', () => this.switchCrawlingMode('index'));
         }
 
         // Analyze found articles button
@@ -301,12 +297,12 @@ class NewsAnalyzer {
         this.hideResults();
     }
 
-    // Switch crawling mode (preview vs analyze vs index)
+    // Switch crawling mode (preview vs analyze)
     switchCrawlingMode(mode) {
         this.state.currentCrawlingMode = mode;
         
         // Reset all button styles
-        const buttons = [this.elements.crawlOnlyBtn, this.elements.crawlAnalyzeBtn, this.elements.crawlIndexBtn];
+        const buttons = [this.elements.crawlOnlyBtn, this.elements.crawlAnalyzeBtn];
         const inactiveClass = 'crawl-mode-btn bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium focus-ring';
         const activeClass = 'crawl-mode-btn bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium focus-ring';
         
@@ -321,8 +317,6 @@ class NewsAnalyzer {
             this.elements.crawlOnlyBtn.className = activeClass;
         } else if (mode === Config.crawlingModes.ANALYZE && this.elements.crawlAnalyzeBtn) {
             this.elements.crawlAnalyzeBtn.className = activeClass;
-        } else if (mode === 'index' && this.elements.crawlIndexBtn) {
-            this.elements.crawlIndexBtn.className = activeClass;
         }
     }
 
@@ -460,8 +454,6 @@ class NewsAnalyzer {
         try {
             if (crawlingMode === Config.crawlingModes.PREVIEW) {
                 await this.crawlWebsitePreview(websiteUrl, maxArticles);
-            } else if (crawlingMode === 'index') {
-                await this.crawlAndIndexWebsite();
             } else {
                 await this.crawlAndAnalyzeWebsite(websiteUrl, maxArticles);
             }
@@ -740,6 +732,45 @@ class NewsAnalyzer {
                         </div>
                     `;
                 }
+
+                // Philippine news indexing status
+                if (result.indexing_status) {
+                    const indexingClass = result.indexing_status === 'success' ? 'border-green-500 bg-green-50' : 
+                                         result.indexing_status === 'skipped' ? 'border-yellow-500 bg-yellow-50' :
+                                         result.indexing_status === 'already_indexed' ? 'border-blue-500 bg-blue-50' :
+                                         'border-gray-500 bg-gray-50';
+                    
+                    const iconClass = result.indexing_status === 'success' ? 'bi-database-check text-green-600' :
+                                     result.indexing_status === 'skipped' ? 'bi-database-dash text-yellow-600' :
+                                     result.indexing_status === 'already_indexed' ? 'bi-database text-blue-600' :
+                                     'bi-database-x text-gray-600';
+                    
+                    let indexingInfo = '';
+                    if (result.indexing_status === 'success') {
+                        indexingInfo = `
+                            <div class="text-sm text-gray-600 mt-2">
+                                <span>Philippine Relevance: ${(result.relevance_score * 100).toFixed(1)}%</span>
+                                ${result.locations_found && result.locations_found.length ? `<span class="ml-3">Locations: ${result.locations_found.join(', ')}</span>` : ''}
+                            </div>
+                        `;
+                    } else if (result.indexing_error) {
+                        indexingInfo = `<div class="text-sm text-red-600 mt-2">Error: ${result.indexing_error}</div>`;
+                    }
+                    
+                    content += `
+                        <div class="border-l-4 ${indexingClass} p-4 rounded-r-lg">
+                            <h6 class="font-medium text-gray-800 mb-2 flex items-center">
+                                <i class="bi ${iconClass} mr-2"></i>
+                                Philippine News Database
+                            </h6>
+                            <div>
+                                <p class="text-sm text-gray-600">Indexing Status:</p>
+                                <p class="font-semibold text-gray-800 capitalize">${result.indexing_status.replace('_', ' ')}</p>
+                                ${indexingInfo}
+                            </div>
+                        </div>
+                    `;
+                }
             } else {
                 // Show error for failed articles
                 content += `
@@ -798,9 +829,37 @@ class NewsAnalyzer {
             Utils.dom.show(this.elements.extractedContent);
         }
         
+        // Show indexing status if available
+        if (data.indexing_status && this.state.currentInputType === Config.inputTypes.URL) {
+            this.displayIndexingStatus(data.indexing_status);
+        }
+        
         // Show results section
         Utils.dom.show(this.elements.results);
         Utils.animations.fadeIn(this.elements.results);
+    }
+
+    // Display indexing status for single article
+    displayIndexingStatus(indexingStatus) {
+        // Create or update indexing status message
+        const resultsContainer = this.elements.results;
+        let statusElement = resultsContainer.querySelector('.indexing-status');
+        
+        if (!statusElement) {
+            statusElement = document.createElement('div');
+            statusElement.className = 'indexing-status bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4';
+            resultsContainer.insertBefore(statusElement, resultsContainer.firstChild);
+        }
+        
+        const statusIcon = indexingStatus === 'Article queued for indexing in Philippine news database' ? 
+            'bi-database-add text-blue-600' : 'bi-info-circle text-blue-600';
+        
+        statusElement.innerHTML = `
+            <div class="flex items-center">
+                <i class="bi ${statusIcon} mr-2"></i>
+                <span class="text-blue-800 font-medium">${indexingStatus}</span>
+            </div>
+        `;
     }
 
     // Get current input text
@@ -1341,55 +1400,12 @@ class NewsAnalyzer {
     }
 
     // Crawl and index entire website
+    // Crawl and index website (now just calls regular analysis which includes indexing)
     async crawlAndIndexWebsite() {
-        const url = this.elements.websiteUrl?.value?.trim();
-        if (!url) {
-            this.showError('Please enter a website URL');
-            return;
-        }
-
-        if (!Config.validation.websitePattern.test(url)) {
-            this.showError('Please enter a valid website URL starting with http:// or https://');
-            return;
-        }
-
-        try {
-            this.state.isLoading = true;
-            Utils.dom.show(this.elements.loading);
-            this.hideAllSections();
-
-            // Show progress message
-            Utils.dom.show(this.elements.websiteResults);
-            this.elements.websiteResults.innerHTML = `
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                    <div class="flex items-center space-x-3">
-                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                        <div>
-                            <h3 class="text-lg font-semibold text-blue-800">Crawling and Indexing Website</h3>
-                            <p class="text-blue-600 mt-1">Discovering and indexing Philippine news articles from ${url}...</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            const response = await Utils.http.post(Config.endpoints.crawlAndIndexWebsite, {
-                website_url: url,
-                max_articles: 20,
-                force_reindex: false
-            });
-
-            if (response.success) {
-                this.displayCrawlAndIndexResults(response);
-            } else {
-                this.showError(response.error || 'Failed to crawl and index website');
-            }
-        } catch (error) {
-            console.error('Crawl and index error:', error);
-            this.showError('An error occurred while crawling and indexing the website');
-        } finally {
-            this.state.isLoading = false;
-            Utils.dom.hide(this.elements.loading);
-        }
+        // Set to analyze mode to ensure indexing happens
+        this.switchCrawlingMode(Config.crawlingModes.ANALYZE);
+        // Call the regular website analysis which now includes automatic indexing
+        await this.handleWebsiteCrawling();
     }
 
     // Display crawl and index results

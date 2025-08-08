@@ -157,10 +157,10 @@
                             Max Articles to Analyze
                         </label>
                         <select id="maxArticles" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="3">3 articles</option>
-                            <option value="5" selected>5 articles</option>
-                            <option value="8">8 articles</option>
-                            <option value="10">10 articles</option>
+                            <option value="5">5 articles</option>
+                            <option value="10" selected>10 articles</option>
+                            <option value="15">15 articles</option>
+                            <option value="20">20 articles</option>
                         </select>
                     </div>
                     <div>
@@ -175,11 +175,7 @@
                             </button>
                             <button id="crawlAnalyzeBtn" class="crawl-mode-btn bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium focus-ring">
                                 <i class="bi bi-cpu mr-1"></i>
-                                Analyze
-                            </button>
-                            <button id="crawlIndexBtn" class="crawl-mode-btn bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium focus-ring">
-                                <i class="bi bi-database-add mr-1"></i>
-                                Index All
+                                Analyze & Index
                             </button>
                         </div>
                     </div>
@@ -192,9 +188,9 @@
                             <p class="font-medium mb-1">Website Analysis Options:</p>
                             <ul class="space-y-1 text-blue-700">
                                 <li>• <strong>Preview:</strong> Find and display article links without analysis</li>
-                                <li>• <strong>Analyze:</strong> Find articles and automatically analyze them for fake news and political content</li>
-                                <li>• <strong>Index All:</strong> Crawl Philippine news articles and add them to the searchable database</li>
+                                <li>• <strong>Analyze & Index:</strong> Analyze articles for fake news/political content AND automatically add Philippine news to the searchable database</li>
                                 <li>• Works best with major news websites (ABS-CBN, GMA, Inquirer, Rappler, etc.)</li>
+                                <li>• Individual article URLs are also automatically indexed when analyzed</li>
                             </ul>
                         </div>
                     </div>

@@ -247,27 +247,43 @@ class NewsAnalyzer {
         Utils.dom.hide(this.elements.websiteInput);
         Utils.dom.hide(this.elements.searchInput);
         
+        // Get analysis sections for hiding/showing
+        const analysisTypeSection = document.getElementById('analysisTypeSection');
+        const analyzeButtonSection = document.getElementById('analyzeButtonSection');
+        
         // Show appropriate section and activate button
         if (type === Config.inputTypes.TEXT) {
             if (this.elements.textBtn) {
                 this.elements.textBtn.className = Config.cssClasses.button.active.textInput;
             }
             Utils.dom.show(this.elements.textInput);
+            // Show analysis sections for text input
+            if (analysisTypeSection) Utils.dom.show(analysisTypeSection);
+            if (analyzeButtonSection) Utils.dom.show(analyzeButtonSection);
         } else if (type === Config.inputTypes.URL) {
             if (this.elements.urlBtn) {
                 this.elements.urlBtn.className = Config.cssClasses.button.active.urlInput;
             }
             Utils.dom.show(this.elements.urlInput);
+            // Show analysis sections for URL input
+            if (analysisTypeSection) Utils.dom.show(analysisTypeSection);
+            if (analyzeButtonSection) Utils.dom.show(analyzeButtonSection);
         } else if (type === Config.inputTypes.WEBSITE) {
             if (this.elements.websiteBtn) {
                 this.elements.websiteBtn.className = Config.cssClasses.button.active.urlInput; // Reuse URL styling
             }
             Utils.dom.show(this.elements.websiteInput);
+            // Show analysis sections for website input
+            if (analysisTypeSection) Utils.dom.show(analysisTypeSection);
+            if (analyzeButtonSection) Utils.dom.show(analyzeButtonSection);
         } else if (type === Config.inputTypes.SEARCH) {
             if (this.elements.searchBtn) {
                 this.elements.searchBtn.className = Config.cssClasses.button.active.urlInput; // Reuse URL styling
             }
             Utils.dom.show(this.elements.searchInput);
+            // Hide analysis sections for search mode
+            if (analysisTypeSection) Utils.dom.hide(analysisTypeSection);
+            if (analyzeButtonSection) Utils.dom.hide(analyzeButtonSection);
             this.updateSearchButton();
             return; // Don't call updateAnalyzeButton for search mode
         }

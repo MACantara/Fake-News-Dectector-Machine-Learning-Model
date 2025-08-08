@@ -1892,7 +1892,7 @@ class NewsWebsiteCrawler:
         return confidence_score >= 3
     
     def extract_article_links(self, url, max_links=10):
-        """Extract article links from a news website with enhanced detection"""
+        """Extract article links from a news website with AI-powered URL classification"""
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -1911,150 +1911,102 @@ class NewsWebsiteCrawler:
             
             article_links = []
             seen_urls = set()
-            link_candidates = []
+            all_links = []
             
-            print(f"Crawling website: {url}")
-            print(f"Website title: {soup.title.string if soup.title else 'No title found'}")
+            print(f"🔍 Crawling website: {url}")
+            print(f"📄 Website title: {soup.title.string if soup.title else 'No title found'}")
             
-            # First pass: Try specific article selectors
-            for selector in self.common_article_selectors:
-                try:
-                    links = soup.select(selector)
-                    print(f"Selector '{selector}' found {len(links)} links")
-                    
-                    for link in links:
-                        href = link.get('href')
-                        if not href:
-                            continue
-                        
-                        # Convert relative URLs to absolute
-                        if href.startswith('/'):
-                            href = urljoin(base_url, href)
-                        elif not href.startswith('http'):
-                            href = urljoin(url, href)
-                        
-                        # Avoid duplicates
-                        if href in seen_urls:
-                            continue
-                        seen_urls.add(href)
-                        
-                        # Get link text and clean it
-                        link_text = link.get_text(strip=True)
-                        if not link_text:
-                            # Try to get text from title attribute
-                            link_text = link.get('title', '')
-                        
-                        # Try to get better title from surrounding elements
-                        enhanced_title = self.extract_enhanced_title(link, link_text)
-                        
-                        if self.is_news_link(href, enhanced_title, link):
-                            confidence_score = self.calculate_link_confidence(href, enhanced_title, link, selector)
-                            link_candidates.append({
-                                'url': href,
-                                'title': enhanced_title[:150] + '...' if len(enhanced_title) > 150 else enhanced_title,
-                                'selector_used': selector,
-                                'confidence': confidence_score,
-                                'link_element': str(link)[:200] + '...' if len(str(link)) > 200 else str(link)
-                            })
-                            
-                except Exception as e:
-                    print(f"Error with selector '{selector}': {str(e)}")
+            # Collect ALL links from the page for AI classification
+            for link in soup.find_all('a', href=True):
+                href = link.get('href')
+                if not href:
                     continue
-            
-            # Second pass: Broader search if we don't have enough candidates
-            if len(link_candidates) < max_links:
-                print("Running broader search for more articles...")
                 
-                # Look for articles and main content areas
-                content_areas = soup.find_all(['article', 'main', 'section'], class_=re.compile(r'(content|article|news|story|post)', re.I))
-                for area in content_areas:
-                    area_links = area.find_all('a', href=True)
-                    print(f"Found {len(area_links)} links in content area")
+                # Convert relative URLs to absolute
+                if href.startswith('/'):
+                    href = urljoin(base_url, href)
+                elif not href.startswith('http'):
+                    href = urljoin(url, href)
+                
+                # Skip invalid URLs and duplicates
+                if not href.startswith(('http://', 'https://')) or href in seen_urls:
+                    continue
+                
+                # Basic exclusions (still needed for obvious non-articles)
+                if any(pattern in href.lower() for pattern in ['mailto:', 'tel:', 'javascript:', '#']):
+                    continue
+                
+                seen_urls.add(href)
+                link_text = link.get_text(strip=True)
+                enhanced_title = self.extract_enhanced_title(link, link_text)
+                
+                all_links.append({
+                    'url': href,
+                    'title': enhanced_title[:150] + '...' if len(enhanced_title) > 150 else enhanced_title,
+                    'raw_title': enhanced_title,
+                    'link_text': link_text,
+                    'link_element': str(link)[:200] + '...' if len(str(link)) > 200 else str(link)
+                })
+            
+            print(f"🔗 Found {len(all_links)} total links. Classifying with AI...")
+            
+            # Use URL News Classifier to filter news articles
+            classified_links = []
+            for i, link_data in enumerate(all_links):
+                try:
+                    # Get AI classification for this URL
+                    classification = url_news_classifier.predict_with_confidence(link_data['url'])
                     
-                    for link in area_links:
-                        if len(link_candidates) >= max_links * 2:  # Get extra candidates for sorting
-                            break
-                            
-                        href = link.get('href')
-                        if not href:
-                            continue
-                        
-                        # Convert relative URLs to absolute
-                        if href.startswith('/'):
-                            href = urljoin(base_url, href)
-                        elif not href.startswith('http'):
-                            href = urljoin(url, href)
-                        
-                        # Avoid duplicates
-                        if href in seen_urls:
-                            continue
-                        seen_urls.add(href)
-                        
-                        link_text = link.get_text(strip=True)
-                        enhanced_title = self.extract_enhanced_title(link, link_text)
-                        
-                        if self.is_news_link(href, enhanced_title, link):
-                            confidence_score = self.calculate_link_confidence(href, enhanced_title, link, 'content_area_search')
-                            link_candidates.append({
-                                'url': href,
-                                'title': enhanced_title[:150] + '...' if len(enhanced_title) > 150 else enhanced_title,
-                                'selector_used': 'content_area_search',
-                                'confidence': confidence_score,
-                                'link_element': str(link)[:200] + '...' if len(str(link)) > 200 else str(link)
-                            })
-            
-            # Third pass: If still not enough, try all links with strict filtering
-            if len(link_candidates) < max_links // 2:
-                print("Running final broad search...")
-                all_links = soup.find_all('a', href=True)
-                print(f"Found {len(all_links)} total links on page")
-                
-                for link in all_links:
-                    if len(link_candidates) >= max_links * 3:  # Get many candidates for sorting
+                    link_data['ai_classification'] = {
+                        'is_news_article': classification['is_news_article'],
+                        'confidence': classification['confidence'],
+                        'probability_news': classification['probability_news'],
+                        'heuristic_based': classification.get('heuristic_based', False)
+                    }
+                    
+                    # Only include links classified as news articles
+                    if classification['is_news_article']:
+                        classified_links.append(link_data)
+                        model_type = "🧠" if not classification.get('heuristic_based') else "📋"
+                        print(f"  ✓ {model_type} News article {len(classified_links)}: {link_data['title'][:50]}... "
+                              f"(confidence: {classification['confidence']:.3f})")
+                    
+                    # Limit processing for performance
+                    if len(classified_links) >= max_links * 2:  # Get extra for sorting
                         break
-                    
-                    href = link.get('href')
-                    if not href:
-                        continue
-                    
-                    # Convert relative URLs to absolute
-                    if href.startswith('/'):
-                        href = urljoin(base_url, href)
-                    elif not href.startswith('http'):
-                        href = urljoin(url, href)
-                    
-                    # Avoid duplicates
-                    if href in seen_urls:
-                        continue
-                    seen_urls.add(href)
-                    
-                    link_text = link.get_text(strip=True)
-                    enhanced_title = self.extract_enhanced_title(link, link_text)
-                    
-                    if self.is_news_link(href, enhanced_title, link):
-                        confidence_score = self.calculate_link_confidence(href, enhanced_title, link, 'broad_search')
-                        link_candidates.append({
-                            'url': href,
-                            'title': enhanced_title[:150] + '...' if len(enhanced_title) > 150 else enhanced_title,
-                            'selector_used': 'broad_search',
-                            'confidence': confidence_score,
-                            'link_element': str(link)[:200] + '...' if len(str(link)) > 200 else str(link)
-                        })
+                        
+                except Exception as e:
+                    print(f"  ✗ Classification error for {link_data['url']}: {str(e)}")
+                    # On classification error, fall back to basic heuristics
+                    if self.is_news_link(link_data['url'], link_data['raw_title'], None):
+                        link_data['ai_classification'] = {
+                            'is_news_article': True,
+                            'confidence': 0.5,
+                            'probability_news': 0.5,
+                            'heuristic_based': True,
+                            'fallback': True
+                        }
+                        classified_links.append(link_data)
             
-            # Sort candidates by confidence score and take the best ones
-            link_candidates.sort(key=lambda x: x['confidence'], reverse=True)
-            article_links = link_candidates[:max_links]
+            # Sort by AI confidence and take the best ones
+            classified_links.sort(key=lambda x: x['ai_classification']['confidence'], reverse=True)
+            article_links = classified_links[:max_links]
             
-            print(f"Found {len(link_candidates)} total candidates, returning top {len(article_links)}")
+            print(f"🎯 AI classified {len(classified_links)} news articles, returning top {len(article_links)}")
             for i, article in enumerate(article_links[:5]):  # Log top 5
-                print(f"  {i+1}. {article['title'][:50]}... (confidence: {article['confidence']})")
+                classification = article['ai_classification']
+                model_type = "🧠 AI model" if not classification.get('heuristic_based') else "📋 Heuristic"
+                print(f"  {i+1}. {article['title'][:50]}... "
+                      f"({model_type}, confidence: {classification['confidence']:.3f})")
             
             return {
                 'success': True,
                 'articles': article_links,
                 'total_found': len(article_links),
-                'total_candidates': len(link_candidates),
-                'website_title': soup.title.string if soup.title else urlparse(url).netloc
+                'total_candidates': len(all_links),
+                'ai_classified': len(classified_links),
+                'website_title': soup.title.string if soup.title else urlparse(url).netloc,
+                'classification_method': 'AI + Reinforcement Learning'
             }
             
         except requests.RequestException as e:

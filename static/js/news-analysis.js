@@ -507,14 +507,71 @@ class NewsAnalyzer {
         // Store articles for later analysis
         this.crawledArticles = data.articles;
 
-        // Update summary
+        // Update summary with AI classification info
         Utils.dom.setText(this.elements.totalArticlesCount, data.total_found);
         Utils.dom.setText(this.elements.analyzedWebsiteTitle, data.website_title || 'Unknown Website');
+
+        // Add AI classification summary if available
+        if (data.classification_method) {
+            const aiSummaryHtml = `
+                <div class="mt-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
+                    <div class="flex items-center space-x-2">
+                        <i class="bi bi-robot text-purple-600"></i>
+                        <span class="text-sm font-medium text-purple-800">
+                            ${data.classification_method}
+                        </span>
+                    </div>
+                    <div class="text-xs text-purple-700 mt-1">
+                        Found ${data.ai_classified || data.total_found} news articles from ${data.total_candidates || 'unknown'} total links
+                    </div>
+                </div>
+            `;
+            this.elements.analyzedWebsiteTitle.insertAdjacentHTML('afterend', aiSummaryHtml);
+        }
 
         // Clear and populate article links
         this.elements.articleLinksContainer.innerHTML = '';
         
         data.articles.forEach((article, index) => {
+            // Get AI classification info
+            const aiInfo = article.ai_classification || {};
+            const confidence = aiInfo.confidence || 0;
+            const isHeuristic = aiInfo.heuristic_based || false;
+            const isFallback = aiInfo.fallback || false;
+            
+            // Determine classification badge
+            let classificationBadge = '';
+            if (isFallback) {
+                classificationBadge = `
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
+                        <i class="bi bi-exclamation-triangle mr-1"></i>
+                        Fallback
+                    </span>
+                `;
+            } else if (isHeuristic) {
+                classificationBadge = `
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                        <i class="bi bi-list-check mr-1"></i>
+                        Heuristic
+                    </span>
+                `;
+            } else {
+                classificationBadge = `
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                        <i class="bi bi-cpu mr-1"></i>
+                        AI Model
+                    </span>
+                `;
+            }
+            
+            // Confidence indicator
+            const confidenceColor = confidence > 0.8 ? 'green' : confidence > 0.6 ? 'yellow' : 'red';
+            const confidenceBar = `
+                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                    <div class="bg-${confidenceColor}-500 h-1.5 rounded-full" style="width: ${confidence * 100}%"></div>
+                </div>
+            `;
+
             const articleHtml = `
                 <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
                     <div class="flex items-start space-x-3">
@@ -524,14 +581,42 @@ class NewsAnalyzer {
                             </span>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h4 class="text-sm font-medium text-gray-900 truncate">${Utils.format.escape(article.title)}</h4>
-                            <p class="text-sm text-gray-500 truncate">${Utils.format.escape(article.url)}</p>
-                        </div>
-                        <div class="flex-shrink-0">
-                            <button onclick="window.open('${article.url}', '_blank')" 
-                                    class="text-blue-600 hover:text-blue-800 text-sm">
-                                <i class="bi bi-box-arrow-up-right"></i>
-                            </button>
+                            <div class="flex items-start justify-between">
+                                <h4 class="text-sm font-medium text-gray-900 flex-1 mr-2">
+                                    ${Utils.format.escape(article.title)}
+                                </h4>
+                                <div class="flex-shrink-0 flex items-center space-x-2">
+                                    ${classificationBadge}
+                                    <button onclick="window.open('${article.url}', '_blank')" 
+                                            class="text-blue-600 hover:text-blue-800 text-sm">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-500 truncate mt-1">${Utils.format.escape(article.url)}</p>
+                            <div class="mt-2">
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-gray-600">AI Confidence:</span>
+                                    <span class="font-medium text-gray-800">${Math.round(confidence * 100)}%</span>
+                                </div>
+                                ${confidenceBar}
+                            </div>
+                            ${aiInfo.probability_news ? `
+                                <div class="mt-1 text-xs text-gray-600">
+                                    News probability: ${Math.round(aiInfo.probability_news * 100)}%
+                                </div>
+                            ` : ''}
+                            <div class="mt-2 flex items-center space-x-2">
+                                <span class="text-xs text-gray-600">Classification correct?</span>
+                                <button onclick="window.newsAnalyzer.submitUrlFeedback('${article.url}', true, ${confidence})" 
+                                        class="text-green-600 hover:text-green-800 text-xs">
+                                    <i class="bi bi-check-circle"></i> Yes
+                                </button>
+                                <button onclick="window.newsAnalyzer.submitUrlFeedback('${article.url}', false, ${confidence})" 
+                                        class="text-red-600 hover:text-red-800 text-xs">
+                                    <i class="bi bi-x-circle"></i> No
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -872,6 +957,99 @@ class NewsAnalyzer {
                 Utils.dom.hide(section);
             }
         });
+    }
+
+    // Submit feedback for URL classification (RL integration)
+    async submitUrlFeedback(url, isCorrect, confidence) {
+        try {
+            // Find the current prediction for this URL
+            const article = this.crawledArticles?.find(a => a.url === url);
+            if (!article || !article.ai_classification) {
+                console.error('Article or classification not found for feedback');
+                return;
+            }
+
+            const predictedLabel = article.ai_classification.is_news_article;
+            const actualLabel = isCorrect ? predictedLabel : !predictedLabel;
+
+            const response = await Utils.http.post('/url-classifier-feedback', {
+                url: url,
+                predicted_label: predictedLabel,
+                actual_label: actualLabel,
+                user_confidence: confidence
+            });
+
+            if (response.success) {
+                // Show success message
+                this.showFeedbackMessage(
+                    `✓ Thank you! Feedback submitted. Model accuracy: ${Math.round((response.model_accuracy || 0) * 100)}%`,
+                    'success'
+                );
+                
+                // Update the UI to show feedback was submitted
+                this.updateArticleFeedbackUI(url, isCorrect);
+            } else {
+                this.showFeedbackMessage('✗ Failed to submit feedback: ' + (response.error || 'Unknown error'), 'error');
+            }
+        } catch (error) {
+            console.error('Feedback submission error:', error);
+            this.showFeedbackMessage('✗ Network error occurred while submitting feedback', 'error');
+        }
+    }
+
+    // Update article UI after feedback submission
+    updateArticleFeedbackUI(url, isCorrect) {
+        // Find the article element and update it
+        const articles = document.querySelectorAll('#articleLinksContainer > div');
+        articles.forEach(articleElement => {
+            const urlElement = articleElement.querySelector('p');
+            if (urlElement && urlElement.textContent.includes(url)) {
+                // Replace feedback buttons with confirmation
+                const feedbackDiv = articleElement.querySelector('div:last-child');
+                if (feedbackDiv) {
+                    const icon = isCorrect ? 'check-circle' : 'x-circle';
+                    const color = isCorrect ? 'green' : 'orange';
+                    const message = isCorrect ? 'Feedback: Correct' : 'Feedback: Incorrect';
+                    
+                    feedbackDiv.innerHTML = `
+                        <div class="text-xs text-${color}-600 flex items-center">
+                            <i class="bi bi-${icon} mr-1"></i>
+                            ${message}
+                        </div>
+                    `;
+                }
+            }
+        });
+    }
+
+    // Show feedback message
+    showFeedbackMessage(message, type) {
+        // Create or update feedback message element
+        let feedbackElement = document.getElementById('urlFeedbackMessage');
+        if (!feedbackElement) {
+            feedbackElement = document.createElement('div');
+            feedbackElement.id = 'urlFeedbackMessage';
+            feedbackElement.className = 'fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm';
+            document.body.appendChild(feedbackElement);
+        }
+
+        const bgClass = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
+        feedbackElement.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm border ${bgClass}`;
+        feedbackElement.innerHTML = `
+            <div class="flex items-center">
+                <div class="flex-1">${message}</div>
+                <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-gray-500 hover:text-gray-700">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            if (feedbackElement.parentNode) {
+                feedbackElement.remove();
+            }
+        }, 5000);
     }
 }
 

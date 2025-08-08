@@ -122,9 +122,15 @@
             </label>
             <select id="maxArticles" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="5">5 articles</option>
-                <option value="10" selected>10 articles</option>
+                <option value="10">10 articles</option>
                 <option value="15">15 articles</option>
-                <option value="20">20 articles</option>
+                <option value="20" selected>20 articles</option>
+                <option value="30">30 articles</option>
+                <option value="50">50 articles</option>
+                <option value="100">100 articles</option>
+                <option value="200">200 articles</option>
+                <option value="500">500 articles (Stress Test)</option>
+                <option value="1000">1000 articles (Max Stress Test)</option>
             </select>
         </div>
         <div>
@@ -152,9 +158,10 @@
                 <p class="font-medium mb-1">Website Analysis Options:</p>
                 <ul class="space-y-1 text-blue-700">
                     <li>• <strong>Preview:</strong> Find and display article links without analysis</li>
-                    <li>• <strong>Analyze & Index:</strong> Analyze articles for fake news/political content AND automatically add Philippine news to the searchable database</li>
+                    <li>• <strong>Analyze & Index:</strong> Analyze articles for fake news/political content</li>
                     <li>• Works best with major news websites (ABS-CBN, GMA, Inquirer, Rappler, etc.)</li>
-                    <li>• Individual article URLs are also automatically indexed when analyzed</li>
+                    <li>• <strong>⚠️ High article counts (500+):</strong> May take several minutes and consume significant resources</li>
+                    <li>• <strong>💻 Stress test mode:</strong> Use 1000+ articles to test system limits</li>
                 </ul>
             </div>
         </div>

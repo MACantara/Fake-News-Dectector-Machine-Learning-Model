@@ -431,7 +431,7 @@ class NewsAnalyzer {
             return;
         }
 
-        const maxArticles = parseInt(this.elements.maxArticles?.value || '5');
+        const maxArticles = parseInt(this.elements.maxArticles?.value || '20');
         const crawlingMode = this.state.currentCrawlingMode || Config.crawlingModes.PREVIEW;
 
         this.hideResults();

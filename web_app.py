@@ -2255,7 +2255,9 @@ class NewsWebsiteCrawler:
                 }
         
         # Use ThreadPoolExecutor for parallel processing
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # Increased workers for stress testing (was 5)
+        max_workers = min(20, len(article_urls))  # Dynamic worker count, max 20
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_article = {executor.submit(analyze_single_article, article): article 
                                for article in article_urls}
             
@@ -2476,8 +2478,8 @@ def crawl_website():
         if not website_url.startswith(('http://', 'https://')):
             website_url = 'https://' + website_url
         
-        # Limit max articles to prevent abuse
-        max_articles = min(max_articles, 20)
+        # No limit - allow testing system to its limits
+        # max_articles = min(max_articles, 20)  # REMOVED
         
         # Crawl the website
         crawl_result = news_crawler.extract_article_links(website_url, max_articles)
@@ -2514,8 +2516,8 @@ def analyze_website():
         if not website_url.startswith(('http://', 'https://')):
             website_url = 'https://' + website_url
         
-        # Limit max articles to prevent long processing times
-        max_articles = min(max_articles, 10)
+        # No limit - allow testing system to its limits
+        # max_articles = min(max_articles, 10)  # REMOVED
         
         # First crawl the website to get article links
         crawl_result = news_crawler.extract_article_links(website_url, max_articles)
@@ -2962,8 +2964,8 @@ def crawl_and_index_website():
         if not parsed_url.netloc:
             return jsonify({'error': 'Invalid URL format'}), 400
         
-        # Limit max articles to prevent abuse
-        max_articles = min(max_articles, 50)
+        # No limit - allow testing system to its limits
+        # max_articles = min(max_articles, 50)  # REMOVED
         
         # Perform crawling and indexing
         result = philippine_search_index.crawl_and_index_website(

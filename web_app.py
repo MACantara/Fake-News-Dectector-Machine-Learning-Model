@@ -1124,7 +1124,13 @@ class FakeNewsDetector:
         self.feedback_file = 'user_feedback.json'
         self.feedback_data = []
         self.retrain_threshold = 10  # Retrain after collecting 10 feedback samples
+        
+        # Pattern learning cache for news articles
+        self.pattern_cache = []
+        self.pattern_cache_file = 'news_pattern_cache.json'
+        self.pattern_cache_threshold = 5  # Number of patterns before considering full retraining
         self.load_feedback_data()
+        self.load_pattern_cache()
     
     def load_feedback_data(self):
         """Load existing feedback data"""
@@ -1144,6 +1150,61 @@ class FakeNewsDetector:
                 json.dump(self.feedback_data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"Error saving feedback data: {str(e)}")
+    
+    def load_pattern_cache(self):
+        """Load pattern cache for news articles"""
+        try:
+            if os.path.exists(self.pattern_cache_file):
+                with open(self.pattern_cache_file, 'r', encoding='utf-8') as f:
+                    self.pattern_cache = json.load(f)
+                print(f"Loaded {len(self.pattern_cache)} cached news patterns")
+        except Exception as e:
+            print(f"Error loading pattern cache: {str(e)}")
+            self.pattern_cache = []
+    
+    def save_pattern_cache(self):
+        """Save pattern cache to file"""
+        try:
+            with open(self.pattern_cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self.pattern_cache, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving pattern cache: {str(e)}")
+    
+    def add_pattern_to_cache(self, text, label, metadata=None):
+        """Add a new pattern to the cache"""
+        pattern_entry = {
+            'timestamp': datetime.now().isoformat(),
+            'text': text,
+            'label': label,
+            'processed_text': self.preprocess_text(text),
+            'metadata': metadata or {}
+        }
+        
+        self.pattern_cache.append(pattern_entry)
+        self.save_pattern_cache()
+        
+        print(f"Pattern added to cache. Total cached patterns: {len(self.pattern_cache)}")
+        
+        # Check if we should suggest full retraining
+        if len(self.pattern_cache) >= self.pattern_cache_threshold:
+            print(f"Pattern cache threshold reached ({self.pattern_cache_threshold}). Consider full model retraining for optimal performance.")
+    
+    def get_pattern_cache_stats(self):
+        """Get statistics about the pattern cache"""
+        if not self.pattern_cache:
+            return {
+                'total_patterns': 0,
+                'cache_threshold': self.pattern_cache_threshold,
+                'needs_retraining': False
+            }
+        
+        return {
+            'total_patterns': len(self.pattern_cache),
+            'cache_threshold': self.pattern_cache_threshold,
+            'needs_retraining': len(self.pattern_cache) >= self.pattern_cache_threshold,
+            'oldest_pattern': self.pattern_cache[0]['timestamp'] if self.pattern_cache else None,
+            'newest_pattern': self.pattern_cache[-1]['timestamp'] if self.pattern_cache else None
+        }
     
     def add_feedback(self, text, predicted_label, actual_label, confidence, user_comment=None):
         """Add user feedback for model improvement"""
@@ -1229,6 +1290,119 @@ class FakeNewsDetector:
                     
         except Exception as e:
             print(f"Error during retraining: {str(e)}")
+    
+    def retrain_from_new_pattern(self, training_data):
+        """Add new patterns to cache for future model improvements"""
+        try:
+            if not training_data:
+                print("No training data provided for pattern learning")
+                return
+            
+            # Ensure training_data is a list
+            if not isinstance(training_data, list):
+                print("Converting training_data to list format...")
+                training_data = [training_data] if training_data else []
+            
+            if len(training_data) == 0:
+                print("No valid training data provided for pattern learning")
+                return
+            
+            print(f"Processing {len(training_data)} new patterns for caching...")
+            
+            # Process each training sample and add to pattern cache
+            patterns_added = 0
+            
+            for item in training_data:
+                if not isinstance(item, dict):
+                    print(f"Warning: Skipping invalid training item: {type(item)}")
+                    continue
+                
+                # Extract text content
+                text_content = item.get('text', '') or item.get('content', '')
+                if not text_content:
+                    print(f"Warning: Skipping item with no text content")
+                    continue
+                
+                # Extract label (default to 1 for real news in pattern learning)
+                label = item.get('label', 1)
+                
+                # Extract metadata
+                metadata = {
+                    'source': item.get('source', 'news_article_pattern'),
+                    'url': item.get('url', ''),
+                    'title': item.get('title', ''),
+                    'training_type': item.get('training_type', 'pattern_recognition')
+                }
+                
+                # Add to pattern cache
+                self.add_pattern_to_cache(text_content, label, metadata)
+                patterns_added += 1
+            
+            if patterns_added == 0:
+                print("No valid patterns were added to cache")
+                return
+            
+            print(f"✅ Successfully added {patterns_added} new patterns to cache")
+            
+            # Check if model supports incremental training for immediate improvement
+            if self.is_trained and self.model is not None:
+                print("🔄 Attempting immediate pattern integration...")
+                
+                # Check if the model is a Pipeline and supports incremental training
+                if hasattr(self.model, 'named_steps'):
+                    classifier = self.model.named_steps.get('classifier')
+                    vectorizer = self.model.named_steps.get('tfidf')
+                    
+                    if classifier and vectorizer and hasattr(classifier, 'partial_fit'):
+                        try:
+                            # Prepare data for immediate training
+                            texts = [item.get('text', '') or item.get('content', '') for item in training_data if isinstance(item, dict)]
+                            labels = [item.get('label', 1) for item in training_data if isinstance(item, dict)]
+                            
+                            if texts:
+                                # Transform using existing vectorizer
+                                text_vectors = vectorizer.transform(texts)
+                                
+                                # Perform incremental training
+                                classifier.partial_fit(text_vectors, labels)
+                                print("✅ Applied immediate incremental training")
+                                
+                                # Save updated model
+                                try:
+                                    with open('fake_news_model.pkl', 'wb') as f:
+                                        pickle.dump(self.model, f)
+                                    print("✅ Model saved with new patterns")
+                                except Exception as save_error:
+                                    print(f"Warning: Could not save model: {save_error}")
+                        except Exception as inc_error:
+                            print(f"Could not apply immediate training: {inc_error}")
+                            print("Patterns saved to cache for future full retraining")
+                    else:
+                        print("🔄 Model doesn't support incremental training")
+                        print("✅ Patterns cached for future full retraining")
+                else:
+                    print("🔄 Model structure doesn't support incremental updates")
+                    print("✅ Patterns cached for future full retraining")
+            else:
+                print("✅ Patterns cached - model not currently available for immediate training")
+            
+            # Provide guidance on next steps
+            cache_stats = self.get_pattern_cache_stats()
+            print(f"📊 Pattern cache status: {cache_stats['total_patterns']}/{cache_stats['cache_threshold']} patterns")
+            
+            if cache_stats['needs_retraining']:
+                print("🎯 Recommendation: Consider running full model retraining for optimal performance")
+            
+            print("✅ Pattern learning completed successfully")
+            
+        except Exception as e:
+            print(f"Error during pattern learning: {str(e)}")
+            print(f"Training data type: {type(training_data)}")
+            if isinstance(training_data, list) and len(training_data) > 0:
+                print(f"First item type: {type(training_data[0])}")
+                print(f"First item keys: {list(training_data[0].keys()) if isinstance(training_data[0], dict) else 'Not a dict'}")
+            import traceback
+            traceback.print_exc()
     
     def get_feedback_stats(self):
         """Get statistics about user feedback"""
@@ -2424,47 +2598,51 @@ def predict():
             trigger_retraining = data.get('trigger_retraining', False)
             if trigger_retraining:
                 try:
-                    print(f"🔄 Model retraining requested by user")
+                    print(f"🔄 Automatic model retraining requested for news article URL")
                     
-                    # Check if there's enough feedback data for retraining
-                    feedback_stats = detector.get_feedback_stats()
+                    # For news articles, always attempt retraining to learn new patterns
+                    # This helps the model recognize new content structures and patterns
+                    print(f"📊 Initiating automatic retraining to learn new news article patterns")
                     
-                    if feedback_stats['pending_training'] > 0:
-                        print(f"📊 Initiating retraining with {feedback_stats['pending_training']} feedback entries")
-                        
-                        # Start retraining in a background thread to avoid blocking the response
-                        import threading
-                        def background_retrain():
-                            try:
-                                print("🚀 Starting background model retraining...")
-                                detector.retrain_from_feedback()
-                                print("✅ Model retraining completed successfully")
-                            except Exception as retrain_error:
-                                print(f"❌ Model retraining failed: {str(retrain_error)}")
-                        
-                        retraining_thread = threading.Thread(target=background_retrain)
-                        retraining_thread.daemon = True
-                        retraining_thread.start()
-                        
-                        result['retraining_triggered'] = {
-                            'status': 'initiated',
-                            'feedback_count': feedback_stats['pending_training'],
-                            'message': 'Model retraining started in background. This may take several minutes.'
-                        }
-                        print("✅ Retraining thread started successfully")
-                    else:
-                        result['retraining_triggered'] = {
-                            'status': 'skipped',
-                            'feedback_count': 0,
-                            'message': 'No pending feedback data available for retraining.'
-                        }
-                        print("⏭️ Retraining skipped - no pending feedback data")
+                    # Start retraining in a background thread to avoid blocking the response
+                    import threading
+                    def background_retrain():
+                        try:
+                            print("🚀 Starting background model retraining for news pattern recognition...")
+                            
+                            # Create training samples from the current article for pattern learning
+                            # Format as expected by retrain_from_new_pattern: list of dicts with 'text' and 'label'
+                            training_data = [{
+                                'text': combined_text,
+                                'label': 1,  # Label as real news (1) for pattern recognition
+                                'source': 'news_article_pattern',
+                                'url': url,
+                                'title': article_data.get('title', ''),
+                                'training_type': 'pattern_recognition'
+                            }]
+                            
+                            # Retrain with focus on recognizing new news patterns
+                            detector.retrain_from_new_pattern(training_data)
+                            print("✅ Model retraining completed - new news patterns learned")
+                        except Exception as retrain_error:
+                            print(f"❌ Model retraining failed: {str(retrain_error)}")
+                    
+                    retraining_thread = threading.Thread(target=background_retrain)
+                    retraining_thread.daemon = True
+                    retraining_thread.start()
+                    
+                    result['retraining_triggered'] = {
+                        'status': 'initiated',
+                        'training_type': 'news_pattern_recognition',
+                        'message': 'Model retraining started to learn new news article patterns. This helps improve detection of legitimate news content.'
+                    }
+                    print("✅ Pattern recognition retraining thread started successfully")
                         
                 except Exception as retrain_error:
-                    print(f"⚠️ Error initiating retraining: {str(retrain_error)}")
+                    print(f"⚠️ Error initiating pattern recognition retraining: {str(retrain_error)}")
                     result['retraining_triggered'] = {
                         'status': 'error',
-                        'message': f'Failed to initiate retraining: {str(retrain_error)}'
+                        'message': f'Failed to initiate pattern recognition retraining: {str(retrain_error)}'
                     }
             
             return jsonify({

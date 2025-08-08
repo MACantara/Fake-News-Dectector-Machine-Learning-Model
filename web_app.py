@@ -37,6 +37,7 @@ from whoosh.query import And, Or, Term, Phrase
 from dateutil import parser as date_parser
 from textblob import TextBlob
 from fuzzywuzzy import fuzz, process
+from url_news_classifier import URLNewsClassifier
 warnings.filterwarnings('ignore')
 
 # Download required NLTK data
@@ -2289,6 +2290,7 @@ detector = FakeNewsDetector()
 political_detector = PoliticalNewsDetector()
 news_crawler = NewsWebsiteCrawler()
 philippine_search_index = PhilippineNewsSearchIndex()
+url_news_classifier = URLNewsClassifier()
 
 def extract_article_content(url):
     """Extract article content from URL"""
@@ -2352,6 +2354,10 @@ def index():
 @app.route('/philippine-search')
 def philippine_search():
     return render_template('philippine_search.html')
+
+@app.route('/url-classifier')
+def url_classifier():
+    return render_template('url_classifier.html')
 
 @app.route('/analyze-url')
 def analyze_url():
@@ -3056,6 +3062,129 @@ def get_philippine_news_sources():
         
     except Exception as e:
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+
+@app.route('/classify-url', methods=['POST'])
+def classify_url():
+    """Classify if a URL is a news article using RL model"""
+    try:
+        data = request.get_json()
+        url = data.get('url', '').strip()
+        
+        if not url:
+            return jsonify({
+                'success': False,
+                'error': 'No URL provided'
+            }), 400
+        
+        # Validate URL format
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        
+        # Get prediction from RL model
+        result = url_news_classifier.predict_with_confidence(url)
+        
+        return jsonify({
+            'success': True,
+            'url': url,
+            'is_news_article': result['is_news_article'],
+            'confidence': result['confidence'],
+            'probability_news': result['probability_news'],
+            'probability_not_news': result['probability_not_news'],
+            'model_trained': url_news_classifier.is_trained,
+            'heuristic_based': result.get('heuristic_based', False)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }), 500
+
+@app.route('/url-classifier-feedback', methods=['POST'])
+def submit_url_classifier_feedback():
+    """Submit feedback for URL classification to improve the RL model"""
+    try:
+        data = request.get_json()
+        url = data.get('url', '').strip()
+        predicted_label = data.get('predicted_label')
+        actual_label = data.get('actual_label')
+        user_confidence = data.get('user_confidence', 1.0)
+        
+        if not url or predicted_label is None or actual_label is None:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields: url, predicted_label, actual_label'
+            }), 400
+        
+        # Add feedback to RL model
+        feedback_entry = url_news_classifier.add_feedback(
+            url=url,
+            predicted_label=predicted_label,
+            actual_label=actual_label,
+            user_confidence=user_confidence
+        )
+        
+        # Get updated model stats
+        model_stats = url_news_classifier.get_model_stats()
+        
+        return jsonify({
+            'success': True,
+            'feedback_added': True,
+            'feedback_count': model_stats['feedback_count'],
+            'model_accuracy': model_stats.get('feedback_accuracy', 0),
+            'model_trained': model_stats['is_trained'],
+            'message': 'Thank you for your feedback! The model will improve with your input.'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }), 500
+
+@app.route('/url-classifier-stats')
+def get_url_classifier_stats():
+    """Get URL classifier model statistics"""
+    try:
+        stats = url_news_classifier.get_model_stats()
+        recent_feedback = url_news_classifier.get_recent_feedback(limit=5)
+        
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'recent_feedback': recent_feedback
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }), 500
+
+@app.route('/retrain-url-classifier', methods=['POST'])
+def retrain_url_classifier():
+    """Manually trigger retraining of the URL classifier"""
+    try:
+        accuracy = url_news_classifier.retrain_model()
+        
+        if accuracy is None:
+            return jsonify({
+                'success': False,
+                'error': 'Not enough feedback data to retrain model'
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'message': 'Model retrained successfully',
+            'accuracy': accuracy,
+            'feedback_count': len(url_news_classifier.feedback_data)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }), 500
 
 def check_lfs_files():
     """Check if Git LFS files are properly available"""

@@ -257,7 +257,7 @@ class URLNewsClassifier:
         self.update_feature_weights(feedback_entry)
         
         # Trigger retraining if enough feedback collected
-        if len(self.feedback_data) % 10 == 0:  # Retrain every 10 feedback samples
+        if len(self.feedback_data) % 5 == 0 and len(self.feedback_data) >= 3:  # Retrain every 5 feedback samples
             self.retrain_model()
         
         return feedback_entry
@@ -282,7 +282,7 @@ class URLNewsClassifier:
     
     def retrain_model(self):
         """Retrain the model with accumulated feedback"""
-        if len(self.feedback_data) < 5:
+        if len(self.feedback_data) < 3:
             return  # Need minimum samples
         
         print(f"Retraining model with {len(self.feedback_data)} feedback samples...")
@@ -296,7 +296,7 @@ class URLNewsClassifier:
                 X.append(feedback['feature_vector'])
                 y.append(1 if feedback['actual_label'] else 0)
         
-        if len(X) < 5:
+        if len(X) < 3:
             return  # Not enough feature vectors
         
         X = np.array(X)

@@ -3165,19 +3165,30 @@ def get_url_classifier_stats():
 def retrain_url_classifier():
     """Manually trigger retraining of the URL classifier"""
     try:
+        current_feedback_count = len(url_news_classifier.feedback_data)
+        
+        if current_feedback_count < 3:
+            return jsonify({
+                'success': False,
+                'error': f'Need at least 3 feedback samples to retrain model. Currently have {current_feedback_count} samples.',
+                'current_feedback_count': current_feedback_count,
+                'minimum_required': 3
+            })
+        
         accuracy = url_news_classifier.retrain_model()
         
         if accuracy is None:
             return jsonify({
                 'success': False,
-                'error': 'Not enough feedback data to retrain model'
-            }), 400
+                'error': f'Retraining failed - insufficient quality feedback data. Have {current_feedback_count} samples.',
+                'current_feedback_count': current_feedback_count
+            })
         
         return jsonify({
             'success': True,
-            'message': 'Model retrained successfully',
+            'message': f'Model retrained successfully with {current_feedback_count} feedback samples',
             'accuracy': accuracy,
-            'feedback_count': len(url_news_classifier.feedback_data)
+            'feedback_count': current_feedback_count
         })
         
     except Exception as e:

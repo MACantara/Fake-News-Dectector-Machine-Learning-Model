@@ -652,7 +652,12 @@ class NewsAnalyzer {
                             <div class="flex items-center justify-between mb-2">
                                 <span class="text-sm font-medium text-gray-900">#${index + 1}</span>
                                 <div class="flex items-center gap-2">
-                                    <!-- Feedback buttons moved to top -->
+                                    <!-- Domain badge -->
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                                        <i class="bi bi-link mr-1"></i>
+                                        ${domainName}
+                                    </span>
+                                    <!-- Feedback buttons -->
                                     <div class="flex gap-1">
                                         <button onclick="newsAnalyzer.submitUrlFeedback('${Utils.format.escape(articleUrl)}', true, 0.9)" 
                                                 class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs hover:bg-green-200 transition-colors"
@@ -665,11 +670,6 @@ class NewsAnalyzer {
                                             <i class="bi bi-x-circle"></i>
                                         </button>
                                     </div>
-                                    <!-- Domain badge -->
-                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
-                                        <i class="bi bi-link mr-1"></i>
-                                        ${domainName}
-                                    </span>
                                 </div>
                             </div>
                             

@@ -771,7 +771,7 @@ class PhilippineNewsSearchIndex:
                 self.news_crawler = NewsWebsiteCrawler()
             
             # Crawl the website for article links
-            crawl_result = self.news_crawler.extract_article_links(website_url, max_articles)
+            crawl_result = self.news_crawler.extract_article_links(website_url)
             
             if not crawl_result['success']:
                 return {
@@ -790,7 +790,13 @@ class PhilippineNewsSearchIndex:
                     'results': []
                 }
             
-            print(f"Found {len(crawl_result['articles'])} articles to index")
+            # Apply max_articles limit for indexing
+            articles_to_index = crawl_result['articles']
+            if max_articles and len(articles_to_index) > max_articles:
+                articles_to_index = articles_to_index[:max_articles]
+                print(f"📋 Limited indexing to top {max_articles} articles")
+            
+            print(f"Found {len(articles_to_index)} articles to index")
             
             # Index each found article
             indexing_results = []
@@ -799,7 +805,7 @@ class PhilippineNewsSearchIndex:
             error_indexes = 0
             already_indexed_count = 0
             
-            for article in crawl_result['articles']:
+            for article in articles_to_index:
                 try:
                     article_url = article['url']
                     article_title = article['title']
@@ -870,6 +876,7 @@ class PhilippineNewsSearchIndex:
                 'website_title': crawl_result.get('website_title', ''),
                 'summary': {
                     'total_articles_found': len(crawl_result['articles']),
+                    'articles_processed': len(articles_to_index),  # Add this to show limited count
                     'successfully_indexed': successful_indexes,
                     'skipped': skipped_indexes,
                     'errors': error_indexes,
@@ -1642,7 +1649,7 @@ class NewsWebsiteCrawler:
         # Default to True for unknown patterns (conservative approach)
         return True
     
-    def extract_article_links(self, url, max_links=10, enable_filtering=True):
+    def extract_article_links(self, url, enable_filtering=True):
         """Enhanced method to extract and filter news article links from a website using URL classifier"""
         try:
             # Reset classification stats for this crawl
@@ -1761,11 +1768,6 @@ class NewsWebsiteCrawler:
                 print(f"   🚫 Non-news links: {len(non_news_links)}")
                 print(f"   ⚡ Accuracy rate: {((len(news_articles) + len(non_news_links)) / len(all_links) * 100):.1f}%")
                 
-                # Limit results if max_links is specified
-                if max_links and len(news_articles) > max_links:
-                    news_articles = news_articles[:max_links]
-                    print(f"📋 Limited to top {max_links} news articles")
-                
                 # Return filtered news articles with classification info
                 return {
                     'success': True,
@@ -1785,8 +1787,6 @@ class NewsWebsiteCrawler:
                 
                 # Convert to simple URL list for backward compatibility
                 simple_urls = [link['url'] for link in all_links]
-                if max_links and len(simple_urls) > max_links:
-                    simple_urls = simple_urls[:max_links]
                 
                 return {
                     'success': True,
@@ -2274,7 +2274,6 @@ def crawl_website():
         # Crawl the website with URL filtering
         crawl_result = news_crawler.extract_article_links(
             website_url, 
-            max_articles, 
             enable_filtering=enable_filtering
         )
         
@@ -2284,12 +2283,18 @@ def crawl_website():
                 'articles': []
             }), 400
         
+        # Apply max_articles limit at the Flask route level
+        articles = crawl_result['articles']
+        if max_articles and len(articles) > max_articles:
+            articles = articles[:max_articles]
+            print(f"📋 Limited to top {max_articles} articles")
+        
         # Prepare response with filtering information
         response_data = {
             'success': True,
             'website_title': crawl_result['website_title'],
-            'total_found': crawl_result['total_found'],
-            'articles': crawl_result['articles'],
+            'total_found': len(articles),  # Use limited count
+            'articles': articles,  # Use limited articles
             'filtering_enabled': crawl_result.get('filtering_enabled', False),
             'classification_method': crawl_result.get('classification_method', 'Unknown'),
         }
@@ -2332,7 +2337,6 @@ def analyze_website():
         # First crawl the website to get article links with filtering
         crawl_result = news_crawler.extract_article_links(
             website_url, 
-            max_articles, 
             enable_filtering=enable_filtering
         )
         
@@ -2348,9 +2352,15 @@ def analyze_website():
                 'results': []
             }), 400
         
+        # Apply max_articles limit at the Flask route level
+        articles_to_analyze = crawl_result['articles']
+        if max_articles and len(articles_to_analyze) > max_articles:
+            articles_to_analyze = articles_to_analyze[:max_articles]
+            print(f"📋 Limited analysis to top {max_articles} articles")
+        
         # Analyze the found articles
         analysis_results = news_crawler.analyze_articles_batch(
-            crawl_result['articles'], 
+            articles_to_analyze, 
             analysis_type
         )
         
@@ -2359,7 +2369,7 @@ def analyze_website():
         failed_analyses = [r for r in analysis_results if r['status'] != 'success']
         
         summary = {
-            'total_articles': len(crawl_result['articles']),
+            'total_articles': len(articles_to_analyze),  # Use limited count
             'successful_analyses': len(successful_analyses),
             'failed_analyses': len(failed_analyses),
             'website_title': crawl_result['website_title'],

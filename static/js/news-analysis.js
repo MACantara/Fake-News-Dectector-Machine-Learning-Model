@@ -707,16 +707,22 @@ class NewsAnalyzer {
 
     // Display results for single article analysis
     displayResults(data) {
+        // Handle nested data structure from backend response
+        const actualData = data.data || data;
+        
+        console.log('Raw response data:', data);
+        console.log('Actual data for processing:', actualData);
+        
         // Store results for export functionality
         Utils.storage.set('lastAnalysisResults', {
-            ...data,
+            ...actualData,
             timestamp: new Date().toISOString(),
             input_text: this.getCurrentInputText()
         });
         
         // Track analytics event if available
         if (this.advancedFeatures) {
-            this.advancedFeatures.trackAnalysis(data, this.state.currentInputType, this.state.currentAnalysisType);
+            this.advancedFeatures.trackAnalysis(actualData, this.state.currentInputType, this.state.currentAnalysisType);
         }
         
         // Hide individual result sections first
@@ -724,26 +730,32 @@ class NewsAnalyzer {
         Utils.dom.hide(this.elements.politicalResults);
         
         // Show fake news results if available
-        if (data.fake_news && !data.fake_news.error) {
-            this.displayFakeNewsResults(data.fake_news);
+        if (actualData.fake_news && !actualData.fake_news.error) {
+            console.log('Showing fake news results:', actualData.fake_news);
+            this.displayFakeNewsResults(actualData.fake_news);
             Utils.dom.show(this.elements.fakeNewsResults);
+        } else {
+            console.log('Fake news results not shown:', actualData.fake_news);
         }
         
         // Show political results if available
-        if (data.political_classification && !data.political_classification.error) {
-            this.displayPoliticalResults(data.political_classification);
+        if (actualData.political_classification && !actualData.political_classification.error) {
+            console.log('Showing political results:', actualData.political_classification);
+            this.displayPoliticalResults(actualData.political_classification);
             Utils.dom.show(this.elements.politicalResults);
+        } else {
+            console.log('Political results not shown:', actualData.political_classification);
         }
         
         // Show extracted content if available
-        if (data.extracted_content && this.state.currentInputType === Config.inputTypes.URL) {
-            this.displayExtractedContent(data.extracted_content);
+        if (actualData.extracted_content && this.state.currentInputType === Config.inputTypes.URL) {
+            this.displayExtractedContent(actualData.extracted_content);
             Utils.dom.show(this.elements.extractedContent);
         }
         
         // Show indexing status if available
-        if (data.indexing_status && this.state.currentInputType === Config.inputTypes.URL) {
-            this.displayIndexingStatus(data.indexing_status);
+        if (actualData.indexing_status && this.state.currentInputType === Config.inputTypes.URL) {
+            this.displayIndexingStatus(actualData.indexing_status);
         }
         
         // Show results section
@@ -786,8 +798,10 @@ class NewsAnalyzer {
 
     // Display fake news detection results
     displayFakeNewsResults(fakeNewsData) {
+        console.log('displayFakeNewsResults called with data:', fakeNewsData);
+        
         if (!fakeNewsData || fakeNewsData.error) {
-            console.error('Fake news data error:', fakeNewsData?.error);
+            console.error('Fake news data error:', fakeNewsData?.error || 'No data provided');
             return;
         }
 
@@ -828,8 +842,10 @@ class NewsAnalyzer {
 
     // Display political classification results
     displayPoliticalResults(politicalData) {
+        console.log('displayPoliticalResults called with data:', politicalData);
+        
         if (!politicalData || politicalData.error) {
-            console.error('Political data error:', politicalData?.error);
+            console.error('Political data error:', politicalData?.error || 'No data provided');
             return;
         }
 

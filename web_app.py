@@ -2365,7 +2365,10 @@ def predict():
         data = request.get_json()
         
         if not detector.is_trained:
-            return jsonify({'error': 'Fake news model not trained yet. Please wait for training to complete.'}), 500
+            return jsonify({
+                'success': False,
+                'error': 'Fake news model not trained yet. Please wait for training to complete.'
+            }), 500
         
         input_type = data.get('type', 'text')
         analysis_type = data.get('analysis_type', 'fake_news')  # 'fake_news', 'political', or 'both'
@@ -2373,7 +2376,10 @@ def predict():
         if input_type == 'text':
             text = data.get('text', '').strip()
             if not text:
-                return jsonify({'error': 'No text provided'}), 400
+                return jsonify({
+                    'success': False,
+                    'error': 'No text provided'
+                }), 400
             
             # Perform fake news detection
             fake_result = detector.predict(text)
@@ -2388,22 +2394,34 @@ def predict():
                     'error': 'Political classification model not available'
                 }
             
-            return jsonify(result)
+            return jsonify({
+                'success': True,
+                'data': result
+            })
         
         elif input_type == 'url':
             url = data.get('url', '').strip()
             if not url:
-                return jsonify({'error': 'No URL provided'}), 400
+                return jsonify({
+                    'success': False,
+                    'error': 'No URL provided'
+                }), 400
             
             # Extract content from URL
             article_data = extract_article_content(url)
             
             if 'error' in article_data:
-                return jsonify(article_data), 400
+                return jsonify({
+                    'success': False,
+                    'error': article_data['error']
+                }), 400
             
             combined_text = article_data['combined']
             if not combined_text.strip():
-                return jsonify({'error': 'No content could be extracted from the URL'}), 400
+                return jsonify({
+                    'success': False,
+                    'error': 'No content could be extracted from the URL'
+                }), 400
             
             # Automatically index the article in the Philippine news database (background task)
             def index_article_background():
@@ -2421,7 +2439,9 @@ def predict():
                 'fake_news': fake_result,
                 'extracted_content': {
                     'title': article_data['title'],
-                    'content_preview': combined_text[:500] + '...' if len(combined_text) > 500 else combined_text
+                    'content_preview': combined_text[:500] + '...' if len(combined_text) > 500 else combined_text,
+                    'combined': combined_text,
+                    'word_count': len(combined_text.split()) if combined_text else 0
                 },
                 'indexing_status': 'Article queued for indexing in Philippine news database'
             }
@@ -2435,13 +2455,22 @@ def predict():
                     'error': 'Political classification model not available'
                 }
             
-            return jsonify(result)
+            return jsonify({
+                'success': True,
+                'data': result
+            })
         
         else:
-            return jsonify({'error': 'Invalid input type'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input type'
+            }), 400
     
     except Exception as e:
-        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+        return jsonify({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }), 500
 
 @app.route('/crawl-website', methods=['POST'])
 def crawl_website():
@@ -2631,35 +2660,58 @@ def health_check():
 
 @app.route('/model-status')
 def model_status():
-    status_info = {
-        'fake_news_model': {
-            'is_trained': detector.is_trained,
-            'status': 'Model is ready' if detector.is_trained else 'Model is training...'
-        },
-        'political_model': {
-            'is_trained': political_detector.is_trained,
-            'status': 'Model is ready' if political_detector.is_trained else 'Model not loaded'
+    try:
+        # Create the expected response structure for the frontend
+        status_data = {
+            'fake_news': detector.is_trained,
+            'political': political_detector.is_trained
         }
-    }
-    
-    if detector.is_trained and detector.accuracy:
-        status_info['fake_news_model']['accuracy'] = f"{detector.accuracy:.4f}"
-        status_info['fake_news_model']['status'] = f"Model ready (Accuracy: {detector.accuracy:.1%})"
-    
-    if political_detector.is_trained and political_detector.accuracy:
-        status_info['political_model']['accuracy'] = f"{political_detector.accuracy:.4f}"
-        status_info['political_model']['status'] = f"Model ready (Accuracy: {political_detector.accuracy:.1%})"
-    
-    # Overall status
-    both_ready = detector.is_trained and political_detector.is_trained
-    status_info['overall_status'] = 'Both models ready' if both_ready else 'Models loading...'
-    status_info['is_trained'] = detector.is_trained  # Keep for backward compatibility
-    
-    # Add feedback statistics
-    feedback_stats = detector.get_feedback_stats()
-    status_info['feedback'] = feedback_stats
-    
-    return jsonify(status_info)
+        
+        # Additional detailed status info (optional)
+        status_info = {
+            'fake_news_model': {
+                'is_trained': detector.is_trained,
+                'status': 'Model is ready' if detector.is_trained else 'Model is training...'
+            },
+            'political_model': {
+                'is_trained': political_detector.is_trained,
+                'status': 'Model is ready' if political_detector.is_trained else 'Model not loaded'
+            }
+        }
+        
+        if detector.is_trained and detector.accuracy:
+            status_info['fake_news_model']['accuracy'] = f"{detector.accuracy:.4f}"
+            status_info['fake_news_model']['status'] = f"Model ready (Accuracy: {detector.accuracy:.1%})"
+        
+        if political_detector.is_trained and political_detector.accuracy:
+            status_info['political_model']['accuracy'] = f"{political_detector.accuracy:.4f}"
+            status_info['political_model']['status'] = f"Model ready (Accuracy: {political_detector.accuracy:.1%})"
+        
+        # Overall status
+        both_ready = detector.is_trained and political_detector.is_trained
+        status_info['overall_status'] = 'Both models ready' if both_ready else 'Models loading...'
+        status_info['is_trained'] = detector.is_trained  # Keep for backward compatibility
+        
+        # Add feedback statistics
+        try:
+            feedback_stats = detector.get_feedback_stats()
+            status_info['feedback'] = feedback_stats
+        except:
+            status_info['feedback'] = {'total': 0, 'correct': 0, 'incorrect': 0}
+        
+        # Return in the format expected by the frontend
+        return jsonify({
+            'success': True,
+            'status': status_data,
+            'details': status_info
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to get model status: {str(e)}',
+            'status': {'fake_news': False, 'political': False}
+        })
 
 @app.route('/submit-feedback', methods=['POST'])
 def submit_feedback():

@@ -142,7 +142,9 @@ class NewsAnalyzer {
                 throw new Error(response.error || 'Failed to check model status');
             }
 
-            const status = response.status;
+            // Handle both nested and direct response formats
+            const status = response.data?.status || response.status || response.data || {};
+            
             this.state.modelsReady = {
                 fake_news: status.fake_news || false,
                 political: status.political || false

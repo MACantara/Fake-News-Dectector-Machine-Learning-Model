@@ -530,144 +530,98 @@ class NewsAnalyzer {
             return;
         }
 
-        // Store articles for later analysis
+        // Store articles for later analysis (now just URLs)
         this.crawledArticles = data.articles;
 
-        // Update summary with AI classification info
+        // Update summary 
         Utils.dom.setText(this.elements.totalArticlesCount, data.total_found);
         Utils.dom.setText(this.elements.analyzedWebsiteTitle, data.website_title || 'Unknown Website');
 
-        // Add AI classification summary if available
+        // Add classification method info if available
         if (data.classification_method) {
-            const aiSummaryHtml = `
-                <div class="mt-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
+            const summaryHtml = `
+                <div class="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
                     <div class="flex items-center space-x-2">
-                        <i class="bi bi-robot text-purple-600"></i>
-                        <span class="text-sm font-medium text-purple-800">
+                        <i class="bi bi-link text-green-600"></i>
+                        <span class="text-sm font-medium text-green-800">
                             ${data.classification_method}
                         </span>
                     </div>
-                    <div class="text-xs text-purple-700 mt-1">
-                        Found ${data.ai_classified || data.total_found} news articles from ${data.total_candidates || 'unknown'} total links
+                    <div class="text-xs text-green-700 mt-1">
+                        Extracted ${data.total_found} URLs from website
                     </div>
                 </div>
             `;
-            this.elements.analyzedWebsiteTitle.insertAdjacentHTML('afterend', aiSummaryHtml);
+            this.elements.analyzedWebsiteTitle.insertAdjacentHTML('afterend', summaryHtml);
         }
 
-        // Clear and populate article links
+        // Clear and populate article links (now just URLs)
         this.elements.articleLinksContainer.innerHTML = '';
         
-        data.articles.forEach((article, index) => {
-            // Get AI classification info
-            const aiInfo = article.ai_classification || {};
-            const confidence = aiInfo.confidence || 0;
-            const isHeuristic = aiInfo.heuristic_based || false;
-            const isFallback = aiInfo.fallback || false;
+        data.articles.forEach((articleUrl, index) => {
+            // Since we now only have URLs, create a simplified display
+            const domainName = this.extractDomainFromUrl(articleUrl);
             
-            // Determine classification badge
-            let classificationBadge = '';
-            if (isFallback) {
-                classificationBadge = `
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
-                        <i class="bi bi-exclamation-triangle mr-1"></i>
-                        Fallback
-                    </span>
-                `;
-            } else if (isHeuristic) {
-                classificationBadge = `
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
-                        <i class="bi bi-list-check mr-1"></i>
-                        Heuristic
-                    </span>
-                `;
-            } else {
-                classificationBadge = `
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-                        <i class="bi bi-cpu mr-1"></i>
-                        AI Model
-                    </span>
-                `;
-            }
-            
-            // Confidence indicator
-            const confidenceColor = confidence > 0.8 ? 'green' : confidence > 0.6 ? 'yellow' : 'red';
-            const confidenceBar = `
-                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                    <div class="bg-${confidenceColor}-500 h-1.5 rounded-full" style="width: ${confidence * 100}%"></div>
-                </div>
-            `;
-
             const articleHtml = `
-                <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow" data-url="${Utils.format.escape(article.url)}">
+                <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow" data-url="${Utils.format.escape(articleUrl)}">
                     <div class="flex items-start space-x-3">
                         ${this.state.bulkLabelingMode ? `
-                            <div class="flex-shrink-0 mt-1">
-                                <input type="checkbox" class="article-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" 
-                                       onchange="window.newsAnalyzer.handleArticleSelection(this, '${Utils.format.escape(article.url)}')" />
-                            </div>
+                            <input type="checkbox" class="article-checkbox mt-1" 
+                                   onchange="newsAnalyzer.handleArticleSelection(this, '${Utils.format.escape(articleUrl)}')"
+                                   data-url="${Utils.format.escape(articleUrl)}">
                         ` : ''}
-                        <div class="flex-shrink-0">
-                            <span class="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full text-sm font-medium">
-                                ${index + 1}
-                            </span>
-                        </div>
                         <div class="flex-1 min-w-0">
-                            <div class="flex items-start justify-between">
-                                <h4 class="text-sm font-medium text-gray-900 flex-1 mr-2">
-                                    ${Utils.format.escape(article.title)}
-                                </h4>
-                                <div class="flex-shrink-0 flex items-center space-x-2">
-                                    ${classificationBadge}
-                                    <button onclick="window.open('${article.url}', '_blank')" 
-                                            class="text-blue-600 hover:text-blue-800 text-sm">
-                                        <i class="bi bi-box-arrow-up-right"></i>
-                                    </button>
-                                </div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-gray-900">#${index + 1}</span>
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                                    <i class="bi bi-link mr-1"></i>
+                                    ${domainName}
+                                </span>
                             </div>
-                            <p class="text-sm text-gray-500 truncate mt-1">${Utils.format.escape(article.url)}</p>
-                            ${this.state.bulkLabelingMode ? `
-                                <div class="mt-2 bulk-label-status" style="display: none;">
-                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs">
-                                        <!-- Label status will be populated here -->
-                                    </span>
-                                </div>
-                            ` : ''}
-                            <div class="mt-2">
-                                <div class="flex items-center justify-between text-xs">
-                                    <span class="text-gray-600">AI Confidence:</span>
-                                    <span class="font-medium text-gray-800">${Math.round(confidence * 100)}%</span>
-                                </div>
-                                ${confidenceBar}
+                            
+                            <div class="mb-3">
+                                <a href="${articleUrl}" target="_blank" 
+                                   class="text-blue-600 hover:text-blue-800 text-sm break-all font-mono">
+                                    ${articleUrl}
+                                </a>
                             </div>
-                            ${aiInfo.probability_news ? `
-                                <div class="mt-1 text-xs text-gray-600">
-                                    News probability: ${Math.round(aiInfo.probability_news * 100)}%
-                                </div>
-                            ` : ''}
-                            ${!this.state.bulkLabelingMode ? `
-                                <div class="mt-2 flex items-center space-x-2">
-                                    <span class="text-xs text-gray-600">Classification correct?</span>
-                                    <button onclick="window.newsAnalyzer.submitUrlFeedback('${article.url}', true, ${confidence})" 
-                                            class="text-green-600 hover:text-green-800 text-xs">
-                                        <i class="bi bi-check-circle"></i> Yes
-                                    </button>
-                                    <button onclick="window.newsAnalyzer.submitUrlFeedback('${article.url}', false, ${confidence})" 
-                                            class="text-red-600 hover:text-red-800 text-xs">
-                                        <i class="bi bi-x-circle"></i> No
-                                    </button>
-                                </div>
-                            ` : ''}
+
+                            <!-- Feedback buttons (simplified since no AI classification) -->
+                            <div class="flex flex-wrap gap-2 mt-3">
+                                <button onclick="newsAnalyzer.submitUrlFeedback('${Utils.format.escape(articleUrl)}', true, 0.9)" 
+                                        class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs hover:bg-green-200 transition-colors">
+                                    <i class="bi bi-check-circle mr-1"></i>
+                                    Is News Article
+                                </button>
+                                <button onclick="newsAnalyzer.submitUrlFeedback('${Utils.format.escape(articleUrl)}', false, 0.9)" 
+                                        class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs hover:bg-red-200 transition-colors">
+                                    <i class="bi bi-x-circle mr-1"></i>
+                                    Not News Article
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
+
             this.elements.articleLinksContainer.insertAdjacentHTML('beforeend', articleHtml);
         });
 
         // Show crawled articles section
         Utils.dom.show(this.elements.crawledArticlesList);
         Utils.dom.show(this.elements.websiteResults);
+    }
+
+    // Helper method to extract domain from URL
+    extractDomainFromUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            return urlObj.hostname;
+        } catch (error) {
+            // If URL parsing fails, try to extract domain manually
+            const match = url.match(/https?:\/\/([^\/]+)/);
+            return match ? match[1] : 'Unknown Domain';
+        }
     }
 
     // Analyze found articles (when button is clicked in preview mode)
@@ -682,8 +636,11 @@ class NewsAnalyzer {
         this.updateAnalyzeButton();
 
         try {
+            // Convert URLs to article objects for analysis
+            const articleObjects = this.crawledArticles.map(url => ({ url: url }));
+            
             const response = await Utils.http.post(Config.endpoints.analyzeWebsite, {
-                articles: this.crawledArticles,
+                articles: articleObjects,
                 analysis_type: this.state.currentAnalysisType
             });
 

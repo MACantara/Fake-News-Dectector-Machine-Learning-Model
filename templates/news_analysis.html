@@ -118,19 +118,19 @@
         <div>
             <label for="maxArticles" class="block text-sm font-medium text-gray-700 mb-2">
                 <i class="bi bi-list-ol mr-1"></i>
-                Max Articles to Analyze
+                Max URLs to Extract
             </label>
             <select id="maxArticles" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="5">5 articles</option>
-                <option value="10">10 articles</option>
-                <option value="15">15 articles</option>
-                <option value="20" selected>20 articles</option>
-                <option value="30">30 articles</option>
-                <option value="50">50 articles</option>
-                <option value="100">100 articles</option>
-                <option value="200">200 articles</option>
-                <option value="500">500 articles (Stress Test)</option>
-                <option value="1000">1000 articles (Max Stress Test)</option>
+                <option value="5">5 URLs</option>
+                <option value="10">10 URLs</option>
+                <option value="15">15 URLs</option>
+                <option value="20" selected>20 URLs</option>
+                <option value="30">30 URLs</option>
+                <option value="50">50 URLs</option>
+                <option value="100">100 URLs</option>
+                <option value="200">200 URLs</option>
+                <option value="500">500 URLs (Stress Test)</option>
+                <option value="1000">1000 URLs (Max Stress Test)</option>
             </select>
         </div>
         <div>
@@ -141,11 +141,11 @@
             <div class="flex flex-wrap gap-2">
                 <button id="crawlOnlyBtn" class="crawl-mode-btn bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium focus-ring">
                     <i class="bi bi-search mr-1"></i>
-                    Preview
+                    Extract URLs
                 </button>
                 <button id="crawlAnalyzeBtn" class="crawl-mode-btn bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium focus-ring">
                     <i class="bi bi-cpu mr-1"></i>
-                    Analyze & Index
+                    Extract & Analyze
                 </button>
             </div>
         </div>
@@ -155,15 +155,15 @@
         <div class="flex items-start">
             <i class="bi bi-info-circle text-blue-600 text-lg mr-2 mt-0.5"></i>
             <div class="text-sm text-blue-800">
-                <p class="font-medium mb-1">AI-Powered Website Analysis:</p>
+                <p class="font-medium mb-1">Simplified Website Link Extraction:</p>
                 <ul class="space-y-1 text-blue-700">
-                    <li>• <strong>🧠 AI Classification:</strong> Uses reinforcement learning to identify news articles</li>
-                    <li>• <strong>Preview:</strong> Find and display article links with AI confidence scores</li>
-                    <li>• <strong>Analyze & Index:</strong> Analyze articles for fake news/political content</li>
-                    <li>• <strong>📈 Continuous Learning:</strong> Provide feedback to improve AI accuracy</li>
-                    <li>• Works with any news website (CNN, BBC, ABS-CBN, GMA, Inquirer, etc.)</li>
-                    <li>• <strong>⚠️ High article counts (500+):</strong> May take several minutes</li>
-                    <li>• <strong>💻 Stress test mode:</strong> Use 1000+ articles to test system limits</li>
+                    <li>• <strong>🔗 URL Extraction:</strong> Extract all links from any website</li>
+                    <li>• <strong>Preview:</strong> View all URLs found on the website</li>
+                    <li>• <strong>No Filtering:</strong> All links are extracted without manual filtering</li>
+                    <li>• <strong>� Clean Output:</strong> Simple list of URLs for analysis</li>
+                    <li>• Works with any website (news sites, blogs, etc.)</li>
+                    <li>• <strong>⚠️ High link counts (500+):</strong> May take time to load</li>
+                    <li>• <strong>💻 Stress test mode:</strong> Extract 1000+ links to test limits</li>
                 </ul>
             </div>
         </div>
@@ -340,7 +340,7 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="text-center">
                 <div class="text-3xl font-bold text-blue-600" id="totalArticlesCount">0</div>
-                <div class="text-sm text-gray-600">Articles Found</div>
+                <div class="text-sm text-gray-600">URLs Found</div>
             </div>
             <div class="text-center">
                 <div class="text-3xl font-bold text-green-600" id="successfulAnalysesCount">0</div>
@@ -419,7 +419,7 @@
         <div class="flex justify-between items-center mb-4">
             <h4 class="text-lg font-semibold text-gray-800">
                 <i class="bi bi-list-ul"></i>
-                Found Articles
+                Found URLs
             </h4>
             
             <!-- Bulk Labeling Controls -->
@@ -485,7 +485,7 @@
         <div class="mt-4 text-center">
             <button id="analyzeFoundArticlesBtn" class="bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200">
                 <i class="bi bi-cpu mr-2"></i>
-                Analyze These Articles
+                Analyze These URLs
             </button>
         </div>
     </div>

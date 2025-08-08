@@ -9,6 +9,7 @@ const Config = {
         analyzeWebsite: '/analyze-website',
         indexPhilippineArticle: '/index-philippine-article',
         searchPhilippineNews: '/search-philippine-news',
+        findSimilarContent: '/find-similar-content',
         philippineNewsAnalytics: '/philippine-news-analytics',
         getPhilippineArticle: '/philippine-article/',
         batchIndexPhilippineArticles: '/batch-index-philippine-articles',

@@ -172,15 +172,31 @@
 
 <!-- Analyze Button -->
 <div id="analyzeButtonSection" class="mt-8 text-center">
-    <button 
-        id="analyzeBtn"
-        disabled
-        class="bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-8 rounded-lg shadow-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-        aria-label="Analyze news content"
-    >
-        <i class="bi bi-search mr-2"></i>
-        Analyze News
-    </button>
+    <div class="flex flex-wrap justify-center gap-4">
+        <button 
+            id="analyzeBtn"
+            disabled
+            class="bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-8 rounded-lg shadow-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            aria-label="Analyze news content"
+        >
+            <i class="bi bi-search mr-2"></i>
+            Analyze News
+        </button>
+        
+        <button 
+            id="findSimilarBtn"
+            class="bg-gradient-to-r from-green-600 to-teal-600 text-white font-semibold py-4 px-8 rounded-lg shadow-lg hover:from-green-700 hover:to-teal-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200"
+            aria-label="Find similar articles in Philippine news database"
+            title="Search for similar articles in our Philippine news database"
+        >
+            <i class="bi bi-search mr-2"></i>
+            Find Similar Articles
+        </button>
+    </div>
+    
+    <div class="mt-3 text-sm text-gray-600">
+        <p><strong>Find Similar Articles:</strong> Search our Philippine news database for articles with similar content</p>
+    </div>
 </div>
 
 <!-- Loading Indicator -->
@@ -324,6 +340,39 @@
                 <p class="text-sm font-medium text-gray-600">Content Preview:</p>
                 <p id="extractedPreview" class="text-gray-700 text-sm custom-scrollbar max-h-32 overflow-y-auto"></p>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Similar Content Results -->
+<div id="similarContentSection" class="hidden mt-8">
+    <h3 class="text-2xl font-semibold text-gray-800 mb-6">
+        <i class="bi bi-collection"></i>
+        Similar Articles in Philippine News Database
+    </h3>
+    
+    <!-- Similar Content Summary -->
+    <div id="similarContentSummary" class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <!-- Summary will be dynamically populated -->
+    </div>
+    
+    <!-- Similar Content Results -->
+    <div id="similarContentResults">
+        <div id="similarContentList" class="space-y-4">
+            <!-- Similar content cards will be dynamically inserted here -->
+        </div>
+    </div>
+    
+    <div class="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+        <div class="text-sm text-gray-600">
+            <p class="font-medium mb-2">🔍 How Similar Content Search Works:</p>
+            <ul class="space-y-1">
+                <li>• <strong>Keyword Extraction:</strong> Identifies important terms from your content</li>
+                <li>• <strong>Content Matching:</strong> Searches our Philippine news database for articles with similar keywords</li>
+                <li>• <strong>Similarity Scoring:</strong> Calculates similarity percentage based on matching content</li>
+                <li>• <strong>Philippine Relevance:</strong> Shows how relevant each article is to Philippine news</li>
+                <li>• <strong>Source Verification:</strong> Compare with established Philippine news sources</li>
+            </ul>
         </div>
     </div>
 </div>

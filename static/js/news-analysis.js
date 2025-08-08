@@ -67,6 +67,13 @@ class NewsAnalyzer {
         elementIds.forEach(id => {
             this.elements[id] = document.getElementById(id);
         });
+
+        // Add similar content elements
+        this.elements.similarContentSection = document.getElementById('similarContentSection');
+        this.elements.similarContentResults = document.getElementById('similarContentResults');
+        this.elements.similarContentList = document.getElementById('similarContentList');
+        this.elements.findSimilarBtn = document.getElementById('findSimilarBtn');
+        this.elements.similarContentSummary = document.getElementById('similarContentSummary');
     }
 
     // Bind event listeners
@@ -146,6 +153,11 @@ class NewsAnalyzer {
         // Website URL input monitoring
         if (this.elements.websiteUrl) {
             this.elements.websiteUrl.addEventListener('input', () => this.updateAnalyzeButton());
+        }
+
+        // Find similar content button
+        if (this.elements.findSimilarBtn) {
+            this.elements.findSimilarBtn.addEventListener('click', () => this.findSimilarContent());
         }
 
         // Keyboard shortcuts
@@ -338,6 +350,7 @@ class NewsAnalyzer {
     hideResults() {
         Utils.dom.hide(this.elements.results);
         Utils.dom.hide(this.elements.websiteResults);
+        Utils.dom.hide(this.elements.similarContentSection);
         Utils.dom.hide(this.elements.error);
     }
 
@@ -1245,6 +1258,7 @@ class NewsAnalyzer {
         const sections = [
             this.elements.results,
             this.elements.websiteResults,
+            this.elements.similarContentSection,
             this.elements.error
         ];
         
@@ -1426,6 +1440,217 @@ class NewsAnalyzer {
                 feedbackElement.remove();
             }
         }, 5000);
+    }
+
+    // Find similar content in Philippine news database
+    async findSimilarContent() {
+        let contentText = '';
+        
+        // Get content based on current input type
+        if (this.state.currentInputType === Config.inputTypes.TEXT) {
+            contentText = this.elements.newsText?.value?.trim() || '';
+        } else if (this.state.currentInputType === Config.inputTypes.URL) {
+            // For URL input, we need to check if we have extracted content from previous analysis
+            const lastResults = Utils.storage.get('lastAnalysisResults');
+            if (lastResults && lastResults.extracted_content) {
+                contentText = lastResults.extracted_content.combined || 
+                             lastResults.extracted_content.content || '';
+            } else {
+                this.showError('Please analyze the URL first to extract content before finding similar articles.');
+                return;
+            }
+        } else {
+            this.showError('Similar content search is only available for text input and article URL analysis.');
+            return;
+        }
+
+        if (!contentText || contentText.length < 50) {
+            this.showError('Content must be at least 50 characters long to find similar articles.');
+            return;
+        }
+
+        // Hide previous similar content results
+        Utils.dom.hide(this.elements.similarContentSection);
+        
+        // Show loading state
+        if (this.elements.findSimilarBtn) {
+            this.elements.findSimilarBtn.disabled = true;
+            this.elements.findSimilarBtn.innerHTML = '<i class="bi bi-hourglass-split spin mr-2"></i>Finding Similar Articles...';
+        }
+
+        try {
+            const response = await Utils.http.post(Config.endpoints.findSimilarContent, {
+                content: contentText,
+                limit: 10,
+                minimum_similarity: 0.15
+            });
+
+            if (response.success) {
+                this.displaySimilarContent(response.data);
+            } else {
+                this.showError(response.error || 'Failed to find similar content');
+            }
+        } catch (error) {
+            console.error('Similar content search error:', error);
+            this.showError('An error occurred while searching for similar content');
+        } finally {
+            // Reset button state
+            if (this.elements.findSimilarBtn) {
+                this.elements.findSimilarBtn.disabled = false;
+                this.elements.findSimilarBtn.innerHTML = '<i class="bi bi-search mr-2"></i>Find Similar Articles';
+            }
+        }
+    }
+
+    // Display similar content results
+    displaySimilarContent(data) {
+        if (!this.elements.similarContentResults || !this.elements.similarContentList) {
+            console.error('Similar content elements not found');
+            return;
+        }
+
+        // Update summary
+        if (this.elements.similarContentSummary) {
+            const summary = `Found ${data.total_count} similar articles (${(data.response_time * 1000).toFixed(0)}ms)`;
+            const keywords = data.top_keywords ? ` • Keywords: ${data.top_keywords.slice(0, 5).join(', ')}` : '';
+            this.elements.similarContentSummary.innerHTML = `
+                <div class="text-sm text-gray-600">
+                    <i class="bi bi-info-circle mr-1"></i>
+                    ${summary}${keywords}
+                </div>
+            `;
+        }
+
+        // Clear previous results
+        this.elements.similarContentList.innerHTML = '';
+
+        if (data.results && data.results.length > 0) {
+            data.results.forEach((article, index) => {
+                this.createSimilarContentCard(article, index + 1);
+            });
+        } else {
+            this.elements.similarContentList.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <i class="bi bi-search text-4xl mb-4"></i>
+                    <h4 class="text-lg font-semibold mb-2">No Similar Articles Found</h4>
+                    <p>No articles in our Philippine news database match your content.</p>
+                    <p class="text-sm mt-2">Try:</p>
+                    <ul class="text-sm text-left mt-2 max-w-md mx-auto">
+                        <li>• Using longer, more detailed content</li>
+                        <li>• Including Philippine-specific terms or locations</li>
+                        <li>• Analyzing recent Philippine news content</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Show the similar content section
+        Utils.dom.show(this.elements.similarContentSection);
+        Utils.animations.fadeIn(this.elements.similarContentSection);
+    }
+
+    // Create similar content result card
+    createSimilarContentCard(article, index) {
+        const publishDate = article.publish_date ? 
+            new Date(article.publish_date).toLocaleDateString() : 'Date unknown';
+        
+        const similarityScore = (article.similarity_score * 100).toFixed(1);
+        const relevanceScore = (article.relevance_score * 100).toFixed(1);
+        
+        // Get similarity color class
+        const scoreNum = parseFloat(similarityScore);
+        let scoreClass = 'text-gray-600';
+        if (scoreNum >= 70) scoreClass = 'text-green-600';
+        else if (scoreNum >= 50) scoreClass = 'text-yellow-600';
+        else if (scoreNum >= 30) scoreClass = 'text-orange-600';
+        else scoreClass = 'text-red-600';
+
+        const cardHtml = `
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500 hover:shadow-lg transition-shadow similar-content-card">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex-1">
+                        <h4 class="text-lg font-semibold text-gray-800 hover:text-blue-600 cursor-pointer mb-2" 
+                            onclick="window.open('${article.url}', '_blank')">
+                            ${Utils.format.escape(article.title)}
+                        </h4>
+                        <div class="flex items-center space-x-4 text-sm text-gray-600 mb-2">
+                            <span class="flex items-center">
+                                <i class="bi bi-calendar mr-1"></i>
+                                ${publishDate}
+                            </span>
+                            <span class="flex items-center">
+                                <i class="bi bi-globe mr-1"></i>
+                                ${Utils.format.escape(article.source_domain)}
+                            </span>
+                            ${article.category ? `
+                                <span class="flex items-center">
+                                    <i class="bi bi-tag mr-1"></i>
+                                    ${Utils.format.escape(article.category)}
+                                </span>
+                            ` : ''}
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-end space-y-1">
+                        <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                            #${index}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded-full ${scoreClass.replace('text-', 'bg-').replace('-600', '-100')} ${scoreClass} similarity-score">
+                            ${similarityScore}% similar
+                        </span>
+                        <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                            ${relevanceScore}% PH
+                        </span>
+                    </div>
+                </div>
+                
+                ${article.summary ? `
+                    <p class="text-gray-700 text-sm mb-3 line-clamp-3">
+                        ${Utils.format.escape(article.summary)}
+                    </p>
+                ` : ''}
+                
+                ${article.matching_keywords && article.matching_keywords.length > 0 ? `
+                    <div class="mb-3">
+                        <p class="text-xs text-gray-500 mb-1">Matching keywords:</p>
+                        <div class="flex flex-wrap gap-1">
+                            ${article.matching_keywords.slice(0, 6).map(keyword => 
+                                `<span class="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full keyword-tag">${Utils.format.escape(keyword)}</span>`
+                            ).join('')}
+                            ${article.matching_keywords.length > 6 ? 
+                                `<span class="text-xs text-gray-500">+${article.matching_keywords.length - 6} more</span>` : ''
+                            }
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <div class="flex justify-between items-center">
+                    <div class="flex space-x-2">
+                        <button onclick="window.open('${article.url}', '_blank')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center">
+                            <i class="bi bi-box-arrow-up-right mr-1"></i>Read Original
+                        </button>
+                        <button onclick="newsAnalyzer.compareWithSimilar('${Utils.format.escape(article.url)}')" 
+                                class="text-green-600 hover:text-green-800 text-sm font-medium flex items-center">
+                            <i class="bi bi-arrows-angle-expand mr-1"></i>Compare
+                        </button>
+                    </div>
+                    ${article.author ? `
+                        <span class="text-xs text-gray-500">
+                            by ${Utils.format.escape(article.author)}
+                        </span>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+
+        this.elements.similarContentList.insertAdjacentHTML('beforeend', cardHtml);
+    }
+
+    // Compare current content with similar article (placeholder for future enhancement)
+    compareWithSimilar(articleUrl) {
+        // For now, just open the article and show a message
+        window.open(articleUrl, '_blank');
+        this.showFeedbackMessage('Article opened in new tab. Future versions will include side-by-side comparison.', 'success');
     }
 
     // Bulk Labeling Methods

@@ -3054,35 +3054,89 @@ def classify_url():
 
 @app.route('/url-classifier-feedback', methods=['POST'])
 def submit_url_classifier_feedback():
-    """Submit feedback for URL classification to improve the RL model"""
+    """Submit feedback for URL classification to improve the RL model (supports single and bulk feedback)"""
     try:
         data = request.get_json()
-        url = data.get('url', '').strip()
-        predicted_label = data.get('predicted_label')
-        actual_label = data.get('actual_label')
-        user_confidence = data.get('user_confidence', 1.0)
         
-        if not url or predicted_label is None or actual_label is None:
+        # Check if this is bulk feedback
+        if 'feedback_batch' in data:
+            # Handle bulk feedback
+            feedback_list = data.get('feedback_batch', [])
+            
+            if not feedback_list:
+                return jsonify({
+                    'success': False,
+                    'error': 'feedback_batch is empty'
+                }), 400
+            
+            processed_count = 0
+            errors = []
+            
+            for feedback in feedback_list:
+                try:
+                    url = feedback.get('url', '').strip()
+                    predicted_label = feedback.get('predicted_label')
+                    actual_label = feedback.get('actual_label')
+                    user_confidence = feedback.get('user_confidence', 1.0)
+                    
+                    if not url or predicted_label is None or actual_label is None:
+                        errors.append(f"Missing required fields for URL: {url}")
+                        continue
+                    
+                    # Add feedback to RL model
+                    url_news_classifier.add_feedback(
+                        url=url,
+                        predicted_label=predicted_label,
+                        actual_label=actual_label,
+                        user_confidence=user_confidence
+                    )
+                    processed_count += 1
+                    
+                except Exception as e:
+                    errors.append(f"Error processing feedback for {feedback.get('url', 'unknown')}: {str(e)}")
+            
+            # Get updated model stats
+            model_stats = url_news_classifier.get_model_stats()
+            
             return jsonify({
-                'success': False,
-                'error': 'Missing required fields: url, predicted_label, actual_label'
-            }), 400
+                'success': True,
+                'bulk_feedback': True,
+                'processed_count': processed_count,
+                'total_submitted': len(feedback_list),
+                'errors': errors,
+                'feedback_count': model_stats['feedback_count'],
+                'is_trained': model_stats['is_trained'],
+                'message': f'Successfully processed {processed_count} out of {len(feedback_list)} feedback entries'
+            })
         
-        # Add feedback to RL model
-        feedback_entry = url_news_classifier.add_feedback(
-            url=url,
-            predicted_label=predicted_label,
-            actual_label=actual_label,
-            user_confidence=user_confidence
-        )
-        
-        # Get updated model stats
-        model_stats = url_news_classifier.get_model_stats()
-        
-        return jsonify({
-            'success': True,
-            'feedback_added': True,
-            'feedback_count': model_stats['feedback_count'],
+        else:
+            # Handle single feedback (existing logic)
+            url = data.get('url', '').strip()
+            predicted_label = data.get('predicted_label')
+            actual_label = data.get('actual_label')
+            user_confidence = data.get('user_confidence', 1.0)
+            
+            if not url or predicted_label is None or actual_label is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'Missing required fields: url, predicted_label, actual_label'
+                }), 400
+            
+            # Add feedback to RL model
+            feedback_entry = url_news_classifier.add_feedback(
+                url=url,
+                predicted_label=predicted_label,
+                actual_label=actual_label,
+                user_confidence=user_confidence
+            )
+            
+            # Get updated model stats
+            model_stats = url_news_classifier.get_model_stats()
+            
+            return jsonify({
+                'success': True,
+                'feedback_added': True,
+                'feedback_count': model_stats['feedback_count'],
             'model_accuracy': model_stats.get('feedback_accuracy', 0),
             'model_trained': model_stats['is_trained'],
             'message': 'Thank you for your feedback! The model will improve with your input.'

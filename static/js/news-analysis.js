@@ -10,12 +10,14 @@ class NewsAnalyzer {
                 fake_news: false, 
                 political: false 
             },
-            isLoading: false
+            isLoading: false,
+            bulkLabelingMode: false
         };
 
         // DOM elements cache
         this.elements = {};
         this.crawledArticles = [];
+        this.bulkLabels = new Map(); // Store bulk labels for articles
 
         // Initialize the application
         this.init();
@@ -55,7 +57,11 @@ class NewsAnalyzer {
             'analyzedWebsiteTitle', 'overallStats', 'fakeNewsStats', 'politicalStats',
             'fakeArticlesCount', 'realArticlesCount', 'fakePercentageOverall',
             'politicalArticlesCount', 'nonPoliticalArticlesCount', 'politicalPercentageOverall',
-            'articleResultsList', 'crawledArticlesList', 'articleLinksContainer'
+            'articleResultsList', 'crawledArticlesList', 'articleLinksContainer',
+            // Bulk labeling elements
+            'toggleBulkLabelingBtn', 'bulkActionControls', 'bulkLabelingInstructions',
+            'selectAllBtn', 'deselectAllBtn', 'bulkLabelNewsBtn', 'bulkLabelNotNewsBtn',
+            'submitBulkFeedbackBtn', 'labeledCount'
         ];
 
         elementIds.forEach(id => {
@@ -115,6 +121,26 @@ class NewsAnalyzer {
         // Analyze found articles button
         if (this.elements.analyzeFoundArticlesBtn) {
             this.elements.analyzeFoundArticlesBtn.addEventListener('click', () => this.analyzeFoundArticles());
+        }
+
+        // Bulk labeling event listeners
+        if (this.elements.toggleBulkLabelingBtn) {
+            this.elements.toggleBulkLabelingBtn.addEventListener('click', () => this.toggleBulkLabeling());
+        }
+        if (this.elements.selectAllBtn) {
+            this.elements.selectAllBtn.addEventListener('click', () => this.selectAllArticles());
+        }
+        if (this.elements.deselectAllBtn) {
+            this.elements.deselectAllBtn.addEventListener('click', () => this.deselectAllArticles());
+        }
+        if (this.elements.bulkLabelNewsBtn) {
+            this.elements.bulkLabelNewsBtn.addEventListener('click', () => this.bulkLabelArticles(true));
+        }
+        if (this.elements.bulkLabelNotNewsBtn) {
+            this.elements.bulkLabelNotNewsBtn.addEventListener('click', () => this.bulkLabelArticles(false));
+        }
+        if (this.elements.submitBulkFeedbackBtn) {
+            this.elements.submitBulkFeedbackBtn.addEventListener('click', () => this.submitBulkFeedback());
         }
 
         // Website URL input monitoring
@@ -573,8 +599,14 @@ class NewsAnalyzer {
             `;
 
             const articleHtml = `
-                <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
+                <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow" data-url="${Utils.format.escape(article.url)}">
                     <div class="flex items-start space-x-3">
+                        ${this.state.bulkLabelingMode ? `
+                            <div class="flex-shrink-0 mt-1">
+                                <input type="checkbox" class="article-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" 
+                                       onchange="window.newsAnalyzer.handleArticleSelection(this, '${Utils.format.escape(article.url)}')" />
+                            </div>
+                        ` : ''}
                         <div class="flex-shrink-0">
                             <span class="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full text-sm font-medium">
                                 ${index + 1}
@@ -594,6 +626,13 @@ class NewsAnalyzer {
                                 </div>
                             </div>
                             <p class="text-sm text-gray-500 truncate mt-1">${Utils.format.escape(article.url)}</p>
+                            ${this.state.bulkLabelingMode ? `
+                                <div class="mt-2 bulk-label-status" style="display: none;">
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs">
+                                        <!-- Label status will be populated here -->
+                                    </span>
+                                </div>
+                            ` : ''}
                             <div class="mt-2">
                                 <div class="flex items-center justify-between text-xs">
                                     <span class="text-gray-600">AI Confidence:</span>
@@ -606,17 +645,19 @@ class NewsAnalyzer {
                                     News probability: ${Math.round(aiInfo.probability_news * 100)}%
                                 </div>
                             ` : ''}
-                            <div class="mt-2 flex items-center space-x-2">
-                                <span class="text-xs text-gray-600">Classification correct?</span>
-                                <button onclick="window.newsAnalyzer.submitUrlFeedback('${article.url}', true, ${confidence})" 
-                                        class="text-green-600 hover:text-green-800 text-xs">
-                                    <i class="bi bi-check-circle"></i> Yes
-                                </button>
-                                <button onclick="window.newsAnalyzer.submitUrlFeedback('${article.url}', false, ${confidence})" 
-                                        class="text-red-600 hover:text-red-800 text-xs">
-                                    <i class="bi bi-x-circle"></i> No
-                                </button>
-                            </div>
+                            ${!this.state.bulkLabelingMode ? `
+                                <div class="mt-2 flex items-center space-x-2">
+                                    <span class="text-xs text-gray-600">Classification correct?</span>
+                                    <button onclick="window.newsAnalyzer.submitUrlFeedback('${article.url}', true, ${confidence})" 
+                                            class="text-green-600 hover:text-green-800 text-xs">
+                                        <i class="bi bi-check-circle"></i> Yes
+                                    </button>
+                                    <button onclick="window.newsAnalyzer.submitUrlFeedback('${article.url}', false, ${confidence})" 
+                                            class="text-red-600 hover:text-red-800 text-xs">
+                                        <i class="bi bi-x-circle"></i> No
+                                    </button>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                 </div>
@@ -1050,6 +1091,185 @@ class NewsAnalyzer {
                 feedbackElement.remove();
             }
         }, 5000);
+    }
+
+    // Bulk Labeling Methods
+    
+    toggleBulkLabeling() {
+        this.state.bulkLabelingMode = !this.state.bulkLabelingMode;
+        
+        if (this.state.bulkLabelingMode) {
+            // Enable bulk labeling mode
+            this.elements.toggleBulkLabelingBtn.innerHTML = '<i class="bi bi-tags mr-2"></i>Disable Bulk Labeling';
+            this.elements.toggleBulkLabelingBtn.className = 'bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200';
+            Utils.dom.show(this.elements.bulkActionControls);
+            Utils.dom.show(this.elements.bulkLabelingInstructions);
+        } else {
+            // Disable bulk labeling mode
+            this.elements.toggleBulkLabelingBtn.innerHTML = '<i class="bi bi-tags mr-2"></i>Enable Bulk Labeling';
+            this.elements.toggleBulkLabelingBtn.className = 'bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200';
+            Utils.dom.hide(this.elements.bulkActionControls);
+            Utils.dom.hide(this.elements.bulkLabelingInstructions);
+            this.bulkLabels.clear();
+        }
+        
+        // Re-render articles with or without checkboxes
+        if (this.crawledArticles && this.crawledArticles.length > 0) {
+            this.displayCrawledArticles({ articles: this.crawledArticles, total_found: this.crawledArticles.length });
+        }
+        
+        this.updateBulkFeedbackButton();
+    }
+
+    selectAllArticles() {
+        const checkboxes = document.querySelectorAll('.article-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = true;
+            const url = checkbox.closest('[data-url]').getAttribute('data-url');
+            if (url) {
+                this.handleArticleSelection(checkbox, url);
+            }
+        });
+    }
+
+    deselectAllArticles() {
+        const checkboxes = document.querySelectorAll('.article-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+            const url = checkbox.closest('[data-url]').getAttribute('data-url');
+            if (url) {
+                this.handleArticleSelection(checkbox, url);
+            }
+        });
+    }
+
+    handleArticleSelection(checkbox, url) {
+        if (checkbox.checked) {
+            // Article is selected but not labeled yet
+            if (!this.bulkLabels.has(url)) {
+                this.bulkLabels.set(url, { selected: true, label: null });
+            } else {
+                this.bulkLabels.get(url).selected = true;
+            }
+        } else {
+            // Article is deselected
+            if (this.bulkLabels.has(url)) {
+                this.bulkLabels.delete(url);
+            }
+        }
+        this.updateBulkFeedbackButton();
+    }
+
+    bulkLabelArticles(isNews) {
+        const selectedArticles = Array.from(this.bulkLabels.keys()).filter(url => 
+            this.bulkLabels.get(url).selected
+        );
+
+        if (selectedArticles.length === 0) {
+            this.showError('Please select articles to label first');
+            return;
+        }
+
+        // Update labels for selected articles
+        selectedArticles.forEach(url => {
+            const labelData = this.bulkLabels.get(url);
+            labelData.label = isNews;
+            
+            // Update UI to show label
+            const articleElement = document.querySelector(`[data-url="${url}"]`);
+            if (articleElement) {
+                const statusElement = articleElement.querySelector('.bulk-label-status');
+                if (statusElement) {
+                    const labelClass = isNews ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                    const labelIcon = isNews ? 'check-circle' : 'x-circle';
+                    const labelText = isNews ? 'News' : 'Not News';
+                    
+                    statusElement.innerHTML = `
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${labelClass}">
+                            <i class="bi bi-${labelIcon} mr-1"></i>
+                            Labeled as: ${labelText}
+                        </span>
+                    `;
+                    statusElement.style.display = 'block';
+                }
+            }
+        });
+
+        this.updateBulkFeedbackButton();
+        
+        // Show success message
+        const labelType = isNews ? 'News' : 'Not News';
+        this.showFeedbackMessage(
+            `Successfully labeled ${selectedArticles.length} articles as "${labelType}"`,
+            'success'
+        );
+    }
+
+    async submitBulkFeedback() {
+        const labeledArticles = Array.from(this.bulkLabels.entries())
+            .filter(([url, data]) => data.label !== null)
+            .map(([url, data]) => ({
+                url: url,
+                actual_label: data.label,
+                predicted_label: this.getArticlePrediction(url),
+                user_confidence: 1.0
+            }));
+
+        if (labeledArticles.length === 0) {
+            this.showError('No labeled articles to submit');
+            return;
+        }
+
+        try {
+            this.elements.submitBulkFeedbackBtn.disabled = true;
+            this.elements.submitBulkFeedbackBtn.innerHTML = '<i class="bi bi-hourglass-split spin mr-1"></i>Submitting...';
+
+            const response = await Utils.http.post(Config.endpoints.urlFeedback, {
+                feedback_batch: labeledArticles
+            });
+
+            if (response.success) {
+                this.showFeedbackMessage(
+                    `Successfully submitted feedback for ${labeledArticles.length} articles. Thank you for helping improve our AI!`,
+                    'success'
+                );
+                
+                // Clear labels after successful submission
+                this.bulkLabels.clear();
+                this.deselectAllArticles();
+                this.updateBulkFeedbackButton();
+                
+                // Hide bulk labeling mode
+                this.toggleBulkLabeling();
+                
+            } else {
+                throw new Error(response.error || 'Failed to submit bulk feedback');
+            }
+        } catch (error) {
+            console.error('Error submitting bulk feedback:', error);
+            this.showError(`Failed to submit bulk feedback: ${error.message}`);
+        } finally {
+            this.elements.submitBulkFeedbackBtn.disabled = false;
+            this.elements.submitBulkFeedbackBtn.innerHTML = '<i class="bi bi-cloud-upload mr-1"></i>Submit Feedback (<span id="labeledCount">0</span>)';
+        }
+    }
+
+    getArticlePrediction(url) {
+        const article = this.crawledArticles?.find(a => a.url === url);
+        return article?.ai_classification?.prediction || false;
+    }
+
+    updateBulkFeedbackButton() {
+        const labeledCount = Array.from(this.bulkLabels.values())
+            .filter(data => data.label !== null).length;
+        
+        if (this.elements.labeledCount) {
+            this.elements.labeledCount.textContent = labeledCount;
+        }
+        
+        if (this.elements.submitBulkFeedbackBtn) {
+            this.elements.submitBulkFeedbackBtn.disabled = labeledCount === 0;
+        }
     }
 }
 

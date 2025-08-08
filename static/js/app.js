@@ -247,9 +247,15 @@ class NewsAnalyzer {
         Utils.dom.hide(this.elements.websiteInput);
         Utils.dom.hide(this.elements.searchInput);
         
-        // Get analysis sections for hiding/showing
+        // Get analysis sections and Philippine search results for hiding/showing
         const analysisTypeSection = document.getElementById('analysisTypeSection');
         const analyzeButtonSection = document.getElementById('analyzeButtonSection');
+        const searchResults = document.getElementById('searchResults');
+        const analyticsResults = document.getElementById('analyticsResults');
+        
+        // Hide Philippine search results when switching away from search mode
+        if (searchResults) Utils.dom.hide(searchResults);
+        if (analyticsResults) Utils.dom.hide(analyticsResults);
         
         // Show appropriate section and activate button
         if (type === Config.inputTypes.TEXT) {
@@ -284,6 +290,7 @@ class NewsAnalyzer {
             // Hide analysis sections for search mode
             if (analysisTypeSection) Utils.dom.hide(analysisTypeSection);
             if (analyzeButtonSection) Utils.dom.hide(analyzeButtonSection);
+            // Philippine search results will be shown only when search is performed
             this.updateSearchButton();
             return; // Don't call updateAnalyzeButton for search mode
         }

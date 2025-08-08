@@ -1556,17 +1556,103 @@ class PoliticalNewsDetector:
             return False
 
 class NewsWebsiteCrawler:
-    def __init__(self):
-        # Simplified - no complex selectors, patterns, or filters
-        pass
+    def __init__(self, url_classifier=None):
+        """Initialize the crawler with URL classifier for intelligent filtering"""
+        self.url_classifier = url_classifier or url_news_classifier
+        self.confidence_threshold = 0.7  # Threshold for URL classification
+        self.enable_filtering = True  # Can be disabled for backward compatibility
+        self.classification_stats = {
+            'total_urls': 0,
+            'classified_as_news': 0,
+            'classified_as_non_news': 0,
+            'classification_errors': 0
+        }
     
-    def is_news_link(self, href, link_text, link_element=None):
-        """Simplified - return True for all links (no filtering)"""
-        return True if href else False
-    
-    def extract_article_links(self, url, max_links=10):
-        """Simplified method to extract ALL links from a website without any filtering"""
+    def is_news_link(self, href, link_text=None, link_element=None, use_classifier=True):
+        """Enhanced news link detection using URL classifier"""
+        if not href:
+            return False
+            
+        if not self.enable_filtering or not use_classifier:
+            return True
+            
         try:
+            # Use URL classifier to predict if this is a news article URL
+            prediction_result = self.url_classifier.predict_with_confidence(href)
+            
+            is_news = prediction_result.get('is_news_article', False)
+            confidence = prediction_result.get('confidence', 0.0)
+            
+            # Update classification stats
+            self.classification_stats['total_urls'] += 1
+            if is_news:
+                self.classification_stats['classified_as_news'] += 1
+            else:
+                self.classification_stats['classified_as_non_news'] += 1
+            
+            # Return True if classified as news and confidence is above threshold
+            return is_news and confidence >= self.confidence_threshold
+            
+        except Exception as e:
+            print(f"⚠️ URL classification error for {href}: {e}")
+            self.classification_stats['classification_errors'] += 1
+            # Fallback to basic URL pattern matching
+            return self._basic_news_url_check(href, link_text)
+    
+    def _basic_news_url_check(self, href, link_text=None):
+        """Fallback basic news URL detection using simple patterns"""
+        href_lower = href.lower()
+        
+        # Basic news patterns
+        news_patterns = [
+            r'/news/', r'/article/', r'/story/', r'/post/', r'/blog/',
+            r'/breaking/', r'/latest/', r'/update/', r'/report/', r'/press/',
+            r'\d{4}/\d{2}/\d{2}/', r'\d{4}-\d{2}-\d{2}',
+            r'/politics/', r'/sports/', r'/business/', r'/tech/', r'/health/',
+            r'/entertainment/', r'/opinion/', r'/world/', r'/local/'
+        ]
+        
+        # Non-news patterns (should be excluded)
+        non_news_patterns = [
+            r'/about/', r'/contact/', r'/privacy/', r'/terms/', r'/help/',
+            r'/login/', r'/register/', r'/profile/', r'/settings/', r'/account/',
+            r'/shop/', r'/buy/', r'/cart/', r'/checkout/', r'/product/',
+            r'/search/', r'/category/', r'/tag/', r'/archive/', r'/sitemap/',
+            r'/api/', r'/admin/', r'/dashboard/', r'/upload/', r'/download/'
+        ]
+        
+        # Check for non-news patterns first (exclude these)
+        import re
+        for pattern in non_news_patterns:
+            if re.search(pattern, href_lower):
+                return False
+        
+        # Check for news patterns
+        for pattern in news_patterns:
+            if re.search(pattern, href_lower):
+                return True
+        
+        # Check link text for news indicators
+        if link_text:
+            text_lower = link_text.lower()
+            news_keywords = ['article', 'story', 'news', 'report', 'breaking', 'latest', 'update']
+            if any(keyword in text_lower for keyword in news_keywords):
+                return True
+        
+        # Default to True for unknown patterns (conservative approach)
+        return True
+    
+    def extract_article_links(self, url, max_links=10, enable_filtering=True):
+        """Enhanced method to extract and filter news article links from a website using URL classifier"""
+        try:
+            # Reset classification stats for this crawl
+            self.classification_stats = {
+                'total_urls': 0,
+                'classified_as_news': 0,
+                'classified_as_non_news': 0,
+                'classification_errors': 0
+            }
+            
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
@@ -1578,12 +1664,15 @@ class NewsWebsiteCrawler:
             base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
             
             all_links = []
+            news_articles = []
+            non_news_links = []
             seen_urls = set()
             
             print(f"🔍 Crawling website: {url}")
             print(f"📄 Website title: {soup.title.string if soup.title else 'No title found'}")
+            print(f"🤖 URL classification {'enabled' if enable_filtering else 'disabled'}")
             
-            # Find ALL links on the page - no filtering
+            # Extract all links first
             for link in soup.find_all('a', href=True):
                 href = link.get('href')
                 if not href:
@@ -1595,26 +1684,119 @@ class NewsWebsiteCrawler:
                 elif not href.startswith(('http://', 'https://')):
                     href = urljoin(url, href)
                 
-                # Skip only duplicates and invalid URLs
+                # Skip duplicates and invalid URLs
                 if not href.startswith(('http://', 'https://')) or href in seen_urls:
                     continue
                 
                 seen_urls.add(href)
                 
-                # Only return the URL from href attribute
-                all_links.append(href)
+                # Get link text for additional context
+                link_text = link.get_text(strip=True)
+                
+                # Store all links
+                all_links.append({
+                    'url': href,
+                    'text': link_text,
+                    'title': link.get('title', '')
+                })
             
-            print(f"🔗 Found {len(all_links)} total URLs (no filtering applied)")
+            print(f"🔗 Found {len(all_links)} total URLs")
             
-            # Return all URLs without any classification or filtering
-            return {
-                'success': True,
-                'articles': all_links,  # Now just a list of URLs
-                'total_found': len(all_links),
-                'total_candidates': len(all_links),
-                'website_title': soup.title.string if soup.title else urlparse(url).netloc,
-                'classification_method': 'No filtering - All URLs returned'
-            }
+            # Apply URL classification filtering if enabled
+            if enable_filtering and self.url_classifier:
+                print(f"🎯 Applying URL classification filtering...")
+                
+                # Batch classify URLs for efficiency
+                urls_to_classify = [link['url'] for link in all_links]
+                
+                try:
+                    # Use batch prediction for better performance
+                    classification_results = self.url_classifier.predict_batch(urls_to_classify)
+                    
+                    for i, (link_info, classification) in enumerate(zip(all_links, classification_results)):
+                        if classification.get('error'):
+                            print(f"⚠️ Classification error for {link_info['url']}: {classification['error']}")
+                            # Use fallback classification
+                            if self._basic_news_url_check(link_info['url'], link_info['text']):
+                                news_articles.append(link_info)
+                            else:
+                                non_news_links.append(link_info)
+                        else:
+                            is_news = classification.get('is_news_article', False)
+                            confidence = classification.get('confidence', 0.0)
+                            
+                            # Add classification info to link
+                            link_info['classification'] = {
+                                'is_news_article': is_news,
+                                'confidence': confidence,
+                                'prediction': classification.get('prediction', False),
+                                'probability_news': classification.get('probability_news', 0.0),
+                                'probability_not_news': classification.get('probability_not_news', 0.0)
+                            }
+                            
+                            # Filter based on classification and confidence
+                            if is_news and confidence >= self.confidence_threshold:
+                                news_articles.append(link_info)
+                            else:
+                                non_news_links.append(link_info)
+                
+                except Exception as e:
+                    print(f"⚠️ Batch classification failed: {e}")
+                    print("🔄 Falling back to individual classification...")
+                    
+                    # Fallback to individual classification
+                    for link_info in all_links:
+                        if self.is_news_link(link_info['url'], link_info['text'], use_classifier=True):
+                            news_articles.append(link_info)
+                        else:
+                            non_news_links.append(link_info)
+                
+                # Update classification stats
+                self.classification_stats['total_urls'] = len(all_links)
+                self.classification_stats['classified_as_news'] = len(news_articles)
+                self.classification_stats['classified_as_non_news'] = len(non_news_links)
+                
+                print(f"📊 Classification results:")
+                print(f"   📰 News articles: {len(news_articles)}")
+                print(f"   🚫 Non-news links: {len(non_news_links)}")
+                print(f"   ⚡ Accuracy rate: {((len(news_articles) + len(non_news_links)) / len(all_links) * 100):.1f}%")
+                
+                # Limit results if max_links is specified
+                if max_links and len(news_articles) > max_links:
+                    news_articles = news_articles[:max_links]
+                    print(f"📋 Limited to top {max_links} news articles")
+                
+                # Return filtered news articles with classification info
+                return {
+                    'success': True,
+                    'articles': news_articles,
+                    'total_found': len(news_articles),
+                    'total_candidates': len(all_links),
+                    'filtered_out': len(non_news_links),
+                    'website_title': soup.title.string if soup.title else urlparse(url).netloc,
+                    'classification_method': f'URL Classifier (threshold: {self.confidence_threshold})',
+                    'classification_stats': self.classification_stats.copy(),
+                    'filtering_enabled': True
+                }
+            
+            else:
+                # No filtering - return all links (backward compatibility)
+                print(f"🔄 URL filtering disabled - returning all {len(all_links)} URLs")
+                
+                # Convert to simple URL list for backward compatibility
+                simple_urls = [link['url'] for link in all_links]
+                if max_links and len(simple_urls) > max_links:
+                    simple_urls = simple_urls[:max_links]
+                
+                return {
+                    'success': True,
+                    'articles': simple_urls,  # Simple list of URLs for backward compatibility
+                    'total_found': len(simple_urls),
+                    'total_candidates': len(all_links),
+                    'website_title': soup.title.string if soup.title else urlparse(url).netloc,
+                    'classification_method': 'No filtering - All URLs returned',
+                    'filtering_enabled': False
+                }
             
         except requests.RequestException as e:
             print(f"Network error crawling {url}: {str(e)}")
@@ -1632,51 +1814,141 @@ class NewsWebsiteCrawler:
             }
     
     def extract_enhanced_title(self, link_element, fallback_text):
-        """Simplified title extraction - just return the text"""
-        return fallback_text or link_element.get('title', '') or ''
+        """Enhanced title extraction with multiple fallbacks"""
+        title = fallback_text or ''
+        
+        if link_element:
+            # Try different attributes for title
+            title = (link_element.get('title') or 
+                    link_element.get('aria-label') or 
+                    link_element.get_text(strip=True) or 
+                    title)
+        
+        return title
     
-    def calculate_link_confidence(self, href, title, link_element, selector_used):
-        """Simplified confidence calculation - return 1.0 for all links"""
-        return 1.0
+    def calculate_link_confidence(self, href, title, link_element, selector_used, classification_result=None):
+        """Calculate confidence score for a link being a news article"""
+        if classification_result:
+            # Use URL classifier confidence if available
+            return classification_result.get('confidence', 0.5)
+        
+        # Fallback confidence calculation based on URL patterns
+        confidence = 0.5  # Base confidence
+        
+        href_lower = href.lower()
+        
+        # Boost confidence for known news patterns
+        news_indicators = [
+            ('news', 0.3), ('article', 0.2), ('story', 0.2), ('post', 0.1),
+            ('breaking', 0.2), ('latest', 0.1), ('update', 0.1), ('report', 0.1)
+        ]
+        
+        for indicator, boost in news_indicators:
+            if indicator in href_lower:
+                confidence += boost
+        
+        # Boost for date patterns
+        import re
+        if re.search(r'\d{4}[/-]\d{1,2}[/-]\d{1,2}', href):
+            confidence += 0.2
+        
+        # Reduce confidence for non-news patterns
+        non_news_indicators = ['login', 'register', 'about', 'contact', 'shop', 'cart']
+        for indicator in non_news_indicators:
+            if indicator in href_lower:
+                confidence -= 0.3
+        
+        return max(0.0, min(1.0, confidence))
+    
+    def set_filtering_mode(self, enable_filtering=True, confidence_threshold=0.6):
+        """Configure URL filtering settings"""
+        self.enable_filtering = enable_filtering
+        self.confidence_threshold = confidence_threshold
+        print(f"🎯 URL filtering {'enabled' if enable_filtering else 'disabled'}")
+        if enable_filtering:
+            print(f"📊 Confidence threshold set to: {confidence_threshold}")
+    
+    def get_classification_stats(self):
+        """Get current classification statistics"""
+        return self.classification_stats.copy()
+    
+    def reset_classification_stats(self):
+        """Reset classification statistics"""
+        self.classification_stats = {
+            'total_urls': 0,
+            'classified_as_news': 0,
+            'classified_as_non_news': 0,
+            'classification_errors': 0
+        }
     
     def analyze_articles_batch(self, article_urls, analysis_type='both'):
-        """Analyze multiple articles in parallel"""
+        """Analyze multiple articles in parallel - handles both URL strings and article objects"""
         results = []
         
         def analyze_single_article(article_info):
             try:
+                # Handle both URL strings and article objects with classification info
+                if isinstance(article_info, str):
+                    # Simple URL string (backward compatibility)
+                    article_url = article_info
+                    article_title = ''
+                    classification_info = None
+                elif isinstance(article_info, dict):
+                    # Article object with metadata
+                    article_url = article_info.get('url', '')
+                    article_title = article_info.get('text', '') or article_info.get('title', '')
+                    classification_info = article_info.get('classification')
+                else:
+                    return {
+                        'url': str(article_info),
+                        'title': '',
+                        'error': 'Invalid article format',
+                        'status': 'failed'
+                    }
+                
+                if not article_url:
+                    return {
+                        'url': '',
+                        'title': article_title,
+                        'error': 'No URL provided',
+                        'status': 'failed'
+                    }
+                
                 # Extract content from article
-                content_result = extract_article_content(article_info['url'])
+                content_result = extract_article_content(article_url)
                 
                 if 'error' in content_result:
                     return {
-                        'url': article_info['url'],
-                        'title': article_info['title'],
+                        'url': article_url,
+                        'title': article_title,
                         'error': content_result['error'],
-                        'status': 'failed'
+                        'status': 'failed',
+                        'classification_info': classification_info
                     }
                 
                 # Analyze the content
                 text_to_analyze = content_result['combined']
                 if not text_to_analyze.strip():
                     return {
-                        'url': article_info['url'],
-                        'title': article_info['title'],
+                        'url': article_url,
+                        'title': article_title,
                         'error': 'No content extracted',
-                        'status': 'failed'
+                        'status': 'failed',
+                        'classification_info': classification_info
                     }
                 
                 analysis_result = {
-                    'url': article_info['url'],
-                    'title': article_info['title'],
+                    'url': article_url,
+                    'title': article_title,
                     'extracted_title': content_result.get('title', ''),
                     'content_preview': text_to_analyze[:200] + '...' if len(text_to_analyze) > 200 else text_to_analyze,
-                    'status': 'success'
+                    'status': 'success',
+                    'classification_info': classification_info
                 }
                 
                 # Automatically index the article in Philippine news database (background)
                 try:
-                    index_result = philippine_search_index.index_article(article_info['url'], force_reindex=False)
+                    index_result = philippine_search_index.index_article(article_url, force_reindex=False)
                     analysis_result['indexing_status'] = index_result['status']
                     if index_result['status'] == 'success':
                         analysis_result['relevance_score'] = index_result.get('relevance_score', 0)
@@ -1705,15 +1977,24 @@ class NewsWebsiteCrawler:
                 return analysis_result
                 
             except Exception as e:
+                # Handle the article info properly in error case
+                if isinstance(article_info, str):
+                    url, title = article_info, ''
+                elif isinstance(article_info, dict):
+                    url = article_info.get('url', str(article_info))
+                    title = article_info.get('text', '') or article_info.get('title', '')
+                else:
+                    url, title = str(article_info), ''
+                
                 return {
-                    'url': article_info['url'],
-                    'title': article_info['title'],
+                    'url': url,
+                    'title': title,
                     'error': str(e),
                     'status': 'failed'
                 }
         
         # Use ThreadPoolExecutor for parallel processing
-        # Increased workers for stress testing (was 5)
+        # Dynamic worker count based on the number of articles
         max_workers = min(20, len(article_urls))  # Dynamic worker count, max 20
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_article = {executor.submit(analyze_single_article, article): article 
@@ -1725,17 +2006,35 @@ class NewsWebsiteCrawler:
                     results.append(result)
                 except concurrent.futures.TimeoutError:
                     article = future_to_article[future]
+                    # Handle timeout case properly
+                    if isinstance(article, str):
+                        url, title = article, ''
+                    elif isinstance(article, dict):
+                        url = article.get('url', str(article))
+                        title = article.get('text', '') or article.get('title', '')
+                    else:
+                        url, title = str(article), ''
+                    
                     results.append({
-                        'url': article['url'],
-                        'title': article['title'],
+                        'url': url,
+                        'title': title,
                         'error': 'Analysis timeout',
                         'status': 'timeout'
                     })
                 except Exception as e:
                     article = future_to_article[future]
+                    # Handle exception case properly
+                    if isinstance(article, str):
+                        url, title = article, ''
+                    elif isinstance(article, dict):
+                        url = article.get('url', str(article))
+                        title = article.get('text', '') or article.get('title', '')
+                    else:
+                        url, title = str(article), ''
+                    
                     results.append({
-                        'url': article['url'],
-                        'title': article['title'],
+                        'url': url,
+                        'title': title,
                         'error': str(e),
                         'status': 'failed'
                     })
@@ -1745,9 +2044,9 @@ class NewsWebsiteCrawler:
 # Initialize the detectors and crawler
 detector = FakeNewsDetector()
 political_detector = PoliticalNewsDetector()
-news_crawler = NewsWebsiteCrawler()
-philippine_search_index = PhilippineNewsSearchIndex()
 url_news_classifier = URLNewsClassifier()
+news_crawler = NewsWebsiteCrawler(url_classifier=url_news_classifier)
+philippine_search_index = PhilippineNewsSearchIndex()
 
 def extract_article_content(url):
     """Extract article content from URL"""
@@ -1954,11 +2253,13 @@ def predict():
 
 @app.route('/crawl-website', methods=['POST'])
 def crawl_website():
-    """Crawl a news website for article links"""
+    """Crawl a news website for article links with optional URL filtering"""
     try:
         data = request.get_json()
         website_url = data.get('website_url', '').strip()
         max_articles = int(data.get('max_articles', 10))
+        enable_filtering = data.get('enable_filtering', True)  # New parameter for URL filtering
+        confidence_threshold = float(data.get('confidence_threshold', 0.6))  # Filtering threshold
         
         if not website_url:
             return jsonify({'error': 'Website URL is required'}), 400
@@ -1967,11 +2268,15 @@ def crawl_website():
         if not website_url.startswith(('http://', 'https://')):
             website_url = 'https://' + website_url
         
-        # No limit - allow testing system to its limits
-        # max_articles = min(max_articles, 20)  # REMOVED
+        # Configure the crawler's filtering settings
+        news_crawler.set_filtering_mode(enable_filtering, confidence_threshold)
         
-        # Crawl the website
-        crawl_result = news_crawler.extract_article_links(website_url, max_articles)
+        # Crawl the website with URL filtering
+        crawl_result = news_crawler.extract_article_links(
+            website_url, 
+            max_articles, 
+            enable_filtering=enable_filtering
+        )
         
         if not crawl_result['success']:
             return jsonify({
@@ -1979,24 +2284,40 @@ def crawl_website():
                 'articles': []
             }), 400
         
-        return jsonify({
+        # Prepare response with filtering information
+        response_data = {
             'success': True,
             'website_title': crawl_result['website_title'],
             'total_found': crawl_result['total_found'],
-            'articles': crawl_result['articles']
-        })
+            'articles': crawl_result['articles'],
+            'filtering_enabled': crawl_result.get('filtering_enabled', False),
+            'classification_method': crawl_result.get('classification_method', 'Unknown'),
+        }
+        
+        # Add filtering statistics if available
+        if enable_filtering and 'classification_stats' in crawl_result:
+            response_data.update({
+                'total_candidates': crawl_result['total_candidates'],
+                'filtered_out': crawl_result.get('filtered_out', 0),
+                'classification_stats': crawl_result['classification_stats'],
+                'confidence_threshold': confidence_threshold
+            })
+        
+        return jsonify(response_data)
     
     except Exception as e:
         return jsonify({'error': f'Crawling failed: {str(e)}'}), 500
 
 @app.route('/analyze-website', methods=['POST'])
 def analyze_website():
-    """Crawl and analyze articles from a news website"""
+    """Crawl and analyze articles from a news website with URL filtering"""
     try:
         data = request.get_json()
         website_url = data.get('website_url', '').strip()
         max_articles = int(data.get('max_articles', 5))
         analysis_type = data.get('analysis_type', 'both')
+        enable_filtering = data.get('enable_filtering', True)  # New parameter for URL filtering
+        confidence_threshold = float(data.get('confidence_threshold', 0.6))  # Filtering threshold
         
         if not website_url:
             return jsonify({'error': 'Website URL is required'}), 400
@@ -2005,11 +2326,15 @@ def analyze_website():
         if not website_url.startswith(('http://', 'https://')):
             website_url = 'https://' + website_url
         
-        # No limit - allow testing system to its limits
-        # max_articles = min(max_articles, 10)  # REMOVED
+        # Configure the crawler's filtering settings
+        news_crawler.set_filtering_mode(enable_filtering, confidence_threshold)
         
-        # First crawl the website to get article links
-        crawl_result = news_crawler.extract_article_links(website_url, max_articles)
+        # First crawl the website to get article links with filtering
+        crawl_result = news_crawler.extract_article_links(
+            website_url, 
+            max_articles, 
+            enable_filtering=enable_filtering
+        )
         
         if not crawl_result['success']:
             return jsonify({
@@ -2037,8 +2362,19 @@ def analyze_website():
             'total_articles': len(crawl_result['articles']),
             'successful_analyses': len(successful_analyses),
             'failed_analyses': len(failed_analyses),
-            'website_title': crawl_result['website_title']
+            'website_title': crawl_result['website_title'],
+            'filtering_enabled': enable_filtering,
+            'confidence_threshold': confidence_threshold if enable_filtering else None
         }
+        
+        # Add filtering statistics if available
+        if enable_filtering and 'classification_stats' in crawl_result:
+            summary.update({
+                'total_candidates': crawl_result['total_candidates'],
+                'filtered_out': crawl_result.get('filtered_out', 0),
+                'classification_stats': crawl_result['classification_stats'],
+                'classification_method': crawl_result.get('classification_method', 'URL Classifier')
+            })
         
         # Add aggregated statistics for successful analyses
         if successful_analyses and analysis_type in ['fake_news', 'both']:

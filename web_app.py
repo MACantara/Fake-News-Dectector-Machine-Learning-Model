@@ -2420,6 +2420,53 @@ def predict():
                     'error': 'Political classification model not available'
                 }
             
+            # Handle retraining trigger if requested
+            trigger_retraining = data.get('trigger_retraining', False)
+            if trigger_retraining:
+                try:
+                    print(f"🔄 Model retraining requested by user")
+                    
+                    # Check if there's enough feedback data for retraining
+                    feedback_stats = detector.get_feedback_stats()
+                    
+                    if feedback_stats['pending_training'] > 0:
+                        print(f"📊 Initiating retraining with {feedback_stats['pending_training']} feedback entries")
+                        
+                        # Start retraining in a background thread to avoid blocking the response
+                        import threading
+                        def background_retrain():
+                            try:
+                                print("🚀 Starting background model retraining...")
+                                detector.retrain_from_feedback()
+                                print("✅ Model retraining completed successfully")
+                            except Exception as retrain_error:
+                                print(f"❌ Model retraining failed: {str(retrain_error)}")
+                        
+                        retraining_thread = threading.Thread(target=background_retrain)
+                        retraining_thread.daemon = True
+                        retraining_thread.start()
+                        
+                        result['retraining_triggered'] = {
+                            'status': 'initiated',
+                            'feedback_count': feedback_stats['pending_training'],
+                            'message': 'Model retraining started in background. This may take several minutes.'
+                        }
+                        print("✅ Retraining thread started successfully")
+                    else:
+                        result['retraining_triggered'] = {
+                            'status': 'skipped',
+                            'feedback_count': 0,
+                            'message': 'No pending feedback data available for retraining.'
+                        }
+                        print("⏭️ Retraining skipped - no pending feedback data")
+                        
+                except Exception as retrain_error:
+                    print(f"⚠️ Error initiating retraining: {str(retrain_error)}")
+                    result['retraining_triggered'] = {
+                        'status': 'error',
+                        'message': f'Failed to initiate retraining: {str(retrain_error)}'
+                    }
+            
             return jsonify({
                 'success': True,
                 'data': result

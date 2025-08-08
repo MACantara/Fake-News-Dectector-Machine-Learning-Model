@@ -310,3 +310,33 @@
         align-self: flex-end;
     }
 }
+
+/* Model Retraining Checkbox Styles */
+.retrain-option {
+    transition: all 0.3s ease;
+}
+
+.retrain-option:hover {
+    background-color: #fef3c7;
+    border-color: #f59e0b;
+}
+
+.retrain-option input[type="checkbox"]:checked + label {
+    color: #d97706;
+    font-weight: 600;
+}
+
+.retrain-option input[type="checkbox"]:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Warning animation for retraining */
+@keyframes pulse-warning {
+    0% { background-color: #fef3c7; }
+    50% { background-color: #fed7aa; }
+    100% { background-color: #fef3c7; }
+}
+
+.retrain-option.warning {
+    animation: pulse-warning 2s ease-in-out infinite;
+}

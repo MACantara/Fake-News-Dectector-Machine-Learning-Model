@@ -5,6 +5,7 @@ const Config = {
         predict: '/predict',
         modelStatus: '/model-status',
         submitFeedback: '/submit-feedback',
+        retrainModel: '/retrain-model',
         crawlWebsite: '/crawl-website',
         analyzeWebsite: '/analyze-website',
         indexPhilippineArticle: '/index-philippine-article',

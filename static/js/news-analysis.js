@@ -589,12 +589,56 @@ class NewsAnalyzer {
             this.elements.analyzedWebsiteTitle.insertAdjacentHTML('afterend', summaryHtml);
         }
 
-        // Clear and populate article links (now just URLs)
+        // Clear and populate article links 
         this.elements.articleLinksContainer.innerHTML = '';
         
-        data.articles.forEach((articleUrl, index) => {
-            // Since we now only have URLs, create a simplified display
+        data.articles.forEach((article, index) => {
+            // Handle both URL strings and article objects
+            let articleUrl, articleText, articleTitle, classificationInfo;
+            
+            if (typeof article === 'string') {
+                // Simple URL string (backward compatibility)
+                articleUrl = article;
+                articleText = '';
+                articleTitle = '';
+                classificationInfo = null;
+            } else if (typeof article === 'object' && article.url) {
+                // Article object with metadata
+                articleUrl = article.url;
+                articleText = article.text || '';
+                articleTitle = article.title || '';
+                classificationInfo = article.classification || null;
+            } else {
+                console.warn('Invalid article format:', article);
+                return; // Skip this article
+            }
+            
+            // Ensure articleUrl is a string
+            if (typeof articleUrl !== 'string') {
+                console.warn('Article URL is not a string:', articleUrl);
+                return; // Skip this article
+            }
+            
             const domainName = this.extractDomainFromUrl(articleUrl);
+            
+            // Create confidence display if classification info is available
+            let classificationDisplay = '';
+            if (classificationInfo) {
+                const confidence = (classificationInfo.confidence * 100).toFixed(1);
+                const isNews = classificationInfo.is_news_article;
+                const confidenceClass = isNews ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                const confidenceIcon = isNews ? 'check-circle' : 'x-circle';
+                const confidenceText = isNews ? 'News Article' : 'Not News';
+                
+                classificationDisplay = `
+                    <div class="mt-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${confidenceClass}">
+                            <i class="bi bi-${confidenceIcon} mr-1"></i>
+                            ${confidenceText} (${confidence}% confidence)
+                        </span>
+                    </div>
+                `;
+            }
             
             const articleHtml = `
                 <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow" data-url="${Utils.format.escape(articleUrl)}">
@@ -613,14 +657,22 @@ class NewsAnalyzer {
                                 </span>
                             </div>
                             
+                            ${articleText ? `
+                                <div class="mb-2">
+                                    <span class="text-sm text-gray-700 font-medium">${Utils.format.escape(articleText)}</span>
+                                </div>
+                            ` : ''}
+                            
                             <div class="mb-3">
                                 <a href="${articleUrl}" target="_blank" 
                                    class="text-blue-600 hover:text-blue-800 text-sm break-all font-mono">
                                     ${articleUrl}
                                 </a>
                             </div>
+                            
+                            ${classificationDisplay}
 
-                            <!-- Feedback buttons (simplified since no AI classification) -->
+                            <!-- Feedback buttons -->
                             <div class="flex flex-wrap gap-2 mt-3">
                                 <button onclick="newsAnalyzer.submitUrlFeedback('${Utils.format.escape(articleUrl)}', true, 0.9)" 
                                         class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs hover:bg-green-200 transition-colors">
@@ -649,12 +701,23 @@ class NewsAnalyzer {
     // Helper method to extract domain from URL
     extractDomainFromUrl(url) {
         try {
+            // Ensure url is a string
+            if (typeof url !== 'string') {
+                console.warn('extractDomainFromUrl: url is not a string:', typeof url, url);
+                return 'Unknown Domain';
+            }
+            
             const urlObj = new URL(url);
             return urlObj.hostname;
         } catch (error) {
             // If URL parsing fails, try to extract domain manually
-            const match = url.match(/https?:\/\/([^\/]+)/);
-            return match ? match[1] : 'Unknown Domain';
+            if (typeof url === 'string') {
+                const match = url.match(/https?:\/\/([^\/]+)/);
+                return match ? match[1] : 'Unknown Domain';
+            } else {
+                console.warn('extractDomainFromUrl: Cannot process non-string URL:', url);
+                return 'Invalid URL';
+            }
         }
     }
 

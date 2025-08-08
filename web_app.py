@@ -651,6 +651,192 @@ class PhilippineNewsSearchIndex:
             print(f"Search error: {e}")
             return {'results': [], 'count': 0, 'error': str(e)}
     
+    def find_similar_content(self, content_text, limit=10, minimum_similarity=0.1):
+        """Find similar articles based on content similarity using TF-IDF and keyword matching"""
+        import re
+        from collections import Counter
+        
+        start_time = time.time()
+        
+        try:
+            results = []
+            
+            # Clean and prepare input text
+            content_text = content_text.strip()
+            if len(content_text) < 50:  # Too short for meaningful comparison
+                return {
+                    'results': [],
+                    'count': 0,
+                    'query_summary': 'Content too short for similarity matching',
+                    'response_time': time.time() - start_time
+                }
+            
+            # Extract meaningful keywords from content
+            # Remove common words and extract significant terms
+            stop_words = {
+                'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+                'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+                'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those',
+                'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your',
+                'his', 'her', 'its', 'our', 'their', 'said', 'says', 'according', 'also', 'from', 'as', 'ng',
+                'ang', 'sa', 'na', 'kay', 'ni', 'para', 'mga', 'nang', 'kung', 'hindi', 'siya', 'ako', 'tayo'
+            }
+            
+            # Extract words and clean them
+            words = re.findall(r'\b[a-zA-Z]{3,}\b', content_text.lower())
+            meaningful_words = [word for word in words if word not in stop_words and len(word) > 2]
+            
+            # Get word frequency for importance weighting
+            word_freq = Counter(meaningful_words)
+            top_keywords = [word for word, count in word_freq.most_common(20)]
+            
+            if not top_keywords:
+                return {
+                    'results': [],
+                    'count': 0,
+                    'query_summary': 'No meaningful keywords found',
+                    'response_time': time.time() - start_time
+                }
+            
+            # Search using the Whoosh index first (if available)
+            if self.search_index:
+                try:
+                    searcher = self.search_index.searcher()
+                    
+                    # Create a query using the top keywords
+                    from whoosh.query import Or, Term, And
+                    from whoosh.qparser import MultifieldParser
+                    
+                    # Build keyword-based search query
+                    keyword_queries = []
+                    for keyword in top_keywords[:10]:  # Use top 10 keywords
+                        keyword_queries.append(Term('content', keyword))
+                        keyword_queries.append(Term('title', keyword))
+                        keyword_queries.append(Term('summary', keyword))
+                    
+                    if keyword_queries:
+                        # Use OR to find articles containing any of the keywords
+                        search_query = Or(keyword_queries)
+                        search_results = searcher.search(search_query, limit=limit * 2)  # Get more results for filtering
+                        
+                        for result in search_results:
+                            # Calculate basic similarity score
+                            result_content = (result.get('content', '') + ' ' + 
+                                            result.get('title', '') + ' ' + 
+                                            result.get('summary', '')).lower()
+                            
+                            # Count matching keywords
+                            matches = sum(1 for keyword in top_keywords if keyword in result_content)
+                            similarity_score = matches / len(top_keywords) if top_keywords else 0
+                            
+                            if similarity_score >= minimum_similarity:
+                                results.append({
+                                    'id': result['id'],
+                                    'url': result['url'],
+                                    'title': result['title'],
+                                    'summary': result.get('summary', ''),
+                                    'author': result.get('author', ''),
+                                    'publish_date': result.get('publish_date'),
+                                    'source_domain': result['source_domain'],
+                                    'category': result.get('category', ''),
+                                    'relevance_score': result.get('philippine_relevance_score', 0),
+                                    'similarity_score': round(similarity_score, 3),
+                                    'matching_keywords': [kw for kw in top_keywords if kw in result_content]
+                                })
+                    
+                    searcher.close()
+                except Exception as search_error:
+                    print(f"Whoosh search error: {search_error}")
+            
+            # Fallback to SQL-based similarity search if Whoosh failed or no results
+            if not results:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                # Build SQL query for keyword matching
+                keyword_conditions = []
+                params = []
+                
+                for keyword in top_keywords[:8]:  # Use top 8 keywords for SQL
+                    keyword_conditions.append('(title LIKE ? OR content LIKE ? OR summary LIKE ?)')
+                    search_term = f'%{keyword}%'
+                    params.extend([search_term, search_term, search_term])
+                
+                if keyword_conditions:
+                    sql_query = f'''
+                        SELECT *, 
+                               (CASE 
+                                   {" + ".join([f"WHEN (title LIKE ? OR content LIKE ? OR summary LIKE ?) THEN 1" 
+                                              for _ in range(len(top_keywords[:8]))])}
+                                   ELSE 0 
+                               END) as match_count
+                        FROM philippine_articles 
+                        WHERE ({" OR ".join(keyword_conditions)})
+                        ORDER BY match_count DESC, philippine_relevance_score DESC
+                        LIMIT ?
+                    '''
+                    
+                    # Double the params for the CASE statement
+                    case_params = []
+                    for keyword in top_keywords[:8]:
+                        search_term = f'%{keyword}%'
+                        case_params.extend([search_term, search_term, search_term])
+                    
+                    all_params = case_params + params + [limit]
+                    
+                    cursor.execute(sql_query, all_params)
+                    rows = cursor.fetchall()
+                    
+                    # Convert to dict format and calculate similarity
+                    columns = [description[0] for description in cursor.description]
+                    for row in rows:
+                        row_dict = dict(zip(columns, row))
+                        
+                        # Calculate similarity score
+                        result_content = (row_dict.get('content', '') + ' ' + 
+                                        row_dict.get('title', '') + ' ' + 
+                                        row_dict.get('summary', '')).lower()
+                        
+                        matches = sum(1 for keyword in top_keywords if keyword in result_content)
+                        similarity_score = matches / len(top_keywords) if top_keywords else 0
+                        
+                        if similarity_score >= minimum_similarity:
+                            row_dict['similarity_score'] = round(similarity_score, 3)
+                            row_dict['matching_keywords'] = [kw for kw in top_keywords if kw in result_content]
+                            results.append(row_dict)
+                
+                conn.close()
+            
+            # Sort by similarity score
+            results.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
+            
+            # Limit final results
+            if len(results) > limit:
+                results = results[:limit]
+            
+            # Log the similarity search
+            response_time = time.time() - start_time
+            query_summary = f"Keywords: {', '.join(top_keywords[:5])}"
+            self.log_search_query(f"SIMILARITY: {query_summary}", len(results), response_time)
+            
+            return {
+                'results': results,
+                'count': len(results),
+                'query_summary': query_summary,
+                'top_keywords': top_keywords[:10],
+                'response_time': response_time,
+                'minimum_similarity': minimum_similarity
+            }
+            
+        except Exception as e:
+            print(f"Similarity search error: {e}")
+            return {
+                'results': [], 
+                'count': 0, 
+                'error': str(e),
+                'response_time': time.time() - start_time
+            }
+    
     def log_search_query(self, query, results_count, response_time):
         """Log search query for analytics"""
         try:
@@ -2701,6 +2887,43 @@ def philippine_news_analytics():
     try:
         analytics = philippine_search_index.get_search_analytics()
         return jsonify(analytics)
+        
+    except Exception as e:
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+
+@app.route('/find-similar-content', methods=['POST'])
+def find_similar_content():
+    """Find similar articles in the Philippine news database based on content similarity"""
+    try:
+        data = request.get_json()
+        content_text = data.get('content', '').strip()
+        limit = min(int(data.get('limit', 10)), 20)  # Max 20 results
+        minimum_similarity = float(data.get('minimum_similarity', 0.1))
+        
+        if not content_text:
+            return jsonify({'error': 'Content text is required'}), 400
+        
+        if len(content_text) < 50:
+            return jsonify({'error': 'Content text must be at least 50 characters long'}), 400
+        
+        # Find similar content using the search index
+        similar_results = philippine_search_index.find_similar_content(
+            content_text=content_text,
+            limit=limit,
+            minimum_similarity=minimum_similarity
+        )
+        
+        return jsonify({
+            'success': True,
+            'content_length': len(content_text),
+            'query_summary': similar_results.get('query_summary', ''),
+            'top_keywords': similar_results.get('top_keywords', []),
+            'results': similar_results['results'],
+            'total_count': similar_results['count'],
+            'response_time': similar_results['response_time'],
+            'minimum_similarity': minimum_similarity,
+            'search_type': 'content_similarity'
+        })
         
     except Exception as e:
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500

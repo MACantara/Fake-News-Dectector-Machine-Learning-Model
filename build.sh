@@ -68,6 +68,7 @@ import sys
 try:
     import flask, pandas, numpy, sklearn, nltk, requests, joblib
     from bs4 import BeautifulSoup
+    import sqlite3, whoosh, dateutil, textblob, fuzzywuzzy
     print('✓ All critical packages imported successfully')
 except ImportError as e:
     print(f'✗ Import error: {e}')

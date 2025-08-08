@@ -898,6 +898,11 @@ class NewsAnalyzer {
         if (actualData.extracted_content && this.state.currentInputType === Config.inputTypes.URL) {
             this.displayExtractedContent(actualData.extracted_content);
             Utils.dom.show(this.elements.extractedContent);
+            
+            // Show indexing status if available
+            if (actualData.indexing_result) {
+                this.displayIndexingStatus(actualData.indexing_result, this.elements.extractedContent);
+            }
         }
         
         // Show results section
@@ -1017,6 +1022,104 @@ class NewsAnalyzer {
         Utils.dom.setText(this.elements.extractedTitle, contentData.title || 'No title extracted');
         Utils.dom.setText(this.elements.extractedPreview, 
             Utils.format.truncate(contentData.combined || contentData.content || 'No content extracted', 300));
+    }
+
+    // Display indexing status for URL analysis
+    displayIndexingStatus(indexingResult, extractedContentElement) {
+        if (!indexingResult || !extractedContentElement) {
+            return;
+        }
+
+        // Create indexing status section
+        const indexingStatusHtml = `
+            <div class="mt-4 p-4 rounded-lg border" id="indexingStatus">
+                <h5 class="text-sm font-semibold text-gray-800 mb-2 flex items-center">
+                    <i class="bi bi-database mr-2"></i>
+                    Search Engine Indexing
+                </h5>
+                <div class="indexing-status-content">
+                    ${this.getIndexingStatusContent(indexingResult)}
+                </div>
+            </div>
+        `;
+
+        // Remove existing indexing status if present
+        const existingStatus = document.getElementById('indexingStatus');
+        if (existingStatus) {
+            existingStatus.remove();
+        }
+
+        // Add indexing status after extracted content
+        extractedContentElement.insertAdjacentHTML('beforeend', indexingStatusHtml);
+    }
+
+    // Get indexing status content based on result
+    getIndexingStatusContent(indexingResult) {
+        const status = indexingResult.status;
+        
+        switch (status) {
+            case 'success':
+                const relevanceScore = indexingResult.relevance_score || 0;
+                const locations = indexingResult.locations || [];
+                const govEntities = indexingResult.government_entities || [];
+                
+                return `
+                    <div class="flex items-center mb-2">
+                        <i class="bi bi-check-circle text-green-600 mr-2"></i>
+                        <span class="text-green-700 font-medium">Successfully indexed in Philippine news database</span>
+                    </div>
+                    <div class="text-xs text-gray-600 space-y-1">
+                        <div>Philippine Relevance Score: <span class="font-medium">${(relevanceScore * 100).toFixed(1)}%</span></div>
+                        ${locations.length > 0 ? `<div>Locations found: <span class="font-medium">${locations.join(', ')}</span></div>` : ''}
+                        ${govEntities.length > 0 ? `<div>Government entities: <span class="font-medium">${govEntities.join(', ')}</span></div>` : ''}
+                        <div class="text-blue-600 mt-2">
+                            <i class="bi bi-info-circle mr-1"></i>
+                            This article is now searchable in our Philippine news search engine
+                        </div>
+                    </div>
+                `;
+                
+            case 'skipped':
+                return `
+                    <div class="flex items-center mb-2">
+                        <i class="bi bi-skip-forward text-yellow-600 mr-2"></i>
+                        <span class="text-yellow-700 font-medium">Not indexed - Low Philippine relevance</span>
+                    </div>
+                    <div class="text-xs text-gray-600">
+                        ${indexingResult.message || 'This article does not appear to be relevant to Philippine news'}
+                    </div>
+                `;
+                
+            case 'already_indexed':
+                return `
+                    <div class="flex items-center mb-2">
+                        <i class="bi bi-bookmark-check text-blue-600 mr-2"></i>
+                        <span class="text-blue-700 font-medium">Already in search database</span>
+                    </div>
+                    <div class="text-xs text-gray-600">
+                        This article was previously indexed and is searchable in our Philippine news search engine
+                    </div>
+                `;
+                
+            case 'error':
+                return `
+                    <div class="flex items-center mb-2">
+                        <i class="bi bi-exclamation-triangle text-red-600 mr-2"></i>
+                        <span class="text-red-700 font-medium">Indexing failed</span>
+                    </div>
+                    <div class="text-xs text-gray-600">
+                        ${indexingResult.message || 'An error occurred during indexing'}
+                    </div>
+                `;
+                
+            default:
+                return `
+                    <div class="flex items-center mb-2">
+                        <i class="bi bi-question-circle text-gray-600 mr-2"></i>
+                        <span class="text-gray-700 font-medium">Unknown indexing status</span>
+                    </div>
+                `;
+        }
     }
 
     // Hide all sections

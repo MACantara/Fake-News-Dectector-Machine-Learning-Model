@@ -1888,6 +1888,31 @@ def predict():
                     'error': 'No content could be extracted from the URL'
                 }), 400
             
+            # Automatically index the URL in the Philippine news search engine and database
+            indexing_result = None
+            try:
+                print(f"🔍 Auto-indexing URL for search engine: {url}")
+                indexing_result = philippine_search_index.index_article(url, force_reindex=False)
+                print(f"📚 Indexing result: {indexing_result['status']}")
+                
+                if indexing_result['status'] == 'success':
+                    print(f"✅ Successfully indexed article with relevance score: {indexing_result.get('relevance_score', 0):.3f}")
+                    if indexing_result.get('locations'):
+                        print(f"📍 Found locations: {', '.join(indexing_result['locations'])}")
+                    if indexing_result.get('government_entities'):
+                        print(f"🏛️ Found government entities: {', '.join(indexing_result['government_entities'])}")
+                elif indexing_result['status'] == 'skipped':
+                    print(f"⏭️ Article skipped from indexing: {indexing_result.get('message', 'Low Philippine relevance')}")
+                elif indexing_result['status'] == 'already_indexed':
+                    print(f"📋 Article already in search index")
+                else:
+                    print(f"❌ Indexing failed: {indexing_result.get('message', 'Unknown error')}")
+                    
+            except Exception as indexing_error:
+                print(f"⚠️ Error during auto-indexing: {str(indexing_error)}")
+                # Don't fail the main analysis if indexing fails
+                indexing_result = {'status': 'error', 'message': str(indexing_error)}
+            
             # Perform fake news detection
             fake_result = detector.predict(combined_text)
             result = {
@@ -1897,7 +1922,8 @@ def predict():
                     'content_preview': combined_text[:500] + '...' if len(combined_text) > 500 else combined_text,
                     'combined': combined_text,
                     'word_count': len(combined_text.split()) if combined_text else 0
-                }
+                },
+                'indexing_result': indexing_result  # Include indexing status in response
             }
             
             # Perform political classification if requested

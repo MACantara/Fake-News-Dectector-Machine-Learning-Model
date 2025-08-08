@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Advanced News Analyzer{% endblock %}</title>
+    
+    <!-- External CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen gradient-bg">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="text-center mb-12">
+            <h1 class="text-5xl font-bold text-white mb-4">
+                <i class="bi bi-shield-check"></i>
+                {% block header_title %}Advanced News Analyzer{% endblock %}
+            </h1>
+            <p class="text-xl text-white opacity-90">
+                {% block header_subtitle %}AI-powered tool for fake news detection and political news classification{% endblock %}
+            </p>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="mb-8">
+            <div class="max-w-4xl mx-auto">
+                <div class="flex justify-center space-x-4">
+                    <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}bg-blue-700{% else %}bg-blue-600 hover:bg-blue-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                        <i class="bi bi-house-door mr-2"></i>
+                        News Analysis
+                    </a>
+                    <a href="{{ url_for('philippine_search') }}" class="nav-link {% if request.endpoint == 'philippine_search' %}bg-green-700{% else %}bg-green-600 hover:bg-green-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                        <i class="bi bi-search mr-2"></i>
+                        Philippine News Search
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Model Status -->
+        <div id="modelStatus" class="glass-effect rounded-xl p-4 mb-8 text-center status-loading">
+            <div class="flex items-center justify-center">
+                <i class="bi bi-hourglass-split spin text-blue-600 mr-2"></i>
+                <span class="text-gray-700">Checking model status...</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="max-w-4xl mx-auto glass-effect rounded-2xl shadow-2xl p-8">
+            {% block content %}{% endblock %}
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center mt-12 text-white opacity-75 no-print">
+            <p>
+                <i class="bi bi-cpu"></i>
+                Powered by Machine Learning • Built with Flask & Tailwind CSS
+            </p>
+            <p class="text-sm mt-2">
+                <i class="bi bi-keyboard"></i>
+                Tip: Use Ctrl+Enter to analyze quickly
+            </p>
+        </footer>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script src="{{ url_for('static', filename='js/config.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

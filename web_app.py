@@ -2345,7 +2345,19 @@ def extract_article_content(url):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('news_analysis.html')
+
+@app.route('/philippine-search')
+def philippine_search():
+    return render_template('philippine_search.html')
+
+@app.route('/analyze-url')
+def analyze_url():
+    """Route for analyzing a URL directly (for external links)"""
+    url = request.args.get('url')
+    if not url:
+        return redirect(url_for('index'))
+    return render_template('news_analysis.html', prefill_url=url)
 
 @app.route('/predict', methods=['POST'])
 def predict():

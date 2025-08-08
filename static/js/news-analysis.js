@@ -410,6 +410,7 @@ class NewsAnalyzer {
     // Prepare analysis data
     prepareAnalysisData() {
         const data = {
+            type: this.state.currentInputType,
             analysis_type: this.state.currentAnalysisType
         };
         

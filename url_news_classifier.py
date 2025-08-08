@@ -189,6 +189,8 @@ class URLNewsClassifier:
         # Get prediction and probability
         prediction = self.model.predict(feature_vector)[0]
         probabilities = self.model.predict_proba(feature_vector)[0]
+        
+        # Calculate confidence as the maximum probability (consistent with heuristic)
         confidence = max(probabilities)
         
         return {
@@ -222,9 +224,13 @@ class URLNewsClassifier:
         probability = min(max(score / 6, 0), 1)
         prediction = probability > 0.5
         
+        # Calculate confidence consistently with trained model
+        # Confidence is the maximum of (probability, 1-probability)
+        confidence = max(probability, 1 - probability)
+        
         return {
             'prediction': prediction,
-            'confidence': abs(probability - 0.5) * 2,  # Distance from uncertainty
+            'confidence': confidence,
             'is_news_article': prediction,
             'probability_news': probability,
             'probability_not_news': 1 - probability,

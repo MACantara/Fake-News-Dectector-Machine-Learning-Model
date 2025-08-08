@@ -811,8 +811,8 @@ class NewsAnalyzer {
             Utils.format.confidence(fakeNewsData.confidence || 0));
 
         // Update probability bars
-        const fakeProb = fakeNewsData.probabilities?.fake || 0;
-        const realProb = fakeNewsData.probabilities?.real || 0;
+        const fakeProb = fakeNewsData.probabilities?.fake || fakeNewsData.probabilities?.Fake || 0;
+        const realProb = fakeNewsData.probabilities?.real || fakeNewsData.probabilities?.Real || 0;
 
         if (this.elements.fakeBar && this.elements.realBar) {
             // Animate progress bars
@@ -853,8 +853,8 @@ class NewsAnalyzer {
             Utils.format.confidence(politicalData.confidence || 0));
 
         // Update probability bars
-        const politicalProb = politicalData.probabilities?.political || 0;
-        const nonPoliticalProb = politicalData.probabilities?.['non-political'] || 0;
+        const politicalProb = politicalData.probabilities?.political || politicalData.probabilities?.Political || 0;
+        const nonPoliticalProb = politicalData.probabilities?.['non-political'] || politicalData.probabilities?.['Non-Political'] || 0;
 
         if (this.elements.politicalBar && this.elements.nonPoliticalBar) {
             // Animate progress bars

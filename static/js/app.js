@@ -45,7 +45,7 @@ class NewsAnalyzer {
             'searchQuery', 'searchCategory', 'searchSource', 'searchLimit',
             'performSearchBtn', 'viewAnalyticsBtn', 'addToIndexBtn', 'addArticleModal',
             'indexArticleUrl', 'submitIndexBtn', 'cancelIndexBtn',
-            'maxArticles', 'crawlOnlyBtn', 'crawlAnalyzeBtn', 'analyzeFoundArticlesBtn',
+            'maxArticles', 'crawlOnlyBtn', 'crawlAnalyzeBtn', 'crawlIndexBtn', 'analyzeFoundArticlesBtn',
             'analyzeBtn', 'loading', 'results', 'websiteResults', 'searchResults', 'analyticsResults',
             'error', 'modelStatus', 'textCount',
             'fakeNewsResults', 'politicalResults', 'extractedContent',
@@ -119,6 +119,10 @@ class NewsAnalyzer {
         }
         if (this.elements.crawlAnalyzeBtn) {
             this.elements.crawlAnalyzeBtn.addEventListener('click', () => this.switchCrawlingMode(Config.crawlingModes.ANALYZE));
+        }
+        
+        if (this.elements.crawlIndexBtn) {
+            this.elements.crawlIndexBtn.addEventListener('click', () => this.switchCrawlingMode('index'));
         }
 
         // Analyze found articles button
@@ -297,24 +301,28 @@ class NewsAnalyzer {
         this.hideResults();
     }
 
-    // Switch crawling mode (preview vs analyze)
+    // Switch crawling mode (preview vs analyze vs index)
     switchCrawlingMode(mode) {
         this.state.currentCrawlingMode = mode;
         
-        if (mode === Config.crawlingModes.PREVIEW) {
-            if (this.elements.crawlOnlyBtn) {
-                this.elements.crawlOnlyBtn.className = 'crawl-mode-btn bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium focus-ring';
+        // Reset all button styles
+        const buttons = [this.elements.crawlOnlyBtn, this.elements.crawlAnalyzeBtn, this.elements.crawlIndexBtn];
+        const inactiveClass = 'crawl-mode-btn bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium focus-ring';
+        const activeClass = 'crawl-mode-btn bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium focus-ring';
+        
+        buttons.forEach(btn => {
+            if (btn) {
+                btn.className = inactiveClass;
             }
-            if (this.elements.crawlAnalyzeBtn) {
-                this.elements.crawlAnalyzeBtn.className = 'crawl-mode-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium focus-ring';
-            }
-        } else {
-            if (this.elements.crawlAnalyzeBtn) {
-                this.elements.crawlAnalyzeBtn.className = 'crawl-mode-btn bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium focus-ring';
-            }
-            if (this.elements.crawlOnlyBtn) {
-                this.elements.crawlOnlyBtn.className = 'crawl-mode-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium focus-ring';
-            }
+        });
+        
+        // Set active button
+        if (mode === Config.crawlingModes.PREVIEW && this.elements.crawlOnlyBtn) {
+            this.elements.crawlOnlyBtn.className = activeClass;
+        } else if (mode === Config.crawlingModes.ANALYZE && this.elements.crawlAnalyzeBtn) {
+            this.elements.crawlAnalyzeBtn.className = activeClass;
+        } else if (mode === 'index' && this.elements.crawlIndexBtn) {
+            this.elements.crawlIndexBtn.className = activeClass;
         }
     }
 
@@ -452,6 +460,8 @@ class NewsAnalyzer {
         try {
             if (crawlingMode === Config.crawlingModes.PREVIEW) {
                 await this.crawlWebsitePreview(websiteUrl, maxArticles);
+            } else if (crawlingMode === 'index') {
+                await this.crawlAndIndexWebsite();
             } else {
                 await this.crawlAndAnalyzeWebsite(websiteUrl, maxArticles);
             }
@@ -1328,6 +1338,268 @@ class NewsAnalyzer {
             this.state.isLoading = false;
             Utils.dom.hide(this.elements.loading);
         }
+    }
+
+    // Crawl and index entire website
+    async crawlAndIndexWebsite() {
+        const url = this.elements.websiteUrl?.value?.trim();
+        if (!url) {
+            this.showError('Please enter a website URL');
+            return;
+        }
+
+        if (!Config.validation.websitePattern.test(url)) {
+            this.showError('Please enter a valid website URL starting with http:// or https://');
+            return;
+        }
+
+        try {
+            this.state.isLoading = true;
+            Utils.dom.show(this.elements.loading);
+            this.hideAllSections();
+
+            // Show progress message
+            Utils.dom.show(this.elements.websiteResults);
+            this.elements.websiteResults.innerHTML = `
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                    <div class="flex items-center space-x-3">
+                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-blue-800">Crawling and Indexing Website</h3>
+                            <p class="text-blue-600 mt-1">Discovering and indexing Philippine news articles from ${url}...</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const response = await Utils.http.post(Config.endpoints.crawlAndIndexWebsite, {
+                website_url: url,
+                max_articles: 20,
+                force_reindex: false
+            });
+
+            if (response.success) {
+                this.displayCrawlAndIndexResults(response);
+            } else {
+                this.showError(response.error || 'Failed to crawl and index website');
+            }
+        } catch (error) {
+            console.error('Crawl and index error:', error);
+            this.showError('An error occurred while crawling and indexing the website');
+        } finally {
+            this.state.isLoading = false;
+            Utils.dom.hide(this.elements.loading);
+        }
+    }
+
+    // Display crawl and index results
+    displayCrawlAndIndexResults(response) {
+        const { summary, results, website_title, website_url } = response;
+        
+        Utils.dom.show(this.elements.websiteResults);
+        this.elements.websiteResults.innerHTML = `
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 class="text-2xl font-bold text-gray-800">Website Crawl & Index Complete</h3>
+                        <p class="text-gray-600 mt-1">${Utils.format.escape(website_title || website_url)}</p>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-2xl font-bold text-green-600">${summary.successfully_indexed}</div>
+                        <div class="text-sm text-gray-500">Articles Indexed</div>
+                    </div>
+                </div>
+
+                <!-- Summary Statistics -->
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                    <div class="bg-blue-50 p-4 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-blue-600">${summary.total_articles_found}</div>
+                        <div class="text-sm text-blue-800">Found</div>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-green-600">${summary.successfully_indexed}</div>
+                        <div class="text-sm text-green-800">Indexed</div>
+                    </div>
+                    <div class="bg-yellow-50 p-4 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-yellow-600">${summary.skipped}</div>
+                        <div class="text-sm text-yellow-800">Skipped</div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-gray-600">${summary.already_indexed}</div>
+                        <div class="text-sm text-gray-800">Already Indexed</div>
+                    </div>
+                    <div class="bg-red-50 p-4 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-red-600">${summary.errors}</div>
+                        <div class="text-sm text-red-800">Errors</div>
+                    </div>
+                </div>
+
+                <!-- Detailed Results -->
+                <div class="border-t pt-6">
+                    <h4 class="text-lg font-semibold text-gray-800 mb-4">Article Processing Results</h4>
+                    <div class="space-y-3 max-h-96 overflow-y-auto">
+                        ${results.map(result => this.createCrawlResultCard(result)).join('')}
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="border-t pt-6 mt-6">
+                    <div class="flex flex-wrap gap-3">
+                        <button onclick="newsAnalyzer.performPhilippineSearch('${Utils.format.escape(website_title || '')}')" 
+                                class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
+                            <i class="bi bi-search mr-2"></i>Search Indexed Articles
+                        </button>
+                        <button onclick="newsAnalyzer.viewCrawlHistory()" 
+                                class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors">
+                            <i class="bi bi-clock-history mr-2"></i>View Crawl History
+                        </button>
+                        <button onclick="newsAnalyzer.crawlAndIndexWebsite()" 
+                                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors">
+                            <i class="bi bi-arrow-clockwise mr-2"></i>Crawl Another Website
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Create crawl result card
+    createCrawlResultCard(result) {
+        const statusConfig = {
+            'success': { 
+                bg: 'bg-green-50 border-green-200', 
+                icon: 'bi-check-circle-fill text-green-600',
+                text: 'text-green-800'
+            },
+            'skipped': { 
+                bg: 'bg-yellow-50 border-yellow-200', 
+                icon: 'bi-skip-forward-fill text-yellow-600',
+                text: 'text-yellow-800'
+            },
+            'already_indexed': { 
+                bg: 'bg-blue-50 border-blue-200', 
+                icon: 'bi-info-circle-fill text-blue-600',
+                text: 'text-blue-800'
+            },
+            'error': { 
+                bg: 'bg-red-50 border-red-200', 
+                icon: 'bi-exclamation-triangle-fill text-red-600',
+                text: 'text-red-800'
+            }
+        };
+
+        const config = statusConfig[result.status] || statusConfig['error'];
+
+        return `
+            <div class="border rounded-lg p-4 ${config.bg}">
+                <div class="flex items-start space-x-3">
+                    <i class="bi ${config.icon} text-lg mt-0.5"></i>
+                    <div class="flex-1 min-w-0">
+                        <h5 class="font-medium ${config.text} truncate">${Utils.format.escape(result.title)}</h5>
+                        <p class="text-sm text-gray-600 truncate">${Utils.format.escape(result.url)}</p>
+                        ${result.status === 'success' ? `
+                            <div class="mt-2 text-sm ${config.text}">
+                                <span class="inline-flex items-center">
+                                    Relevance: ${(result.relevance_score * 100).toFixed(1)}%
+                                    ${result.locations_found?.length ? ` • Locations: ${result.locations_found.join(', ')}` : ''}
+                                </span>
+                            </div>
+                        ` : ''}
+                        ${result.message ? `<p class="text-sm ${config.text} mt-1">${Utils.format.escape(result.message)}</p>` : ''}
+                        ${result.error ? `<p class="text-sm ${config.text} mt-1">Error: ${Utils.format.escape(result.error)}</p>` : ''}
+                    </div>
+                    ${result.article_id ? `
+                        <button onclick="newsAnalyzer.viewSearchResultDetails(${result.article_id})" 
+                                class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                            View
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    // View crawl history
+    async viewCrawlHistory() {
+        try {
+            this.state.isLoading = true;
+            Utils.dom.show(this.elements.loading);
+
+            const response = await Utils.http.get(Config.endpoints.getCrawlHistory + '?limit=20');
+
+            if (response.success) {
+                this.displayCrawlHistory(response.history);
+            } else {
+                this.showError('Failed to load crawl history');
+            }
+        } catch (error) {
+            console.error('Error loading crawl history:', error);
+            this.showError('Error loading crawl history');
+        } finally {
+            this.state.isLoading = false;
+            Utils.dom.hide(this.elements.loading);
+        }
+    }
+
+    // Display crawl history
+    displayCrawlHistory(history) {
+        this.hideAllSections();
+        Utils.dom.show(this.elements.websiteResults);
+
+        if (!history || history.length === 0) {
+            this.elements.websiteResults.innerHTML = `
+                <div class="bg-white rounded-lg shadow-lg p-6 text-center">
+                    <div class="text-gray-500 mb-4">
+                        <i class="bi bi-clock-history text-4xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-800 mb-2">No Crawl History</h3>
+                    <p class="text-gray-600">No website crawling activities found.</p>
+                </div>
+            `;
+            return;
+        }
+
+        this.elements.websiteResults.innerHTML = `
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-2xl font-bold text-gray-800">Website Crawl History</h3>
+                    <span class="text-gray-500">${history.length} record(s)</span>
+                </div>
+
+                <div class="space-y-4">
+                    ${history.map(record => `
+                        <div class="border rounded-lg p-4 hover:bg-gray-50">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <h4 class="font-medium text-gray-800">${Utils.format.escape(record.url)}</h4>
+                                    <p class="text-sm text-gray-600 mt-1">${Utils.format.escape(record.message)}</p>
+                                    <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                                        <span>Started: ${new Date(record.started_date).toLocaleString()}</span>
+                                        ${record.completed_date ? `<span>Completed: ${new Date(record.completed_date).toLocaleString()}</span>` : ''}
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                        record.status === 'website_crawl_completed' ? 'bg-green-100 text-green-800' :
+                                        record.status === 'failed' ? 'bg-red-100 text-red-800' :
+                                        'bg-yellow-100 text-yellow-800'
+                                    }">
+                                        ${record.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="border-t pt-6 mt-6">
+                    <button onclick="newsAnalyzer.crawlAndIndexWebsite()" 
+                            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
+                        <i class="bi bi-plus-circle mr-2"></i>Crawl New Website
+                    </button>
+                </div>
+            </div>
+        `;
     }
 
     // Hide all sections

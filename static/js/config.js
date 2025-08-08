@@ -13,7 +13,9 @@ const Config = {
         getPhilippineArticle: '/philippine-article/',
         batchIndexPhilippineArticles: '/batch-index-philippine-articles',
         philippineNewsCategories: '/philippine-news-categories',
-        philippineNewsSources: '/philippine-news-sources'
+        philippineNewsSources: '/philippine-news-sources',
+        crawlAndIndexWebsite: '/crawl-and-index-website',
+        getCrawlHistory: '/get-crawl-history'
     },
     
     // UI update intervals

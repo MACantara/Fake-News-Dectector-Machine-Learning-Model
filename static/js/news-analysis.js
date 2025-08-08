@@ -696,6 +696,59 @@ class NewsAnalyzer {
         // Show crawled articles section
         Utils.dom.show(this.elements.crawledArticlesList);
         Utils.dom.show(this.elements.websiteResults);
+        
+        // Initialize progress tracking
+        this.updateLabelingProgress();
+    }
+    
+    // Update labeling progress indicator
+    updateLabelingProgress() {
+        const container = document.getElementById('articleLinksContainer');
+        const totalArticles = container.querySelectorAll('div[data-url]').length;
+        const labeledArticles = container.querySelectorAll('div[data-url][data-labeled="true"], div[data-url][data-bulk-labeled="true"]').length;
+        
+        // Find or create progress indicator
+        let progressIndicator = document.getElementById('labelingProgress');
+        if (!progressIndicator && totalArticles > 0) {
+            progressIndicator = document.createElement('div');
+            progressIndicator.id = 'labelingProgress';
+            progressIndicator.className = 'bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4';
+            
+            // Insert before article container
+            const articlesHeader = document.querySelector('#crawledArticlesList h4');
+            if (articlesHeader) {
+                articlesHeader.parentNode.insertBefore(progressIndicator, articlesHeader.nextSibling);
+            }
+        }
+        
+        if (progressIndicator && totalArticles > 0) {
+            const percentage = Math.round((labeledArticles / totalArticles) * 100);
+            
+            progressIndicator.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-blue-800">
+                        <i class="bi bi-tags mr-1"></i>
+                        Labeling Progress
+                    </span>
+                    <span class="text-sm font-semibold text-blue-600">
+                        ${labeledArticles} / ${totalArticles} (${percentage}%)
+                    </span>
+                </div>
+                <div class="w-full bg-blue-200 rounded-full h-2">
+                    <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: ${percentage}%"></div>
+                </div>
+                ${percentage === 100 ? `
+                    <div class="mt-2 text-xs text-green-600 flex items-center">
+                        <i class="bi bi-check-circle mr-1"></i>
+                        All articles labeled! Ready to submit feedback.
+                    </div>
+                ` : `
+                    <div class="mt-2 text-xs text-blue-600">
+                        ${totalArticles - labeledArticles} articles remaining
+                    </div>
+                `}
+            `;
+        }
     }
 
     // Helper method to extract domain from URL
@@ -1266,26 +1319,81 @@ class NewsAnalyzer {
     // Update article UI after feedback submission
     updateArticleFeedbackUI(url, isCorrect) {
         // Find the article element and update it
-        const articles = document.querySelectorAll('#articleLinksContainer > div');
+        const container = document.getElementById('articleLinksContainer');
+        const articles = container.querySelectorAll('div[data-url]');
+        let targetArticle = null;
+        
         articles.forEach(articleElement => {
-            const urlElement = articleElement.querySelector('p');
-            if (urlElement && urlElement.textContent.includes(url)) {
+            const articleUrl = articleElement.getAttribute('data-url');
+            if (articleUrl === url) {
+                targetArticle = articleElement;
                 // Replace feedback buttons with confirmation
-                const feedbackDiv = articleElement.querySelector('div:last-child');
+                const feedbackDiv = articleElement.querySelector('.flex.flex-wrap.gap-2');
                 if (feedbackDiv) {
                     const icon = isCorrect ? 'check-circle' : 'x-circle';
                     const color = isCorrect ? 'green' : 'orange';
                     const message = isCorrect ? 'Feedback: Correct' : 'Feedback: Incorrect';
                     
                     feedbackDiv.innerHTML = `
-                        <div class="text-xs text-${color}-600 flex items-center">
+                        <div class="text-xs text-${color}-600 flex items-center bg-${color}-50 px-3 py-1 rounded-full">
                             <i class="bi bi-${icon} mr-1"></i>
                             ${message}
                         </div>
                     `;
+                    
+                    // Mark the article as labeled
+                    articleElement.setAttribute('data-labeled', 'true');
                 }
             }
         });
+        
+        // Move labeled article to bottom
+        if (targetArticle) {
+            // Remove from current position
+            targetArticle.remove();
+            
+            // Add to bottom
+            container.appendChild(targetArticle);
+            
+            // Add visual indication that it was moved
+            targetArticle.style.opacity = '0.7';
+            targetArticle.style.order = '999'; // Ensure it stays at bottom
+            
+            // Scroll to next unlabeled article if available
+            this.scrollToNextUnlabeledArticle();
+            
+            // Update progress indicator
+            this.updateLabelingProgress();
+        }
+    }
+    
+    // Scroll to the next unlabeled article for better user experience
+    scrollToNextUnlabeledArticle() {
+        const container = document.getElementById('articleLinksContainer');
+        const articles = container.querySelectorAll('div[data-url]:not([data-labeled="true"]):not([data-bulk-labeled="true"])');
+        
+        if (articles.length > 0) {
+            // Find the first unlabeled article
+            const nextArticle = articles[0];
+            
+            // Smooth scroll to the article
+            nextArticle.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center' 
+            });
+            
+            // Add a subtle highlight effect
+            nextArticle.style.transition = 'box-shadow 0.3s ease';
+            nextArticle.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.3)';
+            
+            // Remove highlight after 2 seconds
+            setTimeout(() => {
+                nextArticle.style.boxShadow = '';
+            }, 2000);
+        } else {
+            // All articles are labeled, show completion message
+            this.showFeedbackMessage('🎉 All articles have been labeled! Great job!', 'success');
+        }
     }
 
     // Show feedback message
@@ -1396,6 +1504,9 @@ class NewsAnalyzer {
         }
 
         // Update labels for selected articles
+        const container = document.getElementById('articleLinksContainer');
+        const labeledElements = [];
+        
         selectedArticles.forEach(url => {
             const labelData = this.bulkLabels.get(url);
             labelData.label = isNews;
@@ -1417,8 +1528,25 @@ class NewsAnalyzer {
                     `;
                     statusElement.style.display = 'block';
                 }
+                
+                // Mark as labeled and prepare for moving
+                articleElement.setAttribute('data-bulk-labeled', 'true');
+                articleElement.style.opacity = '0.7';
+                labeledElements.push(articleElement);
             }
         });
+        
+        // Move all labeled articles to bottom
+        labeledElements.forEach(element => {
+            element.remove();
+            container.appendChild(element);
+        });
+        
+        // Scroll to next unlabeled article if any exist
+        if (labeledElements.length > 0) {
+            this.scrollToNextUnlabeledArticle();
+            this.updateLabelingProgress();
+        }
 
         this.updateBulkFeedbackButton();
         

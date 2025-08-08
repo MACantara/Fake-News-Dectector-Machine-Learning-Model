@@ -759,6 +759,165 @@ class PhilippineNewsSearchIndex:
         except Exception as e:
             print(f"Error getting article {article_id}: {e}")
             return None
+    
+    def crawl_and_index_website(self, website_url, max_articles=20, force_reindex=False):
+        """Crawl a news website and index all found articles"""
+        try:
+            print(f"Starting website crawl and index: {website_url}")
+            
+            # Initialize news crawler if not exists
+            if not hasattr(self, 'news_crawler'):
+                self.news_crawler = NewsWebsiteCrawler()
+            
+            # Crawl the website for article links
+            crawl_result = self.news_crawler.extract_article_links(website_url, max_articles)
+            
+            if not crawl_result['success']:
+                return {
+                    'status': 'error',
+                    'message': f"Failed to crawl website: {crawl_result['error']}",
+                    'website_url': website_url,
+                    'results': []
+                }
+            
+            if not crawl_result['articles']:
+                return {
+                    'status': 'completed',
+                    'message': 'No articles found on the website',
+                    'website_url': website_url,
+                    'website_title': crawl_result.get('website_title', ''),
+                    'results': []
+                }
+            
+            print(f"Found {len(crawl_result['articles'])} articles to index")
+            
+            # Index each found article
+            indexing_results = []
+            successful_indexes = 0
+            skipped_indexes = 0
+            error_indexes = 0
+            already_indexed_count = 0
+            
+            for article in crawl_result['articles']:
+                try:
+                    article_url = article['url']
+                    article_title = article['title']
+                    
+                    print(f"Indexing: {article_title[:50]}...")
+                    
+                    # Index the article
+                    index_result = self.index_article(article_url, force_reindex)
+                    
+                    result_entry = {
+                        'url': article_url,
+                        'title': article_title,
+                        'status': index_result['status'],
+                        'confidence': article.get('confidence', 0),
+                        'selector_used': article.get('selector_used', '')
+                    }
+                    
+                    if index_result['status'] == 'success':
+                        successful_indexes += 1
+                        result_entry.update({
+                            'article_id': index_result['article_id'],
+                            'relevance_score': index_result['relevance_score'],
+                            'locations_found': index_result['locations'],
+                            'government_entities_found': index_result['government_entities']
+                        })
+                    elif index_result['status'] == 'skipped':
+                        skipped_indexes += 1
+                        result_entry['message'] = index_result.get('message', 'Low Philippine relevance')
+                    elif index_result['status'] == 'already_indexed':
+                        already_indexed_count += 1
+                        result_entry['message'] = 'Article already in index'
+                    else:
+                        error_indexes += 1
+                        result_entry['error'] = index_result.get('message', 'Unknown error')
+                    
+                    indexing_results.append(result_entry)
+                    
+                except Exception as e:
+                    error_indexes += 1
+                    indexing_results.append({
+                        'url': article.get('url', ''),
+                        'title': article.get('title', ''),
+                        'status': 'error',
+                        'error': str(e)
+                    })
+            
+            # Log crawling task completion
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO indexing_tasks (url, status, error_message, completed_date)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (
+                    website_url, 
+                    'website_crawl_completed',
+                    f"Found {len(crawl_result['articles'])} articles, indexed {successful_indexes}"
+                ))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"Error logging crawl task: {e}")
+            
+            return {
+                'status': 'completed',
+                'message': f'Website crawl and indexing completed',
+                'website_url': website_url,
+                'website_title': crawl_result.get('website_title', ''),
+                'summary': {
+                    'total_articles_found': len(crawl_result['articles']),
+                    'successfully_indexed': successful_indexes,
+                    'skipped': skipped_indexes,
+                    'errors': error_indexes,
+                    'already_indexed': already_indexed_count
+                },
+                'results': indexing_results
+            }
+            
+        except Exception as e:
+            print(f"Error during website crawl and index: {e}")
+            return {
+                'status': 'error',
+                'message': str(e),
+                'website_url': website_url,
+                'results': []
+            }
+    
+    def get_crawl_history(self, limit=50):
+        """Get history of website crawling tasks"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT url, status, error_message, created_date, completed_date
+                FROM indexing_tasks 
+                WHERE status LIKE '%website%' OR status = 'website_crawl_completed'
+                ORDER BY created_date DESC 
+                LIMIT ?
+            ''', (limit,))
+            
+            rows = cursor.fetchall()
+            conn.close()
+            
+            history = []
+            for row in rows:
+                history.append({
+                    'url': row[0],
+                    'status': row[1],
+                    'message': row[2] or '',
+                    'started_date': row[3],
+                    'completed_date': row[4]
+                })
+            
+            return history
+            
+        except Exception as e:
+            print(f"Error getting crawl history: {e}")
+            return []
 
 class FakeNewsDetector:
     def __init__(self):
@@ -2713,6 +2872,74 @@ def batch_index_philippine_articles():
                 'already_indexed': already_indexed_count
             },
             'results': batch_results
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+
+@app.route('/crawl-and-index-website', methods=['POST'])
+def crawl_and_index_website():
+    """Crawl a news website and automatically index all found Philippine news articles"""
+    try:
+        data = request.get_json()
+        website_url = data.get('website_url', '').strip()
+        max_articles = int(data.get('max_articles', 20))
+        force_reindex = data.get('force_reindex', False)
+        
+        if not website_url:
+            return jsonify({'error': 'Website URL is required'}), 400
+        
+        # Validate URL format
+        if not website_url.startswith(('http://', 'https://')):
+            website_url = 'https://' + website_url
+        
+        parsed_url = urlparse(website_url)
+        if not parsed_url.netloc:
+            return jsonify({'error': 'Invalid URL format'}), 400
+        
+        # Limit max articles to prevent abuse
+        max_articles = min(max_articles, 50)
+        
+        # Perform crawling and indexing
+        result = philippine_search_index.crawl_and_index_website(
+            website_url, 
+            max_articles, 
+            force_reindex
+        )
+        
+        if result['status'] == 'error':
+            return jsonify({
+                'error': result['message'],
+                'website_url': website_url
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'message': result['message'],
+            'website_url': result['website_url'],
+            'website_title': result.get('website_title', ''),
+            'summary': result['summary'],
+            'results': result['results']
+        })
+        
+    except ValueError as e:
+        return jsonify({'error': f'Invalid input: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+
+@app.route('/get-crawl-history')
+def get_crawl_history():
+    """Get history of website crawling and indexing tasks"""
+    try:
+        limit = int(request.args.get('limit', 50))
+        limit = min(limit, 100)  # Maximum 100 records
+        
+        history = philippine_search_index.get_crawl_history(limit)
+        
+        return jsonify({
+            'success': True,
+            'history': history,
+            'count': len(history)
         })
         
     except Exception as e:

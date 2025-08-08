@@ -6,17 +6,15 @@ This module implements a reinforcement learning approach to classify whether a U
 import numpy as np
 import pandas as pd
 import json
-import pickle
 import re
-import requests
 from urllib.parse import urlparse, parse_qs
-from bs4 import BeautifulSoup
 from datetime import datetime
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from functools import partial
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -38,13 +36,17 @@ class URLNewsClassifier:
         self.exploration_rate = 0.1  # Epsilon for epsilon-greedy exploration
         self.confidence_threshold = 0.7
         
-        # Feature weights (updated through RL)
+        # Parallel processing parameters
+        self.max_workers = 4  # Number of parallel workers
+        self.batch_size = 50  # Default batch size for processing
+        
+        # Feature weights (updated through RL) - URL-only features
         self.feature_weights = {
             'url_structure': 1.0,
             'domain_credibility': 1.0,
-            'content_indicators': 1.0,
-            'meta_tags': 1.0,
-            'text_features': 1.0
+            'path_patterns': 1.0,
+            'url_length': 1.0,
+            'special_indicators': 1.0
         }
         
         # Feedback storage
@@ -55,117 +57,127 @@ class URLNewsClassifier:
         self.load_feedback()
         self.load_model()
         
-        # News-related patterns
+        # News-related patterns (optimized for URL-only analysis)
         self.news_url_patterns = [
             r'/news/', r'/article/', r'/story/', r'/post/', r'/blog/',
-            r'/breaking/', r'/latest/', r'/update/', r'/report/',
-            r'\d{4}/\d{2}/\d{2}/', r'\d{4}-\d{2}-\d{2}',
-            r'/\d+/', r'article-\d+', r'story-\d+'
+            r'/breaking/', r'/latest/', r'/update/', r'/report/', r'/press/',
+            r'\d{4}/\d{2}/\d{2}/', r'\d{4}-\d{2}-\d{2}', r'\d{4}/\d{1,2}/',
+            r'/\d+/', r'article-\d+', r'story-\d+', r'news-\d+',
+            r'/politics/', r'/sports/', r'/business/', r'/tech/', r'/health/',
+            r'/entertainment/', r'/opinion/', r'/world/', r'/local/'
         ]
         
         self.news_domains = {
             'cnn.com', 'bbc.com', 'reuters.com', 'ap.org', 'npr.org',
             'nytimes.com', 'washingtonpost.com', 'theguardian.com',
             'abs-cbn.com', 'gma.tv', 'inquirer.net', 'rappler.com',
-            'philstar.com', 'manilabulletin.ph', 'cnnphilippines.com'
+            'philstar.com', 'manilabulletin.ph', 'cnnphilippines.com',
+            'news.com', 'newsweek.com', 'time.com', 'bloomberg.com',
+            'forbes.com', 'wsj.com', 'usatoday.com', 'nbcnews.com'
         }
         
         self.non_news_patterns = [
-            r'/about/', r'/contact/', r'/privacy/', r'/terms/',
-            r'/login/', r'/register/', r'/profile/', r'/settings/',
-            r'/shop/', r'/buy/', r'/cart/', r'/checkout/',
-            r'/search/', r'/category/', r'/tag/', r'/archive/'
+            r'/about/', r'/contact/', r'/privacy/', r'/terms/', r'/help/',
+            r'/login/', r'/register/', r'/profile/', r'/settings/', r'/account/',
+            r'/shop/', r'/buy/', r'/cart/', r'/checkout/', r'/product/',
+            r'/search/', r'/category/', r'/tag/', r'/archive/', r'/sitemap/',
+            r'/api/', r'/admin/', r'/dashboard/', r'/upload/', r'/download/'
         ]
     
     def extract_url_features(self, url):
-        """Extract features from URL for classification"""
+        """Extract comprehensive features from URL for classification (optimized, no content fetching)"""
         features = {}
-        parsed_url = urlparse(url)
+        parsed_url = urlparse(url.lower())
         
-        # URL structure features
-        features['domain'] = parsed_url.netloc.lower()
-        features['path'] = parsed_url.path.lower()
+        # Basic URL structure features
+        features['domain'] = parsed_url.netloc
+        features['path'] = parsed_url.path
         features['path_length'] = len(parsed_url.path)
         features['path_segments'] = len([seg for seg in parsed_url.path.split('/') if seg])
         features['has_query'] = bool(parsed_url.query)
         features['has_fragment'] = bool(parsed_url.fragment)
+        features['url_length'] = len(url)
         
-        # Domain credibility
-        features['is_known_news_domain'] = any(domain in features['domain'] for domain in self.news_domains)
-        features['has_subdomain'] = len(features['domain'].split('.')) > 2
+        # Domain analysis
+        domain_parts = features['domain'].split('.')
         features['domain_length'] = len(features['domain'])
+        features['has_subdomain'] = len(domain_parts) > 2
+        features['is_known_news_domain'] = any(domain in features['domain'] for domain in self.news_domains)
+        features['domain_has_news_keyword'] = any(keyword in features['domain'] for keyword in ['news', 'press', 'media', 'journal', 'times', 'post', 'herald'])
         
-        # URL pattern matching
-        features['has_news_pattern'] = any(re.search(pattern, url) for pattern in self.news_url_patterns)
-        features['has_non_news_pattern'] = any(re.search(pattern, url) for pattern in self.non_news_patterns)
+        # Path analysis
+        path_lower = features['path'].lower()
+        features['path_depth'] = path_lower.count('/')
+        features['has_file_extension'] = bool(re.search(r'\.[a-zA-Z0-9]{2,5}$', path_lower))
+        features['extension_is_html'] = path_lower.endswith(('.html', '.htm', '.php', '.asp', '.aspx', '.jsp'))
         
-        # Date patterns
+        # News pattern matching
+        features['has_news_pattern'] = any(re.search(pattern, url.lower()) for pattern in self.news_url_patterns)
+        features['has_non_news_pattern'] = any(re.search(pattern, url.lower()) for pattern in self.non_news_patterns)
+        features['news_pattern_count'] = sum(1 for pattern in self.news_url_patterns if re.search(pattern, url.lower()))
+        
+        # Date and time patterns
         features['has_date_pattern'] = bool(re.search(r'\d{4}[/-]\d{1,2}[/-]\d{1,2}', url))
         features['has_year'] = bool(re.search(r'/20\d{2}/', url))
+        features['has_timestamp'] = bool(re.search(r'\d{10,13}', url))  # Unix timestamp
         
-        # Article ID patterns
-        features['has_article_id'] = bool(re.search(r'(article|story|post)[-_]?\d+', url))
+        # Article identifier patterns
+        features['has_article_id'] = bool(re.search(r'(article|story|post|news)[-_]?\d+', url.lower()))
         features['has_numeric_id'] = bool(re.search(r'/\d{4,}/', url))
+        features['has_slug'] = bool(re.search(r'/[a-z0-9]+-[a-z0-9-]+', url.lower()))
+        
+        # Query parameter analysis
+        if parsed_url.query:
+            query_params = parse_qs(parsed_url.query)
+            features['query_param_count'] = len(query_params)
+            features['has_id_param'] = any(key in query_params for key in ['id', 'article_id', 'post_id', 'story_id'])
+            features['has_tracking_params'] = any(key in query_params for key in ['utm_source', 'utm_campaign', 'ref', 'source'])
+        else:
+            features['query_param_count'] = 0
+            features['has_id_param'] = False
+            features['has_tracking_params'] = False
+        
+        # URL pattern scoring
+        features['news_score'] = 0
+        if features['is_known_news_domain']:
+            features['news_score'] += 3
+        if features['domain_has_news_keyword']:
+            features['news_score'] += 2
+        if features['has_news_pattern']:
+            features['news_score'] += 2
+        if features['has_date_pattern']:
+            features['news_score'] += 2
+        if features['has_article_id']:
+            features['news_score'] += 1
+        if features['has_slug']:
+            features['news_score'] += 1
+        if features['has_non_news_pattern']:
+            features['news_score'] -= 2
         
         return features
     
-    def extract_content_features(self, url):
-        """Extract content-based features from the webpage"""
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            features = {}
-            
-            # Meta tag analysis
-            title = soup.find('title')
-            features['has_title'] = bool(title)
-            features['title_length'] = len(title.get_text()) if title else 0
-            
-            # Article-specific meta tags
-            features['has_article_tag'] = bool(soup.find('article'))
-            features['has_time_tag'] = bool(soup.find('time'))
-            features['has_author_meta'] = bool(soup.find('meta', attrs={'name': 'author'}))
-            features['has_article_meta'] = bool(soup.find('meta', property='article:published_time'))
-            
-            # Content structure
-            paragraphs = soup.find_all('p')
-            features['paragraph_count'] = len(paragraphs)
-            features['avg_paragraph_length'] = np.mean([len(p.get_text()) for p in paragraphs]) if paragraphs else 0
-            
-            # News-specific elements
-            features['has_byline'] = bool(soup.find(class_=re.compile(r'byline|author')))
-            features['has_dateline'] = bool(soup.find(class_=re.compile(r'date|time|published')))
-            features['has_headline'] = bool(soup.find(['h1', 'h2'], class_=re.compile(r'headline|title')))
-            
-            return features
-            
-        except Exception as e:
-            # Return default features if content extraction fails
-            return {
-                'has_title': False, 'title_length': 0, 'has_article_tag': False,
-                'has_time_tag': False, 'has_author_meta': False, 'has_article_meta': False,
-                'paragraph_count': 0, 'avg_paragraph_length': 0, 'has_byline': False,
-                'has_dateline': False, 'has_headline': False
-            }
-    
     def create_feature_vector(self, url):
-        """Create a comprehensive feature vector for the URL"""
+        """Create a comprehensive feature vector for the URL (optimized, URL-only)"""
         url_features = self.extract_url_features(url)
-        content_features = self.extract_content_features(url)
         
-        # Combine all features
-        all_features = {**url_features, **content_features}
-        
-        # Convert to numerical vector
+        # Convert to numerical vector with consistent ordering
         feature_vector = []
         feature_names = []
         
-        for key, value in all_features.items():
+        # Define feature order for consistency
+        feature_order = [
+            'path_length', 'path_segments', 'has_query', 'has_fragment', 'url_length',
+            'domain_length', 'has_subdomain', 'is_known_news_domain', 'domain_has_news_keyword',
+            'path_depth', 'has_file_extension', 'extension_is_html',
+            'has_news_pattern', 'has_non_news_pattern', 'news_pattern_count',
+            'has_date_pattern', 'has_year', 'has_timestamp',
+            'has_article_id', 'has_numeric_id', 'has_slug',
+            'query_param_count', 'has_id_param', 'has_tracking_params',
+            'news_score'
+        ]
+        
+        for key in feature_order:
+            value = url_features.get(key, 0)
             if isinstance(value, bool):
                 feature_vector.append(1 if value else 0)
             elif isinstance(value, (int, float)):
@@ -202,30 +214,77 @@ class URLNewsClassifier:
             'feature_vector': feature_vector.flatten().tolist()
         }
     
+    def predict_batch(self, urls, use_parallel=True):
+        """Predict multiple URLs efficiently with batch processing"""
+        if not urls:
+            return []
+        
+        if use_parallel and len(urls) > 10:
+            return self._predict_batch_parallel(urls)
+        else:
+            return self._predict_batch_sequential(urls)
+    
+    def _predict_batch_sequential(self, urls):
+        """Sequential batch prediction"""
+        results = []
+        for url in urls:
+            try:
+                result = self.predict_with_confidence(url)
+                result['url'] = url
+                results.append(result)
+            except Exception as e:
+                results.append({
+                    'url': url,
+                    'error': str(e),
+                    'prediction': False,
+                    'confidence': 0.0,
+                    'is_news_article': False
+                })
+        return results
+    
+    def _predict_batch_parallel(self, urls):
+        """Parallel batch prediction using ThreadPoolExecutor"""
+        def predict_single(url):
+            try:
+                result = self.predict_with_confidence(url)
+                result['url'] = url
+                return result
+            except Exception as e:
+                return {
+                    'url': url,
+                    'error': str(e),
+                    'prediction': False,
+                    'confidence': 0.0,
+                    'is_news_article': False
+                }
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            results = list(executor.map(predict_single, urls))
+        
+        return results
+    
     def heuristic_prediction(self, url):
-        """Fallback heuristic prediction when model is not trained"""
+        """Fast heuristic prediction when model is not trained (optimized)"""
         url_features = self.extract_url_features(url)
         
-        # Simple scoring based on heuristics
-        score = 0
+        # Use the pre-calculated news_score from features
+        score = url_features.get('news_score', 0)
         
-        if url_features['is_known_news_domain']:
-            score += 3
-        if url_features['has_news_pattern']:
-            score += 2
-        if url_features['has_date_pattern']:
-            score += 2
-        if url_features['has_article_id']:
-            score += 1
-        if url_features['has_non_news_pattern']:
-            score -= 2
+        # Additional scoring refinements
+        if url_features.get('has_slug'):
+            score += 0.5
+        if url_features.get('has_tracking_params'):
+            score += 0.5  # News articles often have tracking
+        if url_features.get('path_depth', 0) > 5:
+            score -= 1  # Very deep paths are less likely to be news
+        if url_features.get('url_length', 0) > 200:
+            score -= 0.5  # Very long URLs are less likely to be news
         
-        # Normalize score to probability
-        probability = min(max(score / 6, 0), 1)
+        # Normalize score to probability (0-10 scale)
+        probability = min(max(score / 8, 0), 1)
         prediction = probability > 0.5
         
         # Calculate confidence consistently with trained model
-        # Confidence is the maximum of (probability, 1-probability)
         confidence = max(probability, 1 - probability)
         
         return {
@@ -235,11 +294,12 @@ class URLNewsClassifier:
             'probability_news': probability,
             'probability_not_news': 1 - probability,
             'feature_vector': [],
-            'heuristic_based': True
+            'heuristic_based': True,
+            'news_score': score
         }
     
     def add_feedback(self, url, predicted_label, actual_label, user_confidence=1.0):
-        """Add user feedback for reinforcement learning"""
+        """Add user feedback for reinforcement learning (optimized)"""
         feedback_entry = {
             'timestamp': datetime.now().isoformat(),
             'url': url,
@@ -249,7 +309,7 @@ class URLNewsClassifier:
             'was_correct': bool(predicted_label) == bool(actual_label)
         }
         
-        # Get current prediction details
+        # Get current prediction details (fast, no content fetching)
         prediction_result = self.predict_with_confidence(url)
         feedback_entry.update({
             'prediction_confidence': prediction_result['confidence'],
@@ -263,10 +323,49 @@ class URLNewsClassifier:
         self.update_feature_weights(feedback_entry)
         
         # Trigger retraining if enough feedback collected
-        if len(self.feedback_data) % 5 == 0 and len(self.feedback_data) >= 3:  # Retrain every 5 feedback samples
+        if len(self.feedback_data) % 10 == 0 and len(self.feedback_data) >= 10:  # Retrain every 10 feedback samples
             self.retrain_model()
         
         return feedback_entry
+    
+    def add_batch_feedback(self, feedback_list):
+        """Add multiple feedback entries efficiently"""
+        for feedback in feedback_list:
+            url = feedback['url']
+            predicted_label = feedback['predicted_label']
+            actual_label = feedback['actual_label']
+            user_confidence = feedback.get('user_confidence', 1.0)
+            
+            feedback_entry = {
+                'timestamp': datetime.now().isoformat(),
+                'url': url,
+                'predicted_label': bool(predicted_label),
+                'actual_label': bool(actual_label),
+                'user_confidence': float(user_confidence),
+                'was_correct': bool(predicted_label) == bool(actual_label)
+            }
+            
+            # For batch processing, generate feature vector only if needed
+            if not self.is_trained:
+                feedback_entry['feature_vector'] = []
+                feedback_entry['prediction_confidence'] = 0.5
+            else:
+                prediction_result = self.predict_with_confidence(url)
+                feedback_entry.update({
+                    'prediction_confidence': prediction_result['confidence'],
+                    'feature_vector': prediction_result.get('feature_vector', [])
+                })
+            
+            self.feedback_data.append(feedback_entry)
+            self.update_feature_weights(feedback_entry)
+        
+        self.save_feedback()
+        
+        # Check if retraining is needed
+        if len(self.feedback_data) >= 10 and len(self.feedback_data) % 10 == 0:
+            self.retrain_model()
+        
+        return len(feedback_list)
     
     def update_feature_weights(self, feedback_entry):
         """Update feature weights based on feedback (RL component)"""
@@ -287,43 +386,69 @@ class URLNewsClassifier:
             self.feature_weights[feature_name] = max(0.1, self.feature_weights[feature_name])
     
     def retrain_model(self):
-        """Retrain the model with accumulated feedback"""
-        if len(self.feedback_data) < 3:
+        """Retrain the model with accumulated feedback (optimized with parallel processing)"""
+        if len(self.feedback_data) < 10:
             return  # Need minimum samples
         
         print(f"Retraining model with {len(self.feedback_data)} feedback samples...")
         
-        # Prepare training data
+        # Prepare training data with parallel feature generation
+        feedback_to_process = []
         X = []
         y = []
         
         for feedback in self.feedback_data:
             feature_vector = feedback.get('feature_vector')
             
-            # If feature_vector is empty or missing, generate it from the URL
+            # If feature_vector is empty or missing, collect URLs for batch processing
             if not feature_vector or len(feature_vector) == 0:
-                try:
-                    feature_vector, _ = self.create_feature_vector(feedback['url'])
-                    feature_vector = feature_vector.tolist()
-                except Exception as e:
-                    print(f"Error creating feature vector for {feedback['url']}: {e}")
-                    continue
-            
-            X.append(feature_vector)
-            y.append(1 if feedback['actual_label'] else 0)
+                feedback_to_process.append(feedback)
+            else:
+                X.append(feature_vector)
+                y.append(1 if feedback['actual_label'] else 0)
         
-        if len(X) < 3:
+        # Process missing feature vectors in parallel
+        if feedback_to_process:
+            urls_to_process = [f['url'] for f in feedback_to_process]
+            
+            def generate_feature_vector(url):
+                try:
+                    feature_vector, _ = self.create_feature_vector(url)
+                    return feature_vector.tolist()
+                except Exception as e:
+                    print(f"Error creating feature vector for {url}: {e}")
+                    return None
+            
+            if len(urls_to_process) > 10:
+                # Use parallel processing for large batches
+                with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                    feature_vectors = list(executor.map(generate_feature_vector, urls_to_process))
+            else:
+                # Sequential processing for small batches
+                feature_vectors = [generate_feature_vector(url) for url in urls_to_process]
+            
+            # Add successfully generated feature vectors
+            for i, feature_vector in enumerate(feature_vectors):
+                if feature_vector is not None:
+                    X.append(feature_vector)
+                    y.append(1 if feedback_to_process[i]['actual_label'] else 0)
+        
+        if len(X) < 10:
             print(f"Not enough valid feature vectors ({len(X)}) to train model")
             return  # Not enough feature vectors
         
         X = np.array(X)
         y = np.array(y)
         
-        # Train new model
+        print(f"Training with {len(X)} feature vectors...")
+        
+        # Train optimized model
         self.model = RandomForestClassifier(
-            n_estimators=100,
+            n_estimators=50,  # Reduced for faster training
+            max_depth=10,     # Limit depth to prevent overfitting
             random_state=42,
-            class_weight='balanced'
+            class_weight='balanced',
+            n_jobs=-1         # Use all available cores
         )
         
         self.model.fit(X, y)
@@ -338,14 +463,19 @@ class URLNewsClassifier:
             'timestamp': datetime.now().isoformat(),
             'samples_count': len(X),
             'accuracy': float(accuracy),
-            'feature_weights': self.feature_weights.copy()
+            'feature_weights': self.feature_weights.copy(),
+            'model_params': {
+                'n_estimators': 50,
+                'max_depth': 10,
+                'feature_count': X.shape[1] if X.ndim > 1 else len(X)
+            }
         }
         self.training_history.append(training_entry)
         
         # Save updated model
         self.save_model()
         
-        print(f"Model retrained. Accuracy: {accuracy:.3f}")
+        print(f"Model retrained successfully! Accuracy: {accuracy:.3f}")
         return accuracy
     
     def save_model(self):
@@ -423,3 +553,81 @@ class URLNewsClassifier:
     def get_recent_feedback(self, limit=10):
         """Get recent feedback samples"""
         return self.feedback_data[-limit:] if self.feedback_data else []
+    
+    def analyze_urls_batch(self, urls, confidence_threshold=0.7):
+        """Analyze a batch of URLs and return categorized results"""
+        results = self.predict_batch(urls)
+        
+        analysis = {
+            'total_urls': len(urls),
+            'news_articles': [],
+            'non_news': [],
+            'high_confidence': [],
+            'low_confidence': [],
+            'errors': [],
+            'summary': {
+                'total_urls': len(urls),
+                'news_count': 0,
+                'non_news_count': 0,
+                'high_confidence_count': 0,
+                'low_confidence_count': 0,
+                'error_count': 0,
+                'avg_confidence': 0.0
+            }
+        }
+        
+        confidences = []
+        
+        for result in results:
+            if 'error' in result:
+                analysis['errors'].append(result)
+                analysis['summary']['error_count'] += 1
+                continue
+            
+            confidence = result.get('confidence', 0.0)
+            confidences.append(confidence)
+            
+            if result.get('is_news_article', False):
+                analysis['news_articles'].append(result)
+                analysis['summary']['news_count'] += 1
+            else:
+                analysis['non_news'].append(result)
+                analysis['summary']['non_news_count'] += 1
+            
+            if confidence >= confidence_threshold:
+                analysis['high_confidence'].append(result)
+                analysis['summary']['high_confidence_count'] += 1
+            else:
+                analysis['low_confidence'].append(result)
+                analysis['summary']['low_confidence_count'] += 1
+        
+        if confidences:
+            analysis['summary']['avg_confidence'] = np.mean(confidences)
+        
+        return analysis
+    
+    def get_performance_stats(self):
+        """Get detailed performance statistics"""
+        stats = self.get_model_stats()
+        
+        # Add performance metrics
+        if self.feedback_data:
+            recent_feedback = self.feedback_data[-50:]  # Last 50 feedback entries
+            recent_accuracy = sum(1 for f in recent_feedback if f['was_correct']) / len(recent_feedback)
+            stats['recent_accuracy'] = recent_accuracy
+            
+            # Confidence vs accuracy correlation
+            high_conf_feedback = [f for f in recent_feedback if f.get('prediction_confidence', 0) > 0.7]
+            if high_conf_feedback:
+                high_conf_accuracy = sum(1 for f in high_conf_feedback if f['was_correct']) / len(high_conf_feedback)
+                stats['high_confidence_accuracy'] = high_conf_accuracy
+        
+        # Model training stats
+        if self.training_history:
+            stats['training_progression'] = [t['accuracy'] for t in self.training_history]
+            stats['model_improvement'] = (
+                self.training_history[-1]['accuracy'] - self.training_history[0]['accuracy']
+                if len(self.training_history) > 1 else 0
+            )
+        
+        return stats

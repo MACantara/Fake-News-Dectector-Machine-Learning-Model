@@ -29,8 +29,8 @@
 
         <!-- Navigation -->
         <nav class="mb-8">
-            <div class="max-w-4xl mx-auto">
-                <div class="flex justify-center space-x-4">
+            <div class="max-w-6xl mx-auto">
+                <div class="flex justify-center space-x-4 flex-wrap">
                     <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}bg-blue-700{% else %}bg-blue-600 hover:bg-blue-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
                         <i class="bi bi-house-door mr-2"></i>
                         News Analysis
@@ -42,6 +42,10 @@
                     <a href="{{ url_for('url_classifier.url_classifier_page') }}" class="nav-link {% if request.endpoint == 'url_classifier.url_classifier_page' %}bg-purple-700{% else %}bg-purple-600 hover:bg-purple-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
                         <i class="bi bi-robot mr-2"></i>
                         URL Classifier (RL)
+                    </a>
+                    <a href="{{ url_for('news_tracker_page') }}" class="nav-link {% if request.endpoint == 'news_tracker_page' %}bg-orange-700{% else %}bg-orange-600 hover:bg-orange-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                        <i class="bi bi-rss mr-2"></i>
+                        News Tracker
                     </a>
                 </div>
             </div>

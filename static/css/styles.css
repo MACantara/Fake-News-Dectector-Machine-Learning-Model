@@ -1,25 +1,37 @@
-/* Advanced News Analyzer Styles */
+/* Essential Custom Styles - Only animations and features not supported by Tailwind CSS */
 
-/* Custom animations */
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.spin {
-    animation: spin 1s linear infinite;
-}
-
-.fade-in {
-    animation: fadeIn 0.5s ease-in;
-}
-
+/* Custom keyframe animations */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Background gradients */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+@keyframes pulse-warning {
+    0% { background-color: #fef3c7; }
+    50% { background-color: #fed7aa; }
+    100% { background-color: #fef3c7; }
+}
+
+/* Animation utility classes */
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+.error-shake {
+    animation: shake 0.5s ease-in-out;
+}
+
+.retrain-option.warning {
+    animation: pulse-warning 2s ease-in-out infinite;
+}
+
+/* Complex gradient backgrounds */
 .gradient-bg {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
@@ -30,52 +42,7 @@
     border: 1px solid rgba(209, 213, 219, 0.3);
 }
 
-/* Button styles */
-.input-type-btn {
-    transition: all 0.2s ease-in-out;
-}
-
-.input-type-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.analysis-type-btn {
-    transition: all 0.2s ease-in-out;
-    text-align: center;
-}
-
-.analysis-type-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.analysis-type-btn.active {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-}
-
-/* Input section styles */
-.input-section {
-    transition: opacity 0.3s ease-in-out;
-}
-
-/* Results section styles */
-.prediction-card {
-    transition: all 0.3s ease-in-out;
-}
-
-.prediction-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-/* Progress bar animations */
-.progress-bar {
-    transition: width 0.8s ease-in-out;
-    border-radius: 0.25rem;
-}
-
+/* Progress bar gradients */
 .progress-bar.fake {
     background: linear-gradient(90deg, #ef4444, #dc2626);
 }
@@ -92,122 +59,19 @@
     background: linear-gradient(90deg, #6b7280, #4b5563);
 }
 
-/* Model status indicators */
-.status-loading {
-    border-left: 4px solid #3b82f6;
-}
-
-.status-ready {
-    border-left: 4px solid #22c55e;
-}
-
-.status-error {
-    border-left: 4px solid #ef4444;
-}
-
-.status-partial {
-    border-left: 4px solid #f59e0b;
-}
-
-/* Responsive design improvements */
-@media (max-width: 768px) {
-    .analysis-type-btn {
-        padding: 1rem;
-        font-size: 0.875rem;
-    }
-    
-    .input-type-btn {
-        padding: 0.75rem 1rem;
-        font-size: 0.875rem;
-    }
-    
-    .gradient-bg {
-        padding: 1rem;
-    }
-    
-    .glass-effect {
-        margin: 0.5rem;
-        padding: 1.5rem;
-    }
-}
-
-/* Loading state styles */
-.loading-overlay {
+/* Pseudo-element styling */
+.similarity-score::before {
+    content: '';
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.9);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0.5rem;
-    z-index: 10;
+    background: linear-gradient(135deg, transparent 0%, rgba(59, 130, 246, 0.1) 100%);
+    border-radius: inherit;
 }
 
-/* Error state styles */
-.error-shake {
-    animation: shake 0.5s ease-in-out;
-}
-
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
-}
-
-/* Success state styles */
-.success-pulse {
-    animation: pulse 1s ease-in-out;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-}
-
-/* Tooltip styles */
-.tooltip {
-    position: relative;
-    display: inline-block;
-}
-
-.tooltip .tooltip-text {
-    visibility: hidden;
-    width: 200px;
-    background-color: #374151;
-    color: white;
-    text-align: center;
-    border-radius: 6px;
-    padding: 8px;
-    position: absolute;
-    z-index: 1;
-    bottom: 125%;
-    left: 50%;
-    margin-left: -100px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    font-size: 0.875rem;
-}
-
-.tooltip:hover .tooltip-text {
-    visibility: visible;
-    opacity: 1;
-}
-
-/* Card hover effects */
-.result-card {
-    transition: all 0.3s ease;
-}
-
-.result-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-}
-
-/* Scrollbar customization */
+/* Webkit scrollbar customization (not supported in Tailwind) */
 .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 #f1f5f9;
@@ -231,13 +95,16 @@
     background: #94a3b8;
 }
 
-/* Focus states for accessibility */
-.focus-ring:focus {
-    outline: 2px solid #3b82f6;
-    outline-offset: 2px;
+/* Line clamping for cross-browser compatibility */
+.line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
-/* Print styles */
+/* Print media queries */
 @media print {
     .no-print {
         display: none !important;
@@ -251,92 +118,4 @@
         background: white !important;
         border: 1px solid #e5e7eb !important;
     }
-}
-
-/* Similar Content Styles */
-.line-clamp-3 {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.similar-content-card {
-    transition: all 0.3s ease;
-    border-left: 4px solid transparent;
-}
-
-.similar-content-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-    border-left-color: #3b82f6;
-}
-
-.similarity-score {
-    position: relative;
-}
-
-.similarity-score::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(135deg, transparent 0%, rgba(59, 130, 246, 0.1) 100%);
-    border-radius: inherit;
-}
-
-.keyword-tag {
-    transition: all 0.2s ease;
-}
-
-.keyword-tag:hover {
-    transform: scale(1.05);
-    background-color: #dbeafe !important;
-    color: #1e40af !important;
-}
-
-/* Responsive improvements for similar content */
-@media (max-width: 768px) {
-    .similar-content-card .flex {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .similar-content-card .flex > div:last-child {
-        margin-top: 0.75rem;
-        align-self: flex-end;
-    }
-}
-
-/* Model Retraining Checkbox Styles */
-.retrain-option {
-    transition: all 0.3s ease;
-}
-
-.retrain-option:hover {
-    background-color: #fef3c7;
-    border-color: #f59e0b;
-}
-
-.retrain-option input[type="checkbox"]:checked + label {
-    color: #d97706;
-    font-weight: 600;
-}
-
-.retrain-option input[type="checkbox"]:focus {
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-/* Warning animation for retraining */
-@keyframes pulse-warning {
-    0% { background-color: #fef3c7; }
-    50% { background-color: #fed7aa; }
-    100% { background-color: #fef3c7; }
-}
-
-.retrain-option.warning {
-    animation: pulse-warning 2s ease-in-out infinite;
 }

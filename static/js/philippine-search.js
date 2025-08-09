@@ -111,7 +111,7 @@ class PhilippineNewsSearch {
                             <span class="text-green-700">Models ready</span>
                         </div>
                     `;
-                    this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center status-ready';
+                    this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center border-l-4 border-green-500';
                 } else {
                     this.elements.modelStatus.innerHTML = `
                         <div class="flex items-center justify-center">

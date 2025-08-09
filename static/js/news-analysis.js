@@ -205,7 +205,7 @@ class NewsAnalyzer {
                     <span class="text-red-700">${errorMessage}</span>
                 </div>
             `;
-            this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center status-error';
+            this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center border-l-4 border-red-500';
             return;
         }
 
@@ -222,23 +222,23 @@ class NewsAnalyzer {
                     <span class="text-green-700">All models ready</span>
                 </div>
             `;
-            this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center status-ready';
+            this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center border-l-4 border-green-500';
         } else if (fakeNewsReady) {
             this.elements.modelStatus.innerHTML = `
                 <div class="flex items-center justify-center">
-                    <i class="bi bi-hourglass-split spin text-yellow-600 mr-2"></i>
+                    <i class="bi bi-hourglass-split animate-spin text-yellow-600 mr-2"></i>
                     <span class="text-yellow-700">Fake news model ready, political classifier loading...</span>
                 </div>
             `;
-            this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center status-partial';
+            this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center border-l-4 border-amber-500';
         } else {
             this.elements.modelStatus.innerHTML = `
                 <div class="flex items-center justify-center">
-                    <i class="bi bi-hourglass-split spin text-blue-600 mr-2"></i>
+                    <i class="bi bi-hourglass-split animate-spin text-blue-600 mr-2"></i>
                     <span class="text-gray-700">Loading models...</span>
                 </div>
             `;
-            this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center status-loading';
+            this.elements.modelStatus.className = 'glass-effect rounded-xl p-4 mb-8 text-center border-l-4 border-blue-500';
         }
     }
 
@@ -377,7 +377,7 @@ class NewsAnalyzer {
         this.elements.analyzeBtn.disabled = this.state.isLoading || !validation.valid;
         
         if (this.state.isLoading) {
-            this.elements.analyzeBtn.innerHTML = '<i class="bi bi-hourglass-split spin mr-2"></i>Analyzing...';
+            this.elements.analyzeBtn.innerHTML = '<i class="bi bi-hourglass-split animate-spin mr-2"></i>Analyzing...';
         } else {
             this.elements.analyzeBtn.innerHTML = '<i class="bi bi-search mr-2"></i>Analyze News';
         }
@@ -1508,7 +1508,7 @@ class NewsAnalyzer {
         // Show loading state
         if (this.elements.findSimilarBtn) {
             this.elements.findSimilarBtn.disabled = true;
-            this.elements.findSimilarBtn.innerHTML = '<i class="bi bi-hourglass-split spin mr-2"></i>Finding Similar Articles...';
+            this.elements.findSimilarBtn.innerHTML = '<i class="bi bi-hourglass-split animate-spin mr-2"></i>Finding Similar Articles...';
         }
 
         try {
@@ -1835,7 +1835,7 @@ class NewsAnalyzer {
 
         try {
             this.elements.submitBulkFeedbackBtn.disabled = true;
-            this.elements.submitBulkFeedbackBtn.innerHTML = '<i class="bi bi-hourglass-split spin mr-1"></i>Submitting...';
+            this.elements.submitBulkFeedbackBtn.innerHTML = '<i class="bi bi-hourglass-split animate-spin mr-1"></i>Submitting...';
 
             const response = await Utils.http.post(Config.endpoints.urlFeedback, {
                 feedback_batch: labeledArticles

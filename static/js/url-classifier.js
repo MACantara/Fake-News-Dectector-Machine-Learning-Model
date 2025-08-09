@@ -334,7 +334,7 @@ class URLClassifier {
     
     async retrainModel() {
         this.elements.retrainBtn.disabled = true;
-        this.elements.retrainBtn.innerHTML = '<i class="bi bi-hourglass-split spin mr-1"></i>Retraining...';
+        this.elements.retrainBtn.innerHTML = '<i class="bi bi-hourglass-split animate-spin mr-1"></i>Retraining...';
         
         try {
             const response = await fetch('/retrain-url-classifier', {
@@ -372,7 +372,7 @@ class URLClassifier {
         if (show) {
             this.elements.loading.classList.remove('hidden');
             this.elements.classifyBtn.disabled = true;
-            this.elements.classifyBtn.innerHTML = '<i class="bi bi-hourglass-split spin mr-2"></i>Analyzing...';
+            this.elements.classifyBtn.innerHTML = '<i class="bi bi-hourglass-split animate-spin mr-2"></i>Analyzing...';
         } else {
             this.elements.loading.classList.add('hidden');
             this.updateClassifyButton();

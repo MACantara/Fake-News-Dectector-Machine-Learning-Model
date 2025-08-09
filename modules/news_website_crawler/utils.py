@@ -67,7 +67,7 @@ def analyze_single_article(article_info, analysis_type='both'):
     """Analyze a single article with fake news detection and political classification"""
     try:
         # Import here to avoid circular imports
-        from web_app import detector, political_detector, philippine_search_index
+        from app import detector, political_detector, philippine_search_index
         
         # Handle both URL strings and article objects with classification info
         if isinstance(article_info, str):

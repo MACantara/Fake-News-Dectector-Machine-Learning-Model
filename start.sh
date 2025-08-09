@@ -4,7 +4,7 @@
 echo "Starting Fake News Detector application..."
 
 # Set environment variables
-export FLASK_APP=web_app.py
+export FLASK_APP=app.py
 export FLASK_ENV=production
 
 # Start the application with Gunicorn

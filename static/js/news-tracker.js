@@ -392,7 +392,19 @@ class NewsTracker {
         
         // Apply current filter
         const filter = document.getElementById('queueFilter').value;
-        const filteredArticles = this.filterArticlesByType(filter);
+        let filteredArticles = this.filterArticlesByType(filter);
+        
+        // Sort articles to put unverified ones first
+        filteredArticles = filteredArticles.sort((a, b) => {
+            // Unverified articles should come first
+            if (!a.verified && b.verified) return -1;
+            if (a.verified && !b.verified) return 1;
+            
+            // If both have same verification status, sort by found date (newest first)
+            const dateA = new Date(a.found_at || a.foundAt);
+            const dateB = new Date(b.found_at || b.foundAt);
+            return dateB - dateA;
+        });
         
         // Pagination
         const startIndex = (this.currentPage - 1) * this.itemsPerPage;

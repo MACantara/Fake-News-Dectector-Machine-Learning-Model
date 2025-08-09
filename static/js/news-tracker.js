@@ -48,17 +48,62 @@ class NewsTracker {
         });
         
         // Auto-fetch controls
-        document.getElementById('autoFetchToggle').addEventListener('change', (e) => {
-            this.toggleAutoFetch(e.target.checked);
-        });
-        document.getElementById('autoFetchInterval').addEventListener('change', (e) => {
-            this.updateAutoFetchInterval(parseInt(e.target.value));
-        });
-        document.getElementById('fetchNowBtn').addEventListener('click', () => this.fetchAllArticles());
-        document.getElementById('clearQueueBtn').addEventListener('click', () => this.clearQueue());
-        document.getElementById('testAutoFetchBtn').addEventListener('click', () => this.testAutoFetch());
-        document.getElementById('enableAllAutoFetchBtn').addEventListener('click', () => this.quickSetupAutoFetch());
-        document.getElementById('resetAutoFetchBtn').addEventListener('click', () => this.resetAutoFetchSettings());
+        const autoFetchToggle = document.getElementById('autoFetchToggle');
+        if (autoFetchToggle) {
+            autoFetchToggle.addEventListener('change', (e) => {
+                this.toggleAutoFetch(e.target.checked);
+            });
+            
+            // Add click handlers to the visual toggle elements
+            const toggleBg = autoFetchToggle.nextElementSibling;
+            const toggleDot = toggleBg?.nextElementSibling;
+            
+            if (toggleBg) {
+                toggleBg.addEventListener('click', () => {
+                    autoFetchToggle.checked = !autoFetchToggle.checked;
+                    autoFetchToggle.dispatchEvent(new Event('change'));
+                });
+            }
+            
+            if (toggleDot) {
+                toggleDot.addEventListener('click', () => {
+                    autoFetchToggle.checked = !autoFetchToggle.checked;
+                    autoFetchToggle.dispatchEvent(new Event('change'));
+                });
+            }
+        }
+        
+        const autoFetchInterval = document.getElementById('autoFetchInterval');
+        if (autoFetchInterval) {
+            autoFetchInterval.addEventListener('change', (e) => {
+                this.updateAutoFetchInterval(parseInt(e.target.value));
+            });
+        }
+        
+        const fetchNowBtn = document.getElementById('fetchNowBtn');
+        if (fetchNowBtn) {
+            fetchNowBtn.addEventListener('click', () => this.fetchAllArticles());
+        }
+        
+        const clearQueueBtn = document.getElementById('clearQueueBtn');
+        if (clearQueueBtn) {
+            clearQueueBtn.addEventListener('click', () => this.clearQueue());
+        }
+        
+        const testAutoFetchBtn = document.getElementById('testAutoFetchBtn');
+        if (testAutoFetchBtn) {
+            testAutoFetchBtn.addEventListener('click', () => this.testAutoFetch());
+        }
+        
+        const enableAllAutoFetchBtn = document.getElementById('enableAllAutoFetchBtn');
+        if (enableAllAutoFetchBtn) {
+            enableAllAutoFetchBtn.addEventListener('click', () => this.quickSetupAutoFetch());
+        }
+        
+        const resetAutoFetchBtn = document.getElementById('resetAutoFetchBtn');
+        if (resetAutoFetchBtn) {
+            resetAutoFetchBtn.addEventListener('click', () => this.resetAutoFetchSettings());
+        }
         
         // Queue management
         document.getElementById('queueFilter').addEventListener('change', (e) => {
@@ -721,6 +766,7 @@ class NewsTracker {
     }
     
     toggleAutoFetch(enabled) {
+        console.log('toggleAutoFetch called with enabled:', enabled);
         this.autoFetchEnabled = enabled;
         
         // Save preference to localStorage
@@ -729,7 +775,10 @@ class NewsTracker {
         // Update toggle appearance
         const toggle = document.getElementById('autoFetchToggle');
         if (toggle) {
+            console.log('Updating toggle appearance for enabled:', enabled);
             this.updateToggleAppearance(toggle, enabled);
+        } else {
+            console.error('Toggle element not found');
         }
         
         this.updateAutoFetchStatus();
@@ -737,7 +786,9 @@ class NewsTracker {
         if (enabled) {
             if (this.trackedWebsites.length === 0) {
                 this.showError('Add websites to track before enabling auto-fetch');
-                toggle.checked = false;
+                if (toggle) {
+                    toggle.checked = false;
+                }
                 this.autoFetchEnabled = false;
                 localStorage.setItem('newsTracker.autoFetchEnabled', 'false');
                 this.updateToggleAppearance(toggle, false);
@@ -795,19 +846,24 @@ class NewsTracker {
     }
     
     updateToggleAppearance(toggle, enabled) {
+        console.log('updateToggleAppearance called with enabled:', enabled);
         const toggleBg = toggle.nextElementSibling;
         const toggleDot = toggleBg?.nextElementSibling;
+        
+        console.log('Toggle elements found:', { toggleBg: !!toggleBg, toggleDot: !!toggleDot });
         
         if (enabled) {
             toggleBg?.classList.remove('bg-gray-200');
             toggleBg?.classList.add('bg-green-400');
-            toggleDot?.classList.remove('-left-1');
-            toggleDot?.classList.add('translate-x-full');
+            toggleDot?.classList.remove('-left-0.5');
+            toggleDot?.classList.add('translate-x-6');
+            console.log('Applied enabled styles');
         } else {
             toggleBg?.classList.remove('bg-green-400');
             toggleBg?.classList.add('bg-gray-200');
-            toggleDot?.classList.remove('translate-x-full');
-            toggleDot?.classList.add('-left-1');
+            toggleDot?.classList.remove('translate-x-6');
+            toggleDot?.classList.add('-left-0.5');
+            console.log('Applied disabled styles');
         }
     }
     

@@ -81,6 +81,11 @@ init_news_tracker_db()
 @news_tracker_bp.route('/news-tracker')
 def news_tracker():
     """Render the news tracker page"""
+    # Ensure user has a session
+    if 'session_id' not in session:
+        import uuid
+        session['session_id'] = str(uuid.uuid4())
+    
     return render_template('news_tracker.html')
 
 @news_tracker_bp.route('/api/news-tracker/add-website', methods=['POST'])
@@ -301,11 +306,12 @@ def get_tracker_data():
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        # Get tracked websites
+        # Get tracked websites with article counts
         cursor.execute('''
             SELECT w.*, 
-                   COUNT(a.id) as article_count,
-                   MAX(a.found_at) as last_article
+                   COUNT(CASE WHEN a.id IS NOT NULL THEN 1 END) as article_count,
+                   MAX(a.found_at) as last_article,
+                   COUNT(CASE WHEN a.verified = 1 THEN 1 END) as verified_count
             FROM tracked_websites w
             LEFT JOIN article_queue a ON w.id = a.website_id
             WHERE w.user_session = ?
@@ -313,7 +319,18 @@ def get_tracker_data():
             ORDER BY w.added_at DESC
         ''', (user_session,))
         
-        websites = [dict(row) for row in cursor.fetchall()]
+        websites = []
+        for row in cursor.fetchall():
+            website = dict(row)
+            # Convert timestamps to ISO format for JavaScript
+            if website['added_at']:
+                website['addedAt'] = website['added_at']
+            if website['last_fetch']:
+                website['lastFetch'] = website['last_fetch']
+            if website['last_article']:
+                website['lastArticle'] = website['last_article']
+            
+            websites.append(website)
         
         # Get article queue
         cursor.execute('''
@@ -324,7 +341,21 @@ def get_tracker_data():
             ORDER BY a.found_at DESC
         ''', (user_session,))
         
-        articles = [dict(row) for row in cursor.fetchall()]
+        articles = []
+        for row in cursor.fetchall():
+            article = dict(row)
+            # Convert timestamps and booleans for JavaScript
+            if article['found_at']:
+                article['foundAt'] = article['found_at']
+            if article['verified_at']:
+                article['verifiedAt'] = article['verified_at']
+            
+            # Convert SQLite boolean (0/1) to actual boolean
+            article['verified'] = bool(article['verified'])
+            if article['is_news'] is not None:
+                article['isNews'] = bool(article['is_news'])
+            
+            articles.append(article)
         
         conn.close()
         
@@ -510,11 +541,11 @@ def start_auto_fetch():
                         for article in articles:
                             try:
                                 cursor.execute('''
-                                    INSERT INTO article_queue (url, title, description, content, site_name, website_id)
-                                    VALUES (?, ?, ?, ?, ?, ?)
+                                    INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?)
                                 ''', (
                                     article['url'], article['title'], article['description'],
-                                    article['content'], article['site_name'], article['website_id']
+                                    article['content'], article['site_name'], article['website_id'], 'default'
                                 ))
                             except sqlite3.IntegrityError:
                                 pass  # Article already exists

@@ -71,8 +71,8 @@ def check_lfs_files():
     lfs_files = [
         'fake_news_model.pkl',
         'political_news_classifier.pkl', 
-        'WELFake_Dataset.csv',
-        'News_Category_Dataset_v3.json'
+        'datasets/WELFake_Dataset.csv',
+        'datasets/News_Category_Dataset_v3.json'
     ]
     
     available_files = []
@@ -126,7 +126,7 @@ def save_feedback_data(feedback_data, feedback_file='user_feedback.json'):
         print(f"Error saving feedback data: {str(e)}")
 
 
-def load_pattern_cache(pattern_cache_file='news_pattern_cache.json'):
+def load_pattern_cache(pattern_cache_file='datasets/news_pattern_cache.json'):
     """Load pattern cache for news articles"""
     try:
         if os.path.exists(pattern_cache_file):
@@ -139,7 +139,7 @@ def load_pattern_cache(pattern_cache_file='news_pattern_cache.json'):
     return []
 
 
-def save_pattern_cache(pattern_cache, pattern_cache_file='news_pattern_cache.json'):
+def save_pattern_cache(pattern_cache, pattern_cache_file='datasets/news_pattern_cache.json'):
     """Save pattern cache to file"""
     try:
         with open(pattern_cache_file, 'w', encoding='utf-8') as f:

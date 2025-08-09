@@ -14,8 +14,8 @@ def main():
     print("="*60)
     
     # Check if dataset exists
-    if not os.path.exists('WELFake_Dataset.csv'):
-        print("❌ Error: 'WELFake_Dataset.csv' not found in current directory.")
+    if not os.path.exists('datasets/WELFake_Dataset.csv'):
+        print("❌ Error: 'datasets/WELFake_Dataset.csv' not found in current directory.")
         print("Please ensure the dataset file is in the same directory as this script.")
         sys.exit(1)
     

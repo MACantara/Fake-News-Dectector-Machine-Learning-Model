@@ -35,7 +35,7 @@ class URLNewsClassifier:
     Uses user feedback to continuously improve classification accuracy
     """
     
-    def __init__(self, model_path='url_news_classifier.pkl', feedback_path='url_classifier_feedback.json'):
+    def __init__(self, model_path='url_news_classifier.pkl', feedback_path='datasets/url_classifier_feedback.json'):
         self.model_path = model_path
         self.feedback_path = feedback_path
         self.model = None

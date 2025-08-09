@@ -53,8 +53,8 @@ def health_check():
         lfs_files = [
             'fake_news_model.pkl',
             'political_news_classifier.pkl', 
-            'WELFake_Dataset.csv',
-            'News_Category_Dataset_v3.json'
+            'datasets/WELFake_Dataset.csv',
+            'datasets/News_Category_Dataset_v3.json'
         ]
         
         file_status = {}
@@ -127,12 +127,12 @@ def initialize_models():
         else:
             print("⚠ Pre-trained fake news model not found. Training from scratch...")
             # Check if training data exists
-            if os.path.exists('WELFake_Dataset.csv'):
+            if os.path.exists('datasets/WELFake_Dataset.csv'):
                 try:
                     print("📊 Loading training dataset...")
                     
                     # Check if it's a Git LFS pointer file
-                    with open('WELFake_Dataset.csv', 'r', encoding='utf-8') as f:
+                    with open('datasets/WELFake_Dataset.csv', 'r', encoding='utf-8') as f:
                         first_line = f.readline()
                         if 'version https://git-lfs.github.com' in first_line:
                             print("❌ WELFake_Dataset.csv is a Git LFS pointer file")
@@ -140,7 +140,7 @@ def initialize_models():
                             return
                     
                     # Load and prepare data
-                    data = pd.read_csv('WELFake_Dataset.csv')
+                    data = pd.read_csv('datasets/WELFake_Dataset.csv')
                     print(f"✓ Dataset loaded: {len(data)} samples")
                     
                     # Train the model
@@ -163,7 +163,7 @@ def initialize_models():
                     print("The application will run with limited functionality.")
             else:
                 print("✗ Training dataset not available. Fake news detection will be unavailable.")
-                print("Please ensure 'WELFake_Dataset.csv' is properly downloaded from Git LFS.")
+                print("Please ensure 'datasets/WELFake_Dataset.csv' is properly downloaded from Git LFS.")
         
         # Initialize political news classifier
         print("\n=== Political News Classification Model ===")

@@ -245,7 +245,7 @@ def main():
     print("No existing model found. Training new model...")
     
     # Load and explore data
-    df = detector.load_and_explore_data('WELFake_Dataset.csv')
+    df = detector.load_and_explore_data('datasets/WELFake_Dataset.csv')
     
     # Prepare data
     df = detector.prepare_data(df)

@@ -47,7 +47,7 @@ class FakeNewsDetector:
         
         # Pattern learning cache for news articles
         self.pattern_cache = []
-        self.pattern_cache_file = 'news_pattern_cache.json'
+        self.pattern_cache_file = 'datasets/news_pattern_cache.json'
         self.pattern_cache_threshold = 5  # Number of patterns before considering full retraining
         
         # Reference to URL classifier for retraining
@@ -99,7 +99,7 @@ class FakeNewsDetector:
             
             # Load original dataset
             try:
-                df = self.load_and_prepare_data('WELFake_Dataset.csv')
+                df = self.load_and_prepare_data('datasets/WELFake_Dataset.csv')
                 print(f"✅ Loaded original dataset: {len(df)} samples")
             except Exception as e:
                 print(f"❌ Could not load original dataset: {e}")
@@ -336,7 +336,7 @@ class FakeNewsDetector:
             print("Starting model retraining with user feedback...")
             
             # Load original dataset
-            df = self.load_and_prepare_data('WELFake_Dataset.csv')
+            df = self.load_and_prepare_data('datasets/WELFake_Dataset.csv')
             
             # Add feedback data to training set
             unprocessed_feedback = [f for f in self.feedback_data if not f.get('used_for_training', False)]

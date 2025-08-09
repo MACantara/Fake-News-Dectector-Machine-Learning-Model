@@ -268,7 +268,7 @@ def train_political_model():
     """Train or retrain the political news classification model"""
     try:
         data = request.get_json()
-        dataset_path = data.get('dataset_path', 'News_Category_Dataset_v3.json')
+        dataset_path = data.get('dataset_path', 'datasets/News_Category_Dataset_v3.json')
         
         # This would typically load training data and retrain the model
         # For now, return a placeholder response

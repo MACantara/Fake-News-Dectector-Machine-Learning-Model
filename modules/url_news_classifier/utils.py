@@ -197,7 +197,7 @@ def update_feature_weights(feature_weights, feedback_entry, learning_rate=0.1):
     
     return feature_weights
 
-def load_feedback_data(feedback_path='url_classifier_feedback.json'):
+def load_feedback_data(feedback_path='datasets/url_classifier_feedback.json'):
     """Load existing feedback data"""
     try:
         if os.path.exists(feedback_path):
@@ -210,7 +210,7 @@ def load_feedback_data(feedback_path='url_classifier_feedback.json'):
         print(f"Error loading feedback data: {str(e)}")
         return []
 
-def save_feedback_data(feedback_data, feedback_path='url_classifier_feedback.json'):
+def save_feedback_data(feedback_data, feedback_path='datasets/url_classifier_feedback.json'):
     """Save feedback data to file"""
     try:
         with open(feedback_path, 'w') as f:

@@ -328,54 +328,149 @@ class NewsWebsiteCrawler:
             'classification_errors': 0
         }
     
+    def get_crawler_info(self):
+        """Get comprehensive crawler information"""
+        return {
+            'version': '2.0',
+            'features': {
+                'url_classification': self.url_classifier is not None,
+                'batch_processing': True,
+                'parallel_analysis': True,
+                'intelligent_filtering': True,
+                'confidence_scoring': True
+            },
+            'configuration': {
+                'filtering_enabled': self.enable_filtering,
+                'confidence_threshold': self.confidence_threshold,
+                'max_workers': 20,
+                'timeout_per_article': 30
+            },
+            'statistics': self.get_classification_stats(),
+            'supported_analysis_types': ['both', 'fake_news', 'political'],
+            'url_classifier_status': 'available' if self.url_classifier else 'unavailable'
+        }
+    
     def analyze_articles_batch(self, article_urls, analysis_type='both'):
         """Analyze multiple articles in parallel - handles both URL strings and article objects"""
         results = []
         
+        # Normalize input data - handle different article formats
+        normalized_articles = []
+        for article in article_urls:
+            if isinstance(article, str):
+                # Simple URL string
+                normalized_articles.append({
+                    'url': article,
+                    'title': '',
+                    'metadata': {}
+                })
+            elif isinstance(article, dict):
+                # Article object with metadata
+                normalized_articles.append({
+                    'url': article.get('url', ''),
+                    'title': article.get('title', '') or article.get('text', '') or article.get('link_text', ''),
+                    'metadata': {
+                        'link_text': article.get('link_text', ''),
+                        'classification_confidence': article.get('classification_confidence', 0.0),
+                        'is_news_prediction': article.get('is_news_prediction', True),
+                        'crawler_source': True
+                    }
+                })
+            else:
+                # Fallback for other types
+                normalized_articles.append({
+                    'url': str(article),
+                    'title': '',
+                    'metadata': {}
+                })
+        
+        print(f"🚀 Starting batch analysis of {len(normalized_articles)} articles...")
+        print(f"📊 Analysis type: {analysis_type}")
+        
         # Use ThreadPoolExecutor for parallel processing
         # Dynamic worker count based on the number of articles
-        max_workers = min(20, len(article_urls))  # Dynamic worker count, max 20
+        max_workers = min(20, len(normalized_articles))  # Dynamic worker count, max 20
+        
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_article = {executor.submit(analyze_single_article, article, analysis_type): article 
-                               for article in article_urls}
+            # Submit all analysis tasks
+            future_to_article = {
+                executor.submit(analyze_single_article, article, analysis_type): article 
+                for article in normalized_articles
+            }
+            
+            completed_count = 0
+            total_articles = len(normalized_articles)
             
             for future in concurrent.futures.as_completed(future_to_article):
+                completed_count += 1
+                article = future_to_article[future]
+                
                 try:
                     result = future.result(timeout=30)  # 30 second timeout per article
+                    
+                    # Enhance result with crawler metadata
+                    if article.get('metadata'):
+                        result['crawler_metadata'] = article['metadata']
+                    
+                    # Add progress information
+                    result['analysis_progress'] = {
+                        'completed': completed_count,
+                        'total': total_articles,
+                        'percentage': round((completed_count / total_articles) * 100, 1)
+                    }
+                    
                     results.append(result)
+                    
+                    # Progress logging
+                    if completed_count % 5 == 0 or completed_count == total_articles:
+                        print(f"📈 Analysis progress: {completed_count}/{total_articles} ({result['analysis_progress']['percentage']}%)")
+                
                 except concurrent.futures.TimeoutError:
-                    article = future_to_article[future]
-                    # Handle timeout case properly
-                    if isinstance(article, str):
-                        url, title = article, ''
-                    elif isinstance(article, dict):
-                        url = article.get('url', str(article))
-                        title = article.get('text', '') or article.get('title', '')
-                    else:
-                        url, title = str(article), ''
+                    print(f"⏰ Analysis timeout for: {article.get('url', 'unknown')}")
+                    result = {
+                        'url': article.get('url', ''),
+                        'title': article.get('title', ''),
+                        'error': 'Analysis timeout - article took too long to process',
+                        'status': 'timeout',
+                        'analysis_progress': {
+                            'completed': completed_count,
+                            'total': total_articles,
+                            'percentage': round((completed_count / total_articles) * 100, 1)
+                        }
+                    }
                     
-                    results.append({
-                        'url': url,
-                        'title': title,
-                        'error': 'Analysis timeout',
-                        'status': 'timeout'
-                    })
+                    if article.get('metadata'):
+                        result['crawler_metadata'] = article['metadata']
+                    
+                    results.append(result)
+                
                 except Exception as e:
-                    article = future_to_article[future]
-                    # Handle exception case properly
-                    if isinstance(article, str):
-                        url, title = article, ''
-                    elif isinstance(article, dict):
-                        url = article.get('url', str(article))
-                        title = article.get('text', '') or article.get('title', '')
-                    else:
-                        url, title = str(article), ''
-                    
-                    results.append({
-                        'url': url,
-                        'title': title,
+                    print(f"❌ Analysis error for {article.get('url', 'unknown')}: {str(e)}")
+                    result = {
+                        'url': article.get('url', ''),
+                        'title': article.get('title', ''),
                         'error': str(e),
-                        'status': 'failed'
-                    })
+                        'status': 'failed',
+                        'analysis_progress': {
+                            'completed': completed_count,
+                            'total': total_articles,
+                            'percentage': round((completed_count / total_articles) * 100, 1)
+                        }
+                    }
+                    
+                    if article.get('metadata'):
+                        result['crawler_metadata'] = article['metadata']
+                    
+                    results.append(result)
+        
+        # Sort results by original order (based on URL)
+        url_to_index = {article['url']: i for i, article in enumerate(normalized_articles)}
+        results.sort(key=lambda x: url_to_index.get(x.get('url', ''), float('inf')))
+        
+        # Calculate final statistics
+        successful = len([r for r in results if r.get('status') == 'success'])
+        failed = len([r for r in results if r.get('status') in ['failed', 'timeout']])
+        
+        print(f"✅ Batch analysis complete: {successful} successful, {failed} failed")
         
         return results

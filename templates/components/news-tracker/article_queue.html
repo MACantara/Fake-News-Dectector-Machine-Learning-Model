@@ -72,9 +72,21 @@
         
         <div id="batchStatus" class="hidden mt-3 p-3 rounded-lg"></div>
         
-        <div class="mt-3 text-xs text-blue-600">
-            <i class="bi bi-info-circle mr-1"></i>
-            Click on unverified articles below to select/deselect them for batch verification
+        <div class="mt-3 p-3 bg-white rounded-lg border border-blue-200">
+            <div class="flex items-start space-x-3">
+                <div class="flex-shrink-0">
+                    <i class="bi bi-info-circle text-blue-600 text-lg"></i>
+                </div>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-blue-800 mb-1">How to select articles:</p>
+                    <div class="text-xs text-blue-700 space-y-1">
+                        <p>• Look for unverified articles with a <span class="inline-flex items-center px-2 py-0.5 bg-white border border-gray-300 rounded-full text-xs"><i class="bi bi-plus-circle mr-1"></i>Click to select</span> button</p>
+                        <p>• Click anywhere on the article card to select/deselect it</p>
+                        <p>• Selected articles will have a blue background and checkmark</p>
+                        <p>• Use "Select Next X" for quick selection or manually click individual articles</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     

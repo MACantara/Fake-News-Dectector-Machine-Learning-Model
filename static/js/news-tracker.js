@@ -365,14 +365,30 @@ class NewsTracker {
     
     renderArticleQueue() {
         const container = document.getElementById('articleQueue');
-        const emptyMessage = document.getElementById('emptyQueueMessage');
+        const  emptyMessage = document.getElementById('emptyQueueMessage');
         
-        if (this.articleQueue.length === 0) {
-            emptyMessage.classList.remove('hidden');
+        if (!container) {
+            console.error('Article queue container not found');
             return;
         }
         
-        emptyMessage.classList.add('hidden');
+        if (this.articleQueue.length === 0) {
+            if (emptyMessage) {
+                emptyMessage.classList.remove('hidden');
+            }
+            container.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="bi bi-inbox text-4xl mb-2 opacity-50"></i>
+                    <p>No articles in queue yet.</p>
+                    <p class="text-sm">Articles will appear here when fetched from tracked websites.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        if (emptyMessage) {
+            emptyMessage.classList.add('hidden');
+        }
         
         // Apply current filter
         const filter = document.getElementById('queueFilter').value;

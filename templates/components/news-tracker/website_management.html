@@ -1,0 +1,86 @@
+<!-- Website Management Section -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <h3 class="text-xl font-semibold text-gray-800 mb-4">
+        <i class="bi bi-plus-circle"></i>
+        Add News Website
+    </h3>
+    
+    <div class="space-y-4">
+        <!-- URL Input -->
+        <div>
+            <label for="websiteUrl" class="block text-sm font-medium text-gray-700 mb-2">
+                <i class="bi bi-link-45deg mr-1"></i>
+                News Website URL
+            </label>
+            <div class="relative">
+                <input 
+                    type="url" 
+                    id="websiteUrl" 
+                    placeholder="https://news-website.com"
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    aria-label="News website URL"
+                />
+                <i class="bi bi-globe absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            </div>
+        </div>
+        
+        <!-- Website Name -->
+        <div>
+            <label for="websiteName" class="block text-sm font-medium text-gray-700 mb-2">
+                <i class="bi bi-tag mr-1"></i>
+                Website Name (Optional)
+            </label>
+            <input 
+                type="text" 
+                id="websiteName" 
+                placeholder="e.g., BBC News, CNN, etc."
+                class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                aria-label="Website name"
+            />
+        </div>
+        
+        <!-- Fetch Interval -->
+        <div>
+            <label for="fetchInterval" class="block text-sm font-medium text-gray-700 mb-2">
+                <i class="bi bi-clock mr-1"></i>
+                Auto-fetch Interval
+            </label>
+            <select id="fetchInterval" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="15">Every 15 minutes</option>
+                <option value="30">Every 30 minutes</option>
+                <option value="60" selected>Every 1 hour</option>
+                <option value="180">Every 3 hours</option>
+                <option value="360">Every 6 hours</option>
+                <option value="720">Every 12 hours</option>
+                <option value="1440">Daily</option>
+            </select>
+        </div>
+        
+        <!-- Add Button -->
+        <button 
+            id="addWebsiteBtn"
+            class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200"
+            aria-label="Add website to tracking list"
+        >
+            <i class="bi bi-plus-circle mr-2"></i>
+            Add Website to Tracker
+        </button>
+    </div>
+</div>
+
+<!-- Tracked Websites List -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <h3 class="text-xl font-semibold text-gray-800 mb-4">
+        <i class="bi bi-list-ul"></i>
+        Tracked Websites
+    </h3>
+    
+    <div id="trackedWebsitesList" class="space-y-3">
+        <!-- Websites will be populated here -->
+        <div class="text-center text-gray-500 py-8">
+            <i class="bi bi-inbox text-4xl mb-2 opacity-50"></i>
+            <p>No websites being tracked yet.</p>
+            <p class="text-sm">Add a website above to start tracking articles.</p>
+        </div>
+    </div>
+</div>

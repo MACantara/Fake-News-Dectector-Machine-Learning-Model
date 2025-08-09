@@ -1,0 +1,73 @@
+<!-- Article Queue -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-semibold text-gray-800">
+            <i class="bi bi-list-check"></i>
+            Article Verification Queue
+        </h3>
+        
+        <div class="flex items-center space-x-2">
+            <span class="text-sm text-gray-600">Filter:</span>
+            <select id="queueFilter" class="p-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="all">All Articles</option>
+                <option value="unverified">Unverified</option>
+                <option value="verified">Verified</option>
+                <option value="news">Confirmed News</option>
+                <option value="not-news">Not News</option>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Queue Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+            <p class="text-sm text-yellow-700">Pending</p>
+            <p id="pendingCount" class="text-xl font-bold text-yellow-800">0</p>
+        </div>
+        <div class="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+            <p class="text-sm text-green-700">Verified News</p>
+            <p id="verifiedNewsCount" class="text-xl font-bold text-green-800">0</p>
+        </div>
+        <div class="text-center p-3 bg-red-50 rounded-lg border border-red-200">
+            <p class="text-sm text-red-700">Not News</p>
+            <p id="notNewsCount" class="text-xl font-bold text-red-800">0</p>
+        </div>
+        <div class="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p class="text-sm text-blue-700">Total</p>
+            <p id="totalCount" class="text-xl font-bold text-blue-800">0</p>
+        </div>
+    </div>
+    
+    <!-- Article List -->
+    <div id="articleQueue" class="space-y-4 max-h-96 overflow-y-auto custom-scrollbar">
+        <!-- Articles will be populated here -->
+        <div id="emptyQueueMessage" class="text-center text-gray-500 py-8">
+            <i class="bi bi-inbox text-4xl mb-2 opacity-50"></i>
+            <p>No articles in queue yet.</p>
+            <p class="text-sm">Articles will appear here when fetched from tracked websites.</p>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    <div id="queuePagination" class="hidden mt-4 flex items-center justify-between">
+        <button 
+            id="prevPageBtn"
+            class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled
+        >
+            <i class="bi bi-chevron-left mr-1"></i>
+            Previous
+        </button>
+        
+        <span id="pageInfo" class="text-sm text-gray-600">Page 1 of 1</span>
+        
+        <button 
+            id="nextPageBtn"
+            class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled
+        >
+            Next
+            <i class="bi bi-chevron-right ml-1"></i>
+        </button>
+    </div>
+</div>

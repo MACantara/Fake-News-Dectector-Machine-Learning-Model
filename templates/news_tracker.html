@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}News Tracker - Advanced News Analyzer{% endblock %}
+
+{% block header_title %}News Article Tracker{% endblock %}
+{% block header_subtitle %}Track news websites and verify articles automatically{% endblock %}
+
+{% block content %}
+<!-- Header Section -->
+{% include 'components/news-tracker/header_section.html' %}
+
+<!-- Website Management Section -->
+{% include 'components/news-tracker/website_management.html' %}
+
+<!-- Auto-fetch Controls -->
+{% include 'components/news-tracker/auto_fetch_controls.html' %}
+
+<!-- Article Queue -->
+{% include 'components/news-tracker/article_queue.html' %}
+
+<!-- Verification Interface -->
+{% include 'components/news-tracker/verification_interface.html' %}
+
+<!-- Statistics Dashboard -->
+{% include 'components/news-tracker/statistics_dashboard.html' %}
+
+<!-- Loading Indicator -->
+{% include 'components/news-tracker/loading_indicator.html' %}
+
+<!-- Error Display -->
+{% include 'components/news-tracker/error_display.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/news-tracker.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,62 @@
+<!-- Auto-fetch Controls -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <h3 class="text-xl font-semibold text-gray-800 mb-4">
+        <i class="bi bi-gear"></i>
+        Auto-fetch Controls
+    </h3>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Auto-fetch Status -->
+        <div class="space-y-4">
+            <div class="flex items-center justify-between">
+                <label for="autoFetchToggle" class="text-sm font-medium text-gray-700">
+                    <i class="bi bi-robot mr-1"></i>
+                    Auto-fetch Articles
+                </label>
+                <div class="relative">
+                    <input type="checkbox" id="autoFetchToggle" class="sr-only">
+                    <div class="w-10 h-6 bg-gray-200 rounded-full shadow-inner toggle-bg"></div>
+                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow -left-1 -top-1 transition"></div>
+                </div>
+            </div>
+            
+            <div id="autoFetchStatus" class="p-3 bg-gray-50 rounded-lg">
+                <div class="flex items-center">
+                    <i class="bi bi-pause-circle text-gray-500 mr-2"></i>
+                    <span class="text-sm text-gray-600">Auto-fetch is currently disabled</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Manual Controls -->
+        <div class="space-y-4">
+            <div class="flex flex-col space-y-2">
+                <button 
+                    id="fetchNowBtn"
+                    class="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200"
+                    aria-label="Fetch articles now"
+                >
+                    <i class="bi bi-download mr-2"></i>
+                    Fetch All Articles Now
+                </button>
+                
+                <button 
+                    id="clearQueueBtn"
+                    class="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200"
+                    aria-label="Clear article queue"
+                >
+                    <i class="bi bi-trash mr-2"></i>
+                    Clear Queue
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Last Fetch Info -->
+    <div id="lastFetchInfo" class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div class="flex items-center">
+            <i class="bi bi-info-circle text-blue-600 mr-2"></i>
+            <span class="text-sm text-blue-800">Last fetch: Never</span>
+        </div>
+    </div>
+</div>

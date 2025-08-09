@@ -374,7 +374,7 @@ class FakeNewsDetector:
                         'feedback_samples': len(feedback_df),
                         'last_retrain': datetime.now().isoformat()
                     }
-                    joblib.dump(model_data, 'fake_news_model.pkl')
+                    joblib.dump(model_data, 'models/fake_news_model.pkl')
                     
                     # Mark feedback as used for training
                     for feedback in unprocessed_feedback:
@@ -469,7 +469,7 @@ class FakeNewsDetector:
                                 
                                 # Save updated model
                                 try:
-                                    with open('fake_news_model.pkl', 'wb') as f:
+                                    with open('models/fake_news_model.pkl', 'wb') as f:
                                         pickle.dump(self.model, f)
                                     print("✅ Model saved with new patterns")
                                 except Exception as save_error:
@@ -518,7 +518,7 @@ class FakeNewsDetector:
         """Get statistics about user feedback"""
         return get_feedback_stats(self.feedback_data, self.retrain_threshold)
     
-    def load_model(self, filepath='fake_news_model.pkl'):
+    def load_model(self, filepath='models/fake_news_model.pkl'):
         """Load a pre-trained model from disk with Git LFS verification"""
         try:
             print(f"Attempting to load model from: {filepath}")

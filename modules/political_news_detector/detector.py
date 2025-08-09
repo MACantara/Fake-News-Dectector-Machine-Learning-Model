@@ -222,7 +222,7 @@ class PoliticalNewsDetector:
         except Exception as e:
             return False, f"Error verifying file: {str(e)}"
 
-    def load_model(self, filepath='political_news_classifier.pkl'):
+    def load_model(self, filepath='models/political_news_classifier.pkl'):
         """Load a pre-trained model with Git LFS verification"""
         try:
             print(f"Attempting to load political model from: {filepath}")
@@ -324,7 +324,7 @@ class PoliticalNewsDetector:
             print(f"Error training political news model: {str(e)}")
             return None
     
-    def save_model(self, filepath='political_news_classifier.pkl'):
+    def save_model(self, filepath='models/political_news_classifier.pkl'):
         """Save the trained model to disk"""
         try:
             if not self.is_trained or self.model is None:

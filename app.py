@@ -175,10 +175,10 @@ class FakeNewsDetector:
             }
             
             # Save using joblib for better scikit-learn compatibility
-            joblib.dump(model_data, 'fake_news_model.pkl')
-            print(f"Model saved as 'fake_news_model.pkl' with accuracy: {accuracy:.4f}")
+            joblib.dump(model_data, 'models/fake_news_model.pkl')
+            print(f"Model saved as 'models/fake_news_model.pkl' with accuracy: {accuracy:.4f}")
     
-    def load_model(self, filepath='fake_news_model.pkl'):
+    def load_model(self, filepath='models/fake_news_model.pkl'):
         """Load a pre-trained model from disk"""
         try:
             model_data = joblib.load(filepath)

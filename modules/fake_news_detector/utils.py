@@ -69,8 +69,8 @@ def check_lfs_files():
     print("=== Checking Git LFS Files ===")
     
     lfs_files = [
-        'fake_news_model.pkl',
-        'political_news_classifier.pkl', 
+        'models/fake_news_model.pkl',
+        'models/political_news_classifier.pkl', 
         'datasets/WELFake_Dataset.csv',
         'datasets/News_Category_Dataset_v3.json'
     ]

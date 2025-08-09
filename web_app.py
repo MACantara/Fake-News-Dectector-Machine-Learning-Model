@@ -51,8 +51,8 @@ def health_check():
     try:
         # Check Git LFS files
         lfs_files = [
-            'fake_news_model.pkl',
-            'political_news_classifier.pkl', 
+            'models/fake_news_model.pkl',
+            'models/political_news_classifier.pkl', 
             'datasets/WELFake_Dataset.csv',
             'datasets/News_Category_Dataset_v3.json'
         ]
@@ -120,7 +120,7 @@ def initialize_models():
         
         # Initialize fake news detector
         print("\n=== Fake News Detection Model ===")
-        if detector.load_model('fake_news_model.pkl'):
+        if detector.load_model('models/fake_news_model.pkl'):
             print("✓ Fake news model loaded successfully.")
             if detector.accuracy:
                 print(f"  Model accuracy: {detector.accuracy:.1%}")
@@ -155,8 +155,8 @@ def initialize_models():
                         'accuracy': best_accuracy,
                         'timestamp': datetime.now().isoformat()
                     }
-                    joblib.dump(model_data, 'fake_news_model.pkl')
-                    print("✓ Fake news model saved as 'fake_news_model.pkl'")
+                    joblib.dump(model_data, 'models/fake_news_model.pkl')
+                    print("✓ Fake news model saved as 'models/fake_news_model.pkl'")
                     
                 except Exception as e:
                     print(f"✗ Error training model: {str(e)}")
@@ -167,11 +167,11 @@ def initialize_models():
         
         # Initialize political news classifier
         print("\n=== Political News Classification Model ===")
-        if political_detector.load_model('political_news_classifier.pkl'):
+        if political_detector.load_model('models/political_news_classifier.pkl'):
             print("✓ Political news classifier loaded successfully.")
         else:
             print("⚠ Political news classifier not found. Political classification will be unavailable.")
-            print("To enable political classification, ensure 'political_news_classifier.pkl' is properly downloaded from Git LFS.")
+            print("To enable political classification, ensure 'models/political_news_classifier.pkl' is properly downloaded from Git LFS.")
         
         # Final status
         print("\n=== Initialization Complete ===")

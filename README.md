@@ -138,9 +138,9 @@ The application performs the following text preprocessing steps:
 - **`train_model.py`** - Standalone script to train and save the model
 - **`templates/index.html`** - Web application frontend with feedback interface
 - **`requirements.txt`** - Python dependencies
-- **`WELFake_Dataset.csv`** - Training dataset (required)
-- **`fake_news_model.pkl`** - Saved trained model (created after training)
-- **`user_feedback.json`** - User feedback data for model improvement (created automatically)
+- **`datasets/WELFake_Dataset.csv`** - Training dataset (required)
+- **`models/fake_news_model.pkl`** - Saved trained model (created after training)
+- **`datasets/user_feedback.json`** - User feedback data for model improvement (created automatically)
 
 ## 🧠 Reinforcement Learning System
 
@@ -308,8 +308,8 @@ The web application is compatible with modern browsers that support:
 The application now uses model persistence for better performance:
 
 - **First Run**: Train the model using `train_model.py` or let `web_app.py` train automatically
-- **Subsequent Runs**: The saved model (`fake_news_model.pkl`) is loaded instantly
-- **Retraining**: Delete `fake_news_model.pkl` or run `train_model.py` again to retrain
+- **Subsequent Runs**: The saved model (`models/fake_news_model.pkl`) is loaded instantly
+- **Retraining**: Delete `models/fake_news_model.pkl` or run `train_model.py` again to retrain
 
 ## Future Enhancements
 

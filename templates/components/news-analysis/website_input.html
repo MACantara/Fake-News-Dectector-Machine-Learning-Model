@@ -1,0 +1,73 @@
+<!-- Website Input Component -->
+<div id="websiteInput" class="input-section hidden">
+    <h3 class="text-xl font-semibold text-gray-800 mb-4">
+        <i class="bi bi-globe2"></i>
+        Enter News Website URL
+    </h3>
+    <div class="relative mb-4">
+        <input 
+            type="url" 
+            id="websiteUrl" 
+            placeholder="https://example-news-site.com"
+            class="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            aria-label="News website URL input"
+        />
+        <i class="bi bi-globe2 absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+    </div>
+    
+    <!-- Website Crawling Options -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+            <label for="maxArticles" class="block text-sm font-medium text-gray-700 mb-2">
+                <i class="bi bi-list-ol mr-1"></i>
+                Max URLs to Extract
+            </label>
+            <select id="maxArticles" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="5">5 URLs</option>
+                <option value="10">10 URLs</option>
+                <option value="15">15 URLs</option>
+                <option value="20" selected>20 URLs</option>
+                <option value="30">30 URLs</option>
+                <option value="50">50 URLs</option>
+                <option value="100">100 URLs</option>
+                <option value="200">200 URLs</option>
+                <option value="500">500 URLs (Stress Test)</option>
+                <option value="1000">1000 URLs (Max Stress Test)</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+                <i class="bi bi-gear mr-1"></i>
+                Website Action
+            </label>
+            <div class="flex flex-wrap gap-2">
+                <button id="crawlOnlyBtn" class="crawl-mode-btn bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium focus-ring">
+                    <i class="bi bi-search mr-1"></i>
+                    Extract URLs
+                </button>
+                <button id="crawlAnalyzeBtn" class="crawl-mode-btn bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium focus-ring">
+                    <i class="bi bi-cpu mr-1"></i>
+                    Extract & Analyze
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex items-start">
+            <i class="bi bi-info-circle text-blue-600 text-lg mr-2 mt-0.5"></i>
+            <div class="text-sm text-blue-800">
+                <p class="font-medium mb-1">Simplified Website Link Extraction:</p>
+                <ul class="space-y-1 text-blue-700">
+                    <li>• <strong>🔗 URL Extraction:</strong> Extract all links from any website</li>
+                    <li>• <strong>Preview:</strong> View all URLs found on the website</li>
+                    <li>• <strong>No Filtering:</strong> All links are extracted without manual filtering</li>
+                    <li>• <strong>📋 Clean Output:</strong> Simple list of URLs for analysis</li>
+                    <li>• Works with any website (news sites, blogs, etc.)</li>
+                    <li>• <strong>⚠️ High link counts (500+):</strong> May take time to load</li>
+                    <li>• <strong>💻 Stress test mode:</strong> Extract 1000+ links to test limits</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>

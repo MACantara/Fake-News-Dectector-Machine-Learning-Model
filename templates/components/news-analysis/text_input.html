@@ -1,0 +1,23 @@
+<!-- Text Input Component -->
+<div id="textInput" class="input-section">
+    <h3 class="text-xl font-semibold text-gray-800 mb-4">
+        <i class="bi bi-pencil-square"></i>
+        Enter News Text
+    </h3>
+    <div class="tooltip">
+        <textarea 
+            id="newsText" 
+            placeholder="Paste the news article text here... (Tip: Use Ctrl+Enter to analyze quickly)"
+            class="w-full h-48 p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent custom-scrollbar"
+            aria-label="News article text input"
+        ></textarea>
+        <span class="tooltip-text">Enter at least 10 characters for analysis</span>
+    </div>
+    <div class="flex justify-between items-center mt-2">
+        <span class="text-xs text-gray-400">
+            <i class="bi bi-info-circle mr-1"></i>
+            Press Ctrl+Enter to analyze quickly
+        </span>
+        <span id="textCount" class="text-sm text-gray-500">0 characters</span>
+    </div>
+</div>

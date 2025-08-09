@@ -1,0 +1,59 @@
+<!-- Political Classification Results Component -->
+<div id="politicalResults" class="hidden mb-8">
+    <h4 class="text-xl font-semibold text-gray-800 mb-4">
+        <i class="bi bi-bank"></i>
+        Political Classification
+    </h4>
+    
+    <!-- Political Prediction Card -->
+    <div id="politicalPredictionCard" class="prediction-card result-card rounded-xl p-6 mb-6 border-l-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <h5 class="text-lg font-semibold mb-2">Classification</h5>
+                <p id="politicalPredictionText" class="text-2xl font-bold"></p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-600 mb-1">Confidence</p>
+                <p id="politicalConfidenceText" class="text-xl font-semibold"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Political Probability Bars -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-lg p-4 shadow-md result-card">
+            <div class="flex items-center justify-between mb-2">
+                <span class="font-medium text-blue-700">
+                    <i class="bi bi-bank"></i>
+                    Political
+                </span>
+                <span id="politicalPercentage" class="font-semibold text-blue-700"></span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+                <div id="politicalBar" class="progress-bar political h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg p-4 shadow-md result-card">
+            <div class="flex items-center justify-between mb-2">
+                <span class="font-medium text-gray-700">
+                    <i class="bi bi-newspaper"></i>
+                    Non-Political
+                </span>
+                <span id="nonPoliticalPercentage" class="font-semibold text-gray-700"></span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+                <div id="nonPoliticalBar" class="progress-bar non-political h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Political Reasoning -->
+    <div id="politicalReasoning" class="bg-gray-50 rounded-lg p-6 mb-6 result-card">
+        <h5 class="text-lg font-semibold text-gray-800 mb-3">
+            <i class="bi bi-lightbulb"></i>
+            Analysis Reasoning
+        </h5>
+        <div id="reasoningText" class="text-gray-700 whitespace-pre-line custom-scrollbar"></div>
+    </div>
+</div>

@@ -1,0 +1,16 @@
+<!-- Main Results Container Component -->
+<div id="results" class="hidden mt-8">
+    <h3 class="text-2xl font-semibold text-gray-800 mb-6">
+        <i class="bi bi-clipboard-data"></i>
+        Analysis Results
+    </h3>
+    
+    <!-- Include Fake News Results -->
+    {% include 'components/news-analysis/fake_news_results.html' %}
+    
+    <!-- Include Political Results -->
+    {% include 'components/news-analysis/political_results.html' %}
+    
+    <!-- Include Extracted Content -->
+    {% include 'components/news-analysis/extracted_content.html' %}
+</div>

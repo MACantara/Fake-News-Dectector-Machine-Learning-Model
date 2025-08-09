@@ -2,6 +2,12 @@
 News Tracker Routes
 Handles website tracking, article fetching, and verification
 Uses the sophisticated news crawler for intelligent article extraction
+
+INTEGRATION FEATURES:
+- Uses /crawl-website endpoint for intelligent article discovery
+- Sends verification feedback to /url-classifier-feedback endpoint
+- Stores crawler metadata (confidence, predictions) for feedback
+- Contributes to ML model improvement through user verifications
 """
 
 from flask import Blueprint, render_template, request, jsonify, session
@@ -14,6 +20,7 @@ import time
 import threading
 import hashlib
 import logging
+import uuid
 
 news_tracker_bp = Blueprint('news_tracker', __name__)
 
@@ -54,6 +61,9 @@ def init_news_tracker_db():
             is_news BOOLEAN,
             verified_at TIMESTAMP,
             user_session TEXT,
+            confidence REAL DEFAULT 0.0,
+            is_news_prediction BOOLEAN DEFAULT TRUE,
+            probability_news REAL DEFAULT 0.0,
             FOREIGN KEY (website_id) REFERENCES tracked_websites (id)
         )
     ''')
@@ -72,6 +82,36 @@ def init_news_tracker_db():
     
     conn.commit()
     conn.close()
+    
+    # Migrate existing databases to add new crawler metadata columns
+    migrate_database_schema()
+
+def migrate_database_schema():
+    """Add new columns to existing database if they don't exist"""
+    try:
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+        
+        # Check if new columns exist and add them if they don't
+        cursor.execute("PRAGMA table_info(article_queue)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        new_columns = [
+            ('confidence', 'REAL DEFAULT 0.0'),
+            ('is_news_prediction', 'BOOLEAN DEFAULT TRUE'),
+            ('probability_news', 'REAL DEFAULT 0.0')
+        ]
+        
+        for column_name, column_definition in new_columns:
+            if column_name not in columns:
+                cursor.execute(f'ALTER TABLE article_queue ADD COLUMN {column_name} {column_definition}')
+                logging.info(f"✅ Added column {column_name} to article_queue table")
+        
+        conn.commit()
+        conn.close()
+        
+    except Exception as e:
+        logging.error(f"❌ Database migration error: {str(e)}")
 
 # Initialize database on import
 init_news_tracker_db()
@@ -220,12 +260,13 @@ def fetch_articles():
         for article in all_articles:
             try:
                 cursor.execute('''
-                    INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     article['url'], article['title'], article['description'],
                     article['content'], article['site_name'], article['website_id'],
-                    user_session
+                    user_session, article.get('confidence', 0.0), 
+                    article.get('is_news_prediction', True), article.get('probability_news', 0.0)
                 ))
                 
                 new_articles.append({
@@ -264,6 +305,15 @@ def verify_article():
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
         
+        # Get article data including crawler metadata before updating
+        cursor.execute('''
+            SELECT url, confidence, is_news_prediction, probability_news
+            FROM article_queue 
+            WHERE id = ? AND user_session = ?
+        ''', (article_id, user_session))
+        
+        article_data = cursor.fetchone()
+        
         # Update article verification
         cursor.execute('''
             UPDATE article_queue 
@@ -274,22 +324,22 @@ def verify_article():
         conn.commit()
         conn.close()
         
-        # Also send to URL classifier for learning (if available)
-        try:
-            feedback_data = {
-                'url': url,
-                'classification': 'news' if is_news else 'not_news'
-            }
-            # This would integrate with your existing URL classifier
-            # requests.post('/api/url-classifier/feedback', json=feedback_data)
-        except Exception:
-            pass  # Ignore errors in feedback submission
+        # Send feedback to URL classifier for model improvement
+        send_url_classifier_feedback(
+            url=url,
+            article_data=article_data,
+            user_verification=is_news
+        )
         
         return jsonify({
             'success': True,
-            'message': f'Article marked as {"news" if is_news else "not news"}'
+            'message': f'Article marked as {"news" if is_news else "not news"}',
+            'url_classifier_feedback_sent': True  # Indicate feedback was attempted
         })
         
+    except Exception as e:
+        logging.error(f"Error verifying article: {str(e)}")
+        return jsonify({'success': False, 'error': 'Internal server error'})
     except Exception as e:
         logging.error(f"Error verifying article: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
@@ -429,6 +479,56 @@ def fetch_articles_from_crawler(url, site_name, website_id):
     
     return articles
 
+def send_url_classifier_feedback(url, article_data, user_verification):
+    """Send feedback to URL classifier to improve the model"""
+    try:
+        if not url or article_data is None:
+            logging.warning("⚠️ Incomplete data for URL classifier feedback")
+            return
+        
+        # Extract crawler prediction data
+        article_url = article_data[0] if article_data else url
+        confidence = article_data[1] if len(article_data) > 1 else None
+        predicted_is_news = article_data[2] if len(article_data) > 2 else True  # Default to True if no prediction
+        probability_news = article_data[3] if len(article_data) > 3 else None
+        
+        # Prepare feedback data for URL classifier
+        feedback_data = {
+            'url': article_url,
+            'predicted_label': bool(predicted_is_news),  # What the crawler/model predicted
+            'actual_label': 'news' if user_verification else 'non-news',  # What user verified
+            'user_confidence': 1.0,  # High confidence since it's human verification
+            'comment': f'News Tracker verification - Confidence: {confidence}, Prob: {probability_news}'
+        }
+        
+        # Send feedback to URL classifier endpoint
+        response = requests.post(
+            'http://127.0.0.1:5000/url-classifier-feedback',
+            json=feedback_data,
+            headers={'Content-Type': 'application/json'},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('success'):
+                logging.info(f"✅ URL classifier feedback sent successfully for {url}")
+                logging.info(f"📊 Model stats: {result.get('model_stats', {})}")
+                
+                # Check if retraining was triggered
+                if result.get('retraining_triggered'):
+                    logging.info("🚀 URL classifier retraining triggered by feedback!")
+            else:
+                logging.warning(f"⚠️ URL classifier feedback failed: {result.get('error')}")
+        else:
+            logging.error(f"❌ URL classifier feedback HTTP error: {response.status_code}")
+            
+    except requests.exceptions.RequestException as e:
+        logging.warning(f"⚠️ Network error sending URL classifier feedback: {str(e)}")
+    except Exception as e:
+        logging.warning(f"⚠️ Error sending URL classifier feedback: {str(e)}")
+    # Don't raise exceptions - feedback is optional and shouldn't break verification
+
 # Auto-fetch functionality (would run in background)
 def start_auto_fetch():
     """Start background auto-fetch process"""
@@ -462,11 +562,13 @@ def start_auto_fetch():
                         for article in articles:
                             try:
                                 cursor.execute('''
-                                    INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                    INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 ''', (
                                     article['url'], article['title'], article['description'],
-                                    article['content'], article['site_name'], article['website_id'], 'default'
+                                    article['content'], article['site_name'], article['website_id'], 'default',
+                                    article.get('confidence', 0.0), article.get('is_news_prediction', True), 
+                                    article.get('probability_news', 0.0)
                                 ))
                             except sqlite3.IntegrityError:
                                 pass  # Article already exists

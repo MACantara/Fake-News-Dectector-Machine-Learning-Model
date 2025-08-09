@@ -10,6 +10,8 @@ class NewsTracker {
         this.currentPage = 1;
         this.itemsPerPage = 10;
         this.autoFetchInterval = null;
+        this.autoFetchEnabled = false;
+        this.autoFetchIntervalMinutes = 30; // Default 30 minutes
         this.selectedArticles = new Set(); // Track selected articles
         
         this.init();
@@ -25,6 +27,11 @@ class NewsTracker {
         // Initialize selection interface
         this.updateSelectionCount();
         this.updateBatchActionButtons();
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            this.stopAutoFetch();
+        });
     }
     
     bindEvents() {
@@ -124,6 +131,12 @@ class NewsTracker {
                 intervalSelect.value = '60';
                 
                 this.showSuccess(`Successfully added ${name} to tracking list`);
+                
+                // Start auto-fetch if enabled and this is the first website
+                if (this.autoFetchEnabled && this.trackedWebsites.length === 1) {
+                    this.startAutoFetch();
+                    this.updateAutoFetchStatus();
+                }
             } else {
                 this.showError(data.error || 'Failed to add website');
             }
@@ -152,6 +165,12 @@ class NewsTracker {
                 this.renderTrackedWebsites();
                 this.updateCounts();
                 this.showSuccess('Website removed from tracking');
+                
+                // Stop auto-fetch if no websites remain
+                if (this.trackedWebsites.length === 0 && this.autoFetchEnabled) {
+                    this.stopAutoFetch();
+                    this.updateAutoFetchStatus();
+                }
             } else {
                 this.showError(data.error || 'Failed to remove website');
             }
@@ -658,20 +677,149 @@ class NewsTracker {
     }
     
     setupAutoFetch() {
-        // Setup auto-fetch intervals
+        // Load auto-fetch preferences from localStorage
+        const autoFetchEnabled = localStorage.getItem('newsTracker.autoFetchEnabled') === 'true';
+        const autoFetchInterval = parseInt(localStorage.getItem('newsTracker.autoFetchInterval')) || 30;
+        
+        this.autoFetchEnabled = autoFetchEnabled;
+        this.autoFetchIntervalMinutes = autoFetchInterval;
+        
+        // Update UI to reflect current state
+        const toggle = document.getElementById('autoFetchToggle');
+        if (toggle) {
+            toggle.checked = autoFetchEnabled;
+            this.updateToggleAppearance(toggle, autoFetchEnabled);
+        }
+        
+        this.updateAutoFetchStatus();
+        
+        // Start auto-fetch if enabled
+        if (autoFetchEnabled && this.trackedWebsites.length > 0) {
+            this.startAutoFetch();
+        }
     }
     
     toggleAutoFetch(enabled) {
-        // Toggle auto-fetch functionality
+        this.autoFetchEnabled = enabled;
+        
+        // Save preference to localStorage
+        localStorage.setItem('newsTracker.autoFetchEnabled', enabled.toString());
+        
+        // Update toggle appearance
+        const toggle = document.getElementById('autoFetchToggle');
+        if (toggle) {
+            this.updateToggleAppearance(toggle, enabled);
+        }
+        
+        this.updateAutoFetchStatus();
+        
+        if (enabled) {
+            if (this.trackedWebsites.length === 0) {
+                this.showError('Add websites to track before enabling auto-fetch');
+                toggle.checked = false;
+                this.autoFetchEnabled = false;
+                localStorage.setItem('newsTracker.autoFetchEnabled', 'false');
+                this.updateToggleAppearance(toggle, false);
+                this.updateAutoFetchStatus();
+                return;
+            }
+            this.startAutoFetch();
+            this.showSuccess(`Auto-fetch enabled. Articles will be fetched every ${this.autoFetchIntervalMinutes} minutes.`);
+        } else {
+            this.stopAutoFetch();
+            this.showInfo('Auto-fetch disabled');
+        }
+    }
+    
+    startAutoFetch() {
+        // Clear any existing interval
+        this.stopAutoFetch();
+        
+        // Set up new interval
+        const intervalMs = this.autoFetchIntervalMinutes * 60 * 1000;
+        this.autoFetchInterval = setInterval(() => {
+            this.autoFetchArticles();
+        }, intervalMs);
+        
+        console.log(`Auto-fetch started with ${this.autoFetchIntervalMinutes} minute interval`);
+    }
+    
+    stopAutoFetch() {
+        if (this.autoFetchInterval) {
+            clearInterval(this.autoFetchInterval);
+            this.autoFetchInterval = null;
+        }
+        console.log('Auto-fetch stopped');
+    }
+    
+    async autoFetchArticles() {
+        try {
+            console.log('Auto-fetch: Fetching articles...');
+            await this.fetchAllArticles();
+        } catch (error) {
+            console.error('Auto-fetch error:', error);
+            // Don't show error to user for auto-fetch to avoid spam
+        }
+    }
+    
+    updateToggleAppearance(toggle, enabled) {
+        const toggleBg = toggle.nextElementSibling;
+        const toggleDot = toggleBg?.nextElementSibling;
+        
+        if (enabled) {
+            toggleBg?.classList.remove('bg-gray-200');
+            toggleBg?.classList.add('bg-green-400');
+            toggleDot?.classList.remove('-left-1');
+            toggleDot?.classList.add('translate-x-full');
+        } else {
+            toggleBg?.classList.remove('bg-green-400');
+            toggleBg?.classList.add('bg-gray-200');
+            toggleDot?.classList.remove('translate-x-full');
+            toggleDot?.classList.add('-left-1');
+        }
+    }
+    
+    updateAutoFetchStatus() {
+        const statusElement = document.getElementById('autoFetchStatus');
+        if (!statusElement) return;
+        
+        if (this.autoFetchEnabled) {
+            const nextFetch = new Date(Date.now() + (this.autoFetchIntervalMinutes * 60 * 1000));
+            statusElement.innerHTML = `
+                <div class="flex items-center">
+                    <i class="bi bi-play-circle text-green-500 mr-2"></i>
+                    <span class="text-sm text-green-700">
+                        Auto-fetch is running every ${this.autoFetchIntervalMinutes} minutes
+                        <br>
+                        <span class="text-xs">Next fetch: ${nextFetch.toLocaleTimeString()}</span>
+                    </span>
+                </div>
+            `;
+        } else {
+            statusElement.innerHTML = `
+                <div class="flex items-center">
+                    <i class="bi bi-pause-circle text-gray-500 mr-2"></i>
+                    <span class="text-sm text-gray-600">Auto-fetch is currently disabled</span>
+                </div>
+            `;
+        }
     }
     
     updateLastFetchInfo() {
-        document.getElementById('lastFetchInfo').innerHTML = `
-            <div class="flex items-center">
-                <i class="bi bi-info-circle text-blue-600 mr-2"></i>
-                <span class="text-sm text-blue-800">Last fetch: ${new Date().toLocaleString()}</span>
-            </div>
-        `;
+        const lastFetchInfo = document.getElementById('lastFetchInfo');
+        if (lastFetchInfo) {
+            lastFetchInfo.innerHTML = `
+                <div class="flex items-center">
+                    <i class="bi bi-info-circle text-blue-600 mr-2"></i>
+                    <span class="text-sm text-blue-800">Last fetch: ${new Date().toLocaleString()}</span>
+                </div>
+            `;
+        }
+        
+        // Update auto-fetch status to show next fetch time
+        if (this.autoFetchEnabled) {
+            this.updateAutoFetchStatus();
+        }
     }
     
     // Additional methods for missing functionality

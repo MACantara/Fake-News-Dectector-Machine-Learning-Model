@@ -16,6 +16,7 @@ from routes.philippine_news_search_routes import philippine_news_bp, init_philip
 from routes.political_news_routes import political_news_bp, init_political_detector
 from routes.fake_news_routes import fake_news_bp, init_fake_news_detector
 from routes.url_classifier_routes import url_classifier_bp, init_url_classifier
+from routes.news_tracker_routes import news_tracker_bp
 
 # Import utility functions from political news detector
 from modules.political_news_detector.utils import extract_political_content_from_url
@@ -44,6 +45,16 @@ def news_analysis():
         # Redirect invalid URLs back to the main page
         return redirect(url_for('index'))
     return render_template('news_analysis.html', prefill_url=url)
+
+@app.route('/url-classifier')
+def url_classifier():
+    """URL classifier page"""
+    return render_template('url_classifier.html')
+
+@app.route('/news-tracker')
+def news_tracker_page():
+    """News tracker page"""
+    return render_template('news_tracker.html')
 
 @app.route('/health')
 def health_check():
@@ -205,6 +216,7 @@ app.register_blueprint(philippine_news_bp)
 app.register_blueprint(political_news_bp)
 app.register_blueprint(fake_news_bp)
 app.register_blueprint(url_classifier_bp)
+app.register_blueprint(news_tracker_bp)
 
 if __name__ == '__main__':
     # Initialize models in a separate thread to avoid blocking

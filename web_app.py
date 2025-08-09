@@ -40,6 +40,8 @@ from fuzzywuzzy import fuzz, process
 from url_news_classifier import URLNewsClassifier
 from routes.news_crawler_routes import news_crawler_bp, init_news_crawler
 from routes.philippine_news_search_routes import philippine_news_bp, init_philippine_search_index
+from routes.political_news_routes import political_news_bp, init_political_detector
+from modules.political_news_detector import PoliticalNewsDetector, extract_political_content_from_url
 warnings.filterwarnings('ignore')
 
 # Download required NLTK data
@@ -844,262 +846,6 @@ class FakeNewsDetector:
                 'error': str(e)
             }
 
-class PoliticalNewsDetector:
-    def __init__(self):
-        self.vectorizer = None
-        self.model = None
-        self.stemmer = PorterStemmer()
-        self.lemmatizer = WordNetLemmatizer()
-        self.stop_words = set(stopwords.words('english'))
-        self.is_trained = False
-        self.accuracy = None
-        self.political_categories = {
-            'POLITICS', 'U.S. NEWS', 'WORLD NEWS', 'CRIME'
-        }
-        self.political_keywords = {
-            'government', 'politics', 'political', 'election', 'vote', 'voting', 'candidate',
-            'president', 'senator', 'congress', 'parliament', 'minister', 'governor',
-            'democrat', 'republican', 'party', 'campaign', 'policy', 'legislation',
-            'bill', 'law', 'constitution', 'supreme court', 'federal', 'state',
-            'mayor', 'city council', 'constituency', 'ballot', 'primary', 'debate',
-            'administration', 'cabinet', 'house', 'senate', 'representative',
-            'diplomatic', 'foreign policy', 'domestic policy', 'budget', 'tax',
-            'reform', 'regulation', 'executive', 'judicial', 'legislative',
-            'courthouse', 'trial', 'lawsuit', 'justice', 'attorney general'
-        }
-    
-    def preprocess_text(self, text):
-        """Advanced text preprocessing for political news classification"""
-        if pd.isna(text) or text is None:
-            return ""
-        
-        # Convert to lowercase
-        text = text.lower()
-        
-        # Remove URLs
-        text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
-        
-        # Remove email addresses
-        text = re.sub(r'\S+@\S+', '', text)
-        
-        # Remove special characters but keep apostrophes for contractions
-        text = re.sub(r'[^a-zA-Z\s\']', '', text)
-        
-        # Handle contractions
-        contractions = {
-            "won't": "will not", "can't": "cannot", "n't": " not",
-            "'re": " are", "'ve": " have", "'ll": " will",
-            "'d": " would", "'m": " am"
-        }
-        for contraction, expansion in contractions.items():
-            text = text.replace(contraction, expansion)
-        
-        # Remove extra whitespace
-        text = ' '.join(text.split())
-        
-        # Tokenize
-        words = word_tokenize(text)
-        
-        # Remove stopwords and apply lemmatization
-        processed_words = []
-        for word in words:
-            if word not in self.stop_words and len(word) > 2:
-                lemmatized = self.lemmatizer.lemmatize(word)
-                processed_words.append(lemmatized)
-        
-        return ' '.join(processed_words)
-    
-    def extract_political_features(self, text):
-        """Extract political-specific features from text"""
-        features = {}
-        text_lower = text.lower()
-        
-        # Count political keywords
-        political_count = sum(1 for keyword in self.political_keywords if keyword in text_lower)
-        features['political_keyword_count'] = political_count
-        features['political_keyword_ratio'] = political_count / max(len(text.split()), 1)
-        
-        # Check for political entities
-        political_patterns = [
-            r'\b(?:president|senator|governor|mayor|minister)\s+\w+',
-            r'\b(?:mr\.|ms\.|mrs\.)\s+\w+',
-            r'\b\w+\s+(?:administration|campaign|party)',
-            r'\b(?:white house|congress|parliament|senate|house of representatives)'
-        ]
-        
-        political_entities = 0
-        for pattern in political_patterns:
-            political_entities += len(re.findall(pattern, text_lower))
-        
-        features['political_entities'] = political_entities
-        
-        return features
-    
-    def predict(self, text):
-        """Predict if text is political news"""
-        if not self.is_trained or self.model is None:
-            raise ValueError("Model not trained yet!")
-        
-        processed_text = self.preprocess_text(text)
-        if not processed_text:
-            return {
-                'prediction': 'Unknown',
-                'confidence': 0.5,
-                'probabilities': {'Non-Political': 0.5, 'Political': 0.5},
-                'reasoning': 'Unable to analyze: Text is empty after preprocessing',
-                'political_features': {},
-                'error': 'Text is empty after preprocessing'
-            }
-        
-        try:
-            prediction = self.model.predict([processed_text])[0]
-            probability = self.model.predict_proba([processed_text])[0]
-            
-            prediction_label = 'Political' if prediction == 1 else 'Non-Political'
-            
-            # Extract reasoning and features
-            reasoning = self.extract_reasoning(text, prediction)
-            political_features = self.extract_political_features(text)
-            
-            return {
-                'prediction': prediction_label,
-                'confidence': float(max(probability)),
-                'probabilities': {
-                    'Non-Political': float(probability[0]),
-                    'Political': float(probability[1])
-                },
-                'reasoning': reasoning,
-                'political_features': political_features
-            }
-        except Exception as e:
-            return {
-                'prediction': 'Unknown',
-                'confidence': 0.5,
-                'probabilities': {'Non-Political': 0.5, 'Political': 0.5},
-                'reasoning': f'Error during prediction: {str(e)}',
-                'political_features': {},
-                'error': str(e)
-            }
-    
-    def extract_reasoning(self, text, prediction):
-        """Extract reasoning for the classification"""
-        features = self.extract_political_features(text)
-        text_lower = text.lower()
-        
-        reasoning_parts = []
-        
-        if prediction == 1:  # Political
-            reasoning_parts.append(f"✓ Classified as POLITICAL news")
-            
-            if features['political_keyword_count'] > 0:
-                reasoning_parts.append(f"• Found {features['political_keyword_count']} political keywords")
-            
-            if features['political_entities'] > 0:
-                reasoning_parts.append(f"• Detected {features['political_entities']} political entities/references")
-            
-            # Check for specific political indicators
-            if any(term in text_lower for term in ['election', 'vote', 'campaign']):
-                reasoning_parts.append("• Contains election/voting related content")
-            
-            if any(term in text_lower for term in ['government', 'congress', 'senate', 'president']):
-                reasoning_parts.append("• References government institutions or officials")
-            
-            if any(term in text_lower for term in ['policy', 'legislation', 'bill', 'law']):
-                reasoning_parts.append("• Discusses policy or legislative matters")
-        
-        else:  # Non-Political
-            reasoning_parts.append(f"✓ Classified as NON-POLITICAL news")
-            
-            if features['political_keyword_count'] == 0:
-                reasoning_parts.append("• No political keywords detected")
-            else:
-                reasoning_parts.append(f"• Limited political content ({features['political_keyword_count']} keywords)")
-            
-            if features['political_entities'] == 0:
-                reasoning_parts.append("• No political entities or references found")
-            
-            # Check for non-political indicators
-            non_political_terms = ['sports', 'entertainment', 'technology', 'science', 'health', 'business']
-            found_terms = [term for term in non_political_terms if term in text_lower]
-            if found_terms:
-                reasoning_parts.append(f"• Contains {', '.join(found_terms)} related content")
-        
-        return '\n'.join(reasoning_parts)
-    
-    def verify_lfs_file(self, filepath):
-        """Verify if a file is properly downloaded from Git LFS"""
-        try:
-            if not os.path.exists(filepath):
-                return False, f"File {filepath} does not exist"
-            
-            # Check file size - LFS pointer files are very small (~100 bytes)
-            file_size = os.path.getsize(filepath)
-            if file_size < 1000:  # Less than 1KB might be an LFS pointer
-                print(f"Warning: {filepath} is very small ({file_size} bytes), might be an LFS pointer file")
-                return False, f"File appears to be an LFS pointer (size: {file_size} bytes)"
-            
-            # Try to read the beginning of the file to check for LFS pointer content
-            with open(filepath, 'rb') as f:
-                first_bytes = f.read(100)
-                if b'version https://git-lfs.github.com/spec/' in first_bytes:
-                    return False, "File is a Git LFS pointer, not the actual file"
-            
-            print(f"✓ {filepath} verified as proper file (size: {file_size} bytes)")
-            return True, "File verified successfully"
-            
-        except Exception as e:
-            return False, f"Error verifying file: {str(e)}"
-
-    def load_model(self, filepath='political_news_classifier.pkl'):
-        """Load a pre-trained model with Git LFS verification"""
-        try:
-            print(f"Attempting to load political model from: {filepath}")
-            
-            # First verify the file is properly downloaded from Git LFS
-            is_valid, message = self.verify_lfs_file(filepath)
-            if not is_valid:
-                print(f"LFS verification failed: {message}")
-                
-                # Try alternative locations for the model file
-                alternative_paths = [
-                    os.path.join(os.getcwd(), filepath),
-                    os.path.join(os.path.dirname(__file__), filepath),
-                    os.path.join('/tmp', filepath),
-                ]
-                
-                for alt_path in alternative_paths:
-                    if os.path.exists(alt_path):
-                        print(f"Trying alternative path: {alt_path}")
-                        is_valid, message = self.verify_lfs_file(alt_path)
-                        if is_valid:
-                            filepath = alt_path
-                            break
-                
-                if not is_valid:
-                    print(f"Political news model file '{filepath}' not found or not properly downloaded from Git LFS.")
-                    return False
-            
-            print(f"Loading political model from verified file: {filepath}")
-            model_data = joblib.load(filepath)
-            
-            self.model = model_data['model']
-            self.stemmer = model_data.get('stemmer', PorterStemmer())
-            self.lemmatizer = model_data.get('lemmatizer', WordNetLemmatizer())
-            self.stop_words = model_data.get('stop_words', set(stopwords.words('english')))
-            self.accuracy = model_data.get('accuracy', None)
-            self.is_trained = True
-            
-            print(f"✓ Political news model loaded successfully")
-            if self.accuracy:
-                print(f"  Model accuracy: {self.accuracy:.4f}")
-            
-            return True
-            
-        except Exception as e:
-            print(f"Error loading political news model: {str(e)}")
-            print(f"Error type: {type(e).__name__}")
-            return False
-
 # Initialize the detectors and search index
 detector = FakeNewsDetector()
 political_detector = PoliticalNewsDetector()
@@ -1111,67 +857,16 @@ init_news_crawler(url_news_classifier)
 # Initialize Philippine news search routes
 init_philippine_search_index()
 
+# Initialize political news detector routes
+init_political_detector(political_detector)
+
 # Register the blueprints
 app.register_blueprint(news_crawler_bp)
 app.register_blueprint(philippine_news_bp)
+app.register_blueprint(political_news_bp)
 
 # Set URL classifier reference in fake news detector for retraining purposes
 detector.url_classifier = url_news_classifier
-
-def extract_article_content(url):
-    """Extract article content from URL"""
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Remove script and style elements
-        for script in soup(["script", "style"]):
-            script.decompose()
-        
-        # Try to find article content
-        article_selectors = [
-            'article',
-            '.article-content',
-            '.post-content',
-            '.content',
-            '.story-body',
-            'main',
-            '.entry-content'
-        ]
-        
-        content = ""
-        title = ""
-        
-        # Get title
-        title_tag = soup.find('title')
-        if title_tag:
-            title = title_tag.get_text().strip()
-        
-        # Try to find article content
-        for selector in article_selectors:
-            elements = soup.select(selector)
-            if elements:
-                content = ' '.join([elem.get_text().strip() for elem in elements])
-                break
-        
-        # If no specific article content found, get all paragraphs
-        if not content:
-            paragraphs = soup.find_all('p')
-            content = ' '.join([p.get_text().strip() for p in paragraphs])
-        
-        return {
-            'title': title,
-            'content': content,
-            'combined': f"{title} {content}".strip()
-        }
-    
-    except Exception as e:
-        return {'error': f"Failed to extract content: {str(e)}"}
 
 @app.route('/')
 def index():
@@ -1241,8 +936,8 @@ def predict():
                     'error': 'No URL provided'
                 }), 400
             
-            # Extract content from URL
-            article_data = extract_article_content(url)
+            # Extract content from URL using the political news detector's extraction function
+            article_data = extract_political_content_from_url(url)
             
             if 'error' in article_data:
                 return jsonify({
@@ -1250,7 +945,7 @@ def predict():
                     'error': article_data['error']
                 }), 400
             
-            combined_text = article_data['combined']
+            combined_text = article_data['combined_text']
             if not combined_text.strip():
                 return jsonify({
                     'success': False,
@@ -1287,10 +982,14 @@ def predict():
             result = {
                 'fake_news': fake_result,
                 'extracted_content': {
-                    'title': article_data['title'],
+                    'title': article_data.get('title', ''),
                     'content_preview': combined_text[:500] + '...' if len(combined_text) > 500 else combined_text,
                     'combined': combined_text,
-                    'word_count': len(combined_text.split()) if combined_text else 0
+                    'word_count': len(combined_text.split()) if combined_text else 0,
+                    'author': article_data.get('author', ''),
+                    'publish_date': article_data.get('publish_date', ''),
+                    'political_score': article_data.get('political_score', 0),
+                    'is_political_source': article_data.get('is_political_source', False)
                 },
                 'indexing_result': indexing_result  # Include indexing status in response
             }

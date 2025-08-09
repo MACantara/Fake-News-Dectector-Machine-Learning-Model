@@ -341,7 +341,10 @@ class URLClassifier {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                }
+                },
+                body: JSON.stringify({
+                    force_retrain: true
+                })
             });
             
             const data = await response.json();

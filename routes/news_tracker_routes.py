@@ -10,6 +10,10 @@ INTEGRATION FEATURES:
 - Contributes to ML model improvement through user verifications
 """
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from flask import Blueprint, render_template, request, jsonify, session
 import json
 import sqlite3
@@ -21,6 +25,8 @@ import threading
 import hashlib
 import logging
 import uuid
+from modules.url_news_classifier import URLNewsClassifier
+from routes.url_classifier_routes import get_url_classifier
 
 news_tracker_bp = Blueprint('news_tracker', __name__)
 

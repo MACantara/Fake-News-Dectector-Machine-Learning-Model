@@ -11,7 +11,7 @@ from modules.political_news_detector import PoliticalNewsDetector
 from modules.philippine_news_search_index import PhilippineNewsSearchIndex
 
 # Import routes
-from routes.news_crawler_routes import news_crawler_bp
+from routes.news_crawler_routes import news_crawler_bp, init_news_crawler
 from routes.philippine_news_search_routes import philippine_news_bp, init_philippine_search_index
 from routes.political_news_routes import political_news_bp, init_political_detector
 from routes.fake_news_routes import fake_news_bp, init_fake_news_detector
@@ -197,6 +197,7 @@ philippine_search_index = init_philippine_search_index()
 init_political_detector(political_detector)
 init_fake_news_detector(detector, political_detector, philippine_search_index)
 url_classifier = init_url_classifier()
+init_news_crawler(url_classifier)  # Initialize news crawler with URL classifier
 
 # Register the blueprints
 app.register_blueprint(news_crawler_bp)

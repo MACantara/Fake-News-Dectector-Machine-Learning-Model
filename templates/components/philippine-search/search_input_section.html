@@ -1,0 +1,31 @@
+<!-- Search Input Section -->
+<div class="mb-8">
+    <h3 class="text-xl font-semibold text-gray-800 mb-4">
+        <i class="bi bi-search"></i>
+        Search Philippine News Database
+    </h3>
+    
+    <!-- Search Bar -->
+    <div class="relative mb-4">
+        <input 
+            type="text" 
+            id="searchQuery" 
+            placeholder="Search for Philippine news articles..."
+            class="w-full p-4 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            aria-label="Philippine news search query"
+        />
+        <i class="bi bi-search absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+    </div>
+    
+    <!-- Search Filters -->
+    {% include 'components/philippine-search/search_filters.html' %}
+    
+    <!-- Search Actions -->
+    {% include 'components/philippine-search/search_actions.html' %}
+    
+    <!-- Add Article to Index Modal -->
+    {% include 'components/philippine-search/add_article_modal.html' %}
+    
+    <!-- Search Info -->
+    {% include 'components/philippine-search/search_info.html' %}
+</div>

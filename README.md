@@ -40,7 +40,7 @@ A machine learning-powered web application that can detect fake news from text i
 
 4. **Train the model** (recommended):
    ```bash
-   python train_model.py
+   python train_fake_news_model.py
    ```
    This will train the model once and save it for reuse. The web app will load much faster!
 
@@ -50,12 +50,12 @@ A machine learning-powered web application that can detect fake news from text i
 
 1. **Train the model first** (one-time setup):
    ```bash
-   python train_model.py
+   python train_fake_news_model.py
    ```
 
 2. **Start the web application**:
    ```bash
-   python web_app.py
+   python app.py
    ```
 
 3. **Open your browser** and navigate to:
@@ -66,11 +66,11 @@ A machine learning-powered web application that can detect fake news from text i
 ### Running the Web Application
 
 **Option 1: With Pre-trained Model (Fast)**
-- Run `train_model.py` first to create the model file
-- Then run `web_app.py` - it will load instantly!
+- Run `train_fake_news_model.py` first to create the model file
+- Then run `app.py` - it will load instantly!
 
 **Option 2: Auto-training (Slower)**
-- Run `web_app.py` directly
+- Run `app.py` directly
 - The app will train the model automatically on first run
 - This takes 2-5 minutes but only happens once
 
@@ -78,7 +78,7 @@ A machine learning-powered web application that can detect fake news from text i
 
 To run the original command-line version:
 ```bash
-python app.py
+python train_fake_news_model.py
 ```
 
 ## How to Use the Web Interface
@@ -133,9 +133,8 @@ The application performs the following text preprocessing steps:
 
 ## Project Files
 
-- **`app.py`** - Original command-line ML model with training and evaluation
-- **`web_app.py`** - Flask web application backend with reinforcement learning
-- **`train_model.py`** - Standalone script to train and save the model
+- **`train_fake_news_model.py`** - Standalone script to train and save the fake news detection model
+- **`app.py`** - Flask web application backend with reinforcement learning
 - **`templates/index.html`** - Web application frontend with feedback interface
 - **`requirements.txt`** - Python dependencies
 - **`datasets/WELFake_Dataset.csv`** - Training dataset (required)
@@ -290,14 +289,14 @@ The web application is compatible with modern browsers that support:
    nltk.download('stopwords')
    ```
 
-4. **Port already in use**: If port 5000 is busy, you can change it in `web_app.py`:
+4. **Port already in use**: If port 5000 is busy, you can change it in `app.py`:
    ```python
    app.run(debug=True, port=5001)  # Change to different port
    ```
 
 ## Performance Notes
 
-- **First-time Setup**: Run `train_model.py` once (2-5 minutes) to create the model file
+- **First-time Setup**: Run `train_fake_news_model.py` once (2-5 minutes) to create the model file
 - **Web App Startup**: Instant if model exists, 2-5 minutes if training needed
 - **Predictions**: Typically very fast (< 1 second)
 - **URL Content Extraction**: 3-10 seconds depending on the website
@@ -307,9 +306,9 @@ The web application is compatible with modern browsers that support:
 
 The application now uses model persistence for better performance:
 
-- **First Run**: Train the model using `train_model.py` or let `web_app.py` train automatically
+- **First Run**: Train the model using `train_fake_news_model.py` or let `app.py` train automatically
 - **Subsequent Runs**: The saved model (`models/fake_news_model.pkl`) is loaded instantly
-- **Retraining**: Delete `models/fake_news_model.pkl` or run `train_model.py` again to retrain
+- **Retraining**: Delete `models/fake_news_model.pkl` or run `train_fake_news_model.py` again to retrain
 
 ## Future Enhancements
 

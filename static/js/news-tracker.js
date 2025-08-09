@@ -12,6 +12,12 @@ class NewsTracker {
         this.autoFetchInterval = null;
         this.autoFetchEnabled = false;
         this.autoFetchIntervalMinutes = 30; // Default 30 minutes
+        this.autoFetchStats = {
+            totalRuns: 0,
+            articlesFound: 0,
+            lastRun: null,
+            nextRun: null
+        };
         this.selectedArticles = new Set(); // Track selected articles
         
         this.init();
@@ -45,8 +51,14 @@ class NewsTracker {
         document.getElementById('autoFetchToggle').addEventListener('change', (e) => {
             this.toggleAutoFetch(e.target.checked);
         });
+        document.getElementById('autoFetchInterval').addEventListener('change', (e) => {
+            this.updateAutoFetchInterval(parseInt(e.target.value));
+        });
         document.getElementById('fetchNowBtn').addEventListener('click', () => this.fetchAllArticles());
         document.getElementById('clearQueueBtn').addEventListener('click', () => this.clearQueue());
+        document.getElementById('testAutoFetchBtn').addEventListener('click', () => this.testAutoFetch());
+        document.getElementById('enableAllAutoFetchBtn').addEventListener('click', () => this.quickSetupAutoFetch());
+        document.getElementById('resetAutoFetchBtn').addEventListener('click', () => this.resetAutoFetchSettings());
         
         // Queue management
         document.getElementById('queueFilter').addEventListener('change', (e) => {
@@ -680,18 +692,27 @@ class NewsTracker {
         // Load auto-fetch preferences from localStorage
         const autoFetchEnabled = localStorage.getItem('newsTracker.autoFetchEnabled') === 'true';
         const autoFetchInterval = parseInt(localStorage.getItem('newsTracker.autoFetchInterval')) || 30;
+        const autoFetchStats = JSON.parse(localStorage.getItem('newsTracker.autoFetchStats') || '{"totalRuns":0,"articlesFound":0,"lastRun":null,"nextRun":null}');
         
         this.autoFetchEnabled = autoFetchEnabled;
         this.autoFetchIntervalMinutes = autoFetchInterval;
+        this.autoFetchStats = autoFetchStats;
         
         // Update UI to reflect current state
         const toggle = document.getElementById('autoFetchToggle');
+        const intervalSelect = document.getElementById('autoFetchInterval');
+        
         if (toggle) {
             toggle.checked = autoFetchEnabled;
             this.updateToggleAppearance(toggle, autoFetchEnabled);
         }
         
+        if (intervalSelect) {
+            intervalSelect.value = autoFetchInterval.toString();
+        }
+        
         this.updateAutoFetchStatus();
+        this.updateAutoFetchStats();
         
         // Start auto-fetch if enabled
         if (autoFetchEnabled && this.trackedWebsites.length > 0) {
@@ -755,7 +776,18 @@ class NewsTracker {
     async autoFetchArticles() {
         try {
             console.log('Auto-fetch: Fetching articles...');
+            const initialCount = this.articleQueue.length;
             await this.fetchAllArticles();
+            const newCount = this.articleQueue.length;
+            const foundArticles = newCount - initialCount;
+            
+            // Update stats
+            this.autoFetchStats.totalRuns++;
+            this.autoFetchStats.articlesFound += foundArticles;
+            localStorage.setItem('newsTracker.autoFetchStats', JSON.stringify(this.autoFetchStats));
+            this.updateAutoFetchStats();
+            
+            console.log(`Auto-fetch completed: Found ${foundArticles} new articles`);
         } catch (error) {
             console.error('Auto-fetch error:', error);
             // Don't show error to user for auto-fetch to avoid spam
@@ -808,18 +840,170 @@ class NewsTracker {
     updateLastFetchInfo() {
         const lastFetchInfo = document.getElementById('lastFetchInfo');
         if (lastFetchInfo) {
+            const now = new Date();
             lastFetchInfo.innerHTML = `
-                <div class="flex items-center">
-                    <i class="bi bi-info-circle text-blue-600 mr-2"></i>
-                    <span class="text-sm text-blue-800">Last fetch: ${new Date().toLocaleString()}</span>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="bi bi-info-circle text-blue-600 mr-2"></i>
+                        <span class="text-sm text-blue-800">Last fetch: ${now.toLocaleString()}</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs text-blue-600">
+                            <i class="bi bi-clock mr-1"></i>
+                            <span id="timeSinceLastFetch">just now</span>
+                        </span>
+                    </div>
                 </div>
             `;
+            
+            // Update auto-fetch stats
+            this.autoFetchStats.lastRun = now.toISOString();
+            localStorage.setItem('newsTracker.autoFetchStats', JSON.stringify(this.autoFetchStats));
+            this.updateAutoFetchStats();
         }
         
         // Update auto-fetch status to show next fetch time
         if (this.autoFetchEnabled) {
             this.updateAutoFetchStatus();
         }
+    }
+    
+    updateAutoFetchInterval(minutes) {
+        this.autoFetchIntervalMinutes = minutes;
+        localStorage.setItem('newsTracker.autoFetchInterval', minutes.toString());
+        
+        // Restart auto-fetch with new interval if it's currently running
+        if (this.autoFetchEnabled && this.autoFetchInterval) {
+            this.startAutoFetch();
+        }
+        
+        this.updateAutoFetchStatus();
+        this.showInfo(`Auto-fetch interval updated to ${minutes} minutes`);
+    }
+    
+    updateAutoFetchStats() {
+        const totalRunsEl = document.getElementById('autoFetchTotalRuns');
+        const articlesFoundEl = document.getElementById('autoFetchArticlesFound');
+        const lastRunEl = document.getElementById('autoFetchLastRun');
+        const nextRunEl = document.getElementById('autoFetchNextRun');
+        
+        if (totalRunsEl) totalRunsEl.textContent = this.autoFetchStats.totalRuns;
+        if (articlesFoundEl) articlesFoundEl.textContent = this.autoFetchStats.articlesFound;
+        if (lastRunEl) {
+            lastRunEl.textContent = this.autoFetchStats.lastRun 
+                ? new Date(this.autoFetchStats.lastRun).toLocaleString()
+                : 'Never';
+        }
+        if (nextRunEl) {
+            if (this.autoFetchEnabled && this.autoFetchInterval) {
+                const nextRun = new Date(Date.now() + (this.autoFetchIntervalMinutes * 60 * 1000));
+                nextRunEl.textContent = nextRun.toLocaleTimeString();
+            } else {
+                nextRunEl.textContent = '-';
+            }
+        }
+    }
+    
+    async testAutoFetch() {
+        if (this.trackedWebsites.length === 0) {
+            this.showError('Add websites to track before testing auto-fetch');
+            return;
+        }
+        
+        this.showInfo('Running auto-fetch test...');
+        
+        try {
+            const initialCount = this.articleQueue.length;
+            await this.autoFetchArticles();
+            const newCount = this.articleQueue.length;
+            const foundArticles = newCount - initialCount;
+            
+            this.showSuccess(`Auto-fetch test completed! Found ${foundArticles} new articles.`);
+            
+            // Update stats
+            this.autoFetchStats.totalRuns++;
+            this.autoFetchStats.articlesFound += foundArticles;
+            localStorage.setItem('newsTracker.autoFetchStats', JSON.stringify(this.autoFetchStats));
+            this.updateAutoFetchStats();
+            
+        } catch (error) {
+            console.error('Auto-fetch test error:', error);
+            this.showError('Auto-fetch test failed. Check console for details.');
+        }
+    }
+    
+    quickSetupAutoFetch() {
+        if (this.trackedWebsites.length === 0) {
+            this.showError('Add websites to track before setting up auto-fetch');
+            return;
+        }
+        
+        // Set optimal settings
+        this.autoFetchIntervalMinutes = 30; // 30 minutes
+        this.autoFetchEnabled = true;
+        
+        // Update UI
+        const toggle = document.getElementById('autoFetchToggle');
+        const intervalSelect = document.getElementById('autoFetchInterval');
+        
+        if (toggle) {
+            toggle.checked = true;
+            this.updateToggleAppearance(toggle, true);
+        }
+        
+        if (intervalSelect) {
+            intervalSelect.value = '30';
+        }
+        
+        // Save settings
+        localStorage.setItem('newsTracker.autoFetchEnabled', 'true');
+        localStorage.setItem('newsTracker.autoFetchInterval', '30');
+        
+        // Start auto-fetch
+        this.startAutoFetch();
+        this.updateAutoFetchStatus();
+        this.updateAutoFetchStats();
+        
+        this.showSuccess('Auto-fetch has been set up with optimal settings (30 minutes interval)');
+    }
+    
+    resetAutoFetchSettings() {
+        // Stop auto-fetch
+        this.stopAutoFetch();
+        
+        // Reset to defaults
+        this.autoFetchEnabled = false;
+        this.autoFetchIntervalMinutes = 30;
+        this.autoFetchStats = {
+            totalRuns: 0,
+            articlesFound: 0,
+            lastRun: null,
+            nextRun: null
+        };
+        
+        // Update UI
+        const toggle = document.getElementById('autoFetchToggle');
+        const intervalSelect = document.getElementById('autoFetchInterval');
+        
+        if (toggle) {
+            toggle.checked = false;
+            this.updateToggleAppearance(toggle, false);
+        }
+        
+        if (intervalSelect) {
+            intervalSelect.value = '30';
+        }
+        
+        // Clear localStorage
+        localStorage.removeItem('newsTracker.autoFetchEnabled');
+        localStorage.removeItem('newsTracker.autoFetchInterval');
+        localStorage.removeItem('newsTracker.autoFetchStats');
+        
+        // Update displays
+        this.updateAutoFetchStatus();
+        this.updateAutoFetchStats();
+        
+        this.showInfo('Auto-fetch settings have been reset to defaults');
     }
     
     // Additional methods for missing functionality

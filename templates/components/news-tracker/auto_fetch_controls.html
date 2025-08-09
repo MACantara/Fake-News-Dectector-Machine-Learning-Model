@@ -9,31 +9,73 @@
         <!-- Auto-fetch Status -->
         <div class="space-y-4">
             <div class="flex items-center justify-between">
-                <label for="autoFetchToggle" class="text-sm font-medium text-gray-700">
+                <label for="autoFetchToggle" class="text-sm font-medium text-gray-700 cursor-pointer">
                     <i class="bi bi-robot mr-1"></i>
                     Auto-fetch Articles
                 </label>
                 <div class="relative">
                     <input type="checkbox" id="autoFetchToggle" class="sr-only">
-                    <div class="w-10 h-6 bg-gray-200 rounded-full shadow-inner toggle-bg"></div>
-                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow -left-1 -top-1 transition"></div>
+                    <div class="w-12 h-6 bg-gray-200 rounded-full shadow-inner cursor-pointer transition-colors duration-200 toggle-bg"></div>
+                    <div class="toggle-dot absolute w-5 h-5 bg-white rounded-full shadow -left-0.5 -top-0.5 transition-transform duration-200 cursor-pointer"></div>
                 </div>
             </div>
             
-            <div id="autoFetchStatus" class="p-3 bg-gray-50 rounded-lg">
+            <!-- Auto-fetch Interval Setting -->
+            <div class="flex items-center justify-between">
+                <label for="autoFetchInterval" class="text-sm font-medium text-gray-700">
+                    <i class="bi bi-clock mr-1"></i>
+                    Fetch Interval
+                </label>
+                <select id="autoFetchInterval" class="p-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="15">15 minutes</option>
+                    <option value="30" selected>30 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="120">2 hours</option>
+                    <option value="360">6 hours</option>
+                    <option value="720">12 hours</option>
+                </select>
+            </div>
+            
+            <div id="autoFetchStatus" class="p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div class="flex items-center">
                     <i class="bi bi-pause-circle text-gray-500 mr-2"></i>
                     <span class="text-sm text-gray-600">Auto-fetch is currently disabled</span>
+                </div>
+            </div>
+            
+            <!-- Auto-fetch Statistics -->
+            <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 class="text-sm font-medium text-blue-800 mb-2">
+                    <i class="bi bi-graph-up mr-1"></i>
+                    Auto-fetch Statistics
+                </h4>
+                <div class="grid grid-cols-2 gap-2 text-xs text-blue-700">
+                    <div>
+                        <span class="font-medium">Total Runs:</span>
+                        <span id="autoFetchTotalRuns">0</span>
+                    </div>
+                    <div>
+                        <span class="font-medium">Articles Found:</span>
+                        <span id="autoFetchArticlesFound">0</span>
+                    </div>
+                    <div>
+                        <span class="font-medium">Last Run:</span>
+                        <span id="autoFetchLastRun">Never</span>
+                    </div>
+                    <div>
+                        <span class="font-medium">Next Run:</span>
+                        <span id="autoFetchNextRun">-</span>
+                    </div>
                 </div>
             </div>
         </div>
         
         <!-- Manual Controls -->
         <div class="space-y-4">
-            <div class="flex flex-col space-y-2">
+            <div class="flex flex-col space-y-3">
                 <button 
                     id="fetchNowBtn"
-                    class="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200"
+                    class="bg-green-600 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200 flex items-center justify-center"
                     aria-label="Fetch articles now"
                 >
                     <i class="bi bi-download mr-2"></i>
@@ -42,21 +84,82 @@
                 
                 <button 
                     id="clearQueueBtn"
-                    class="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200"
+                    class="bg-red-600 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200 flex items-center justify-center"
                     aria-label="Clear article queue"
                 >
                     <i class="bi bi-trash mr-2"></i>
                     Clear Queue
                 </button>
+                
+                <button 
+                    id="testAutoFetchBtn"
+                    class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 flex items-center justify-center"
+                    aria-label="Test auto-fetch now"
+                >
+                    <i class="bi bi-play-circle mr-2"></i>
+                    Test Auto-fetch
+                </button>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="border-t border-gray-200 pt-4">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">
+                    <i class="bi bi-lightning mr-1"></i>
+                    Quick Actions
+                </h4>
+                <div class="grid grid-cols-2 gap-2">
+                    <button 
+                        id="enableAllAutoFetchBtn"
+                        class="bg-yellow-500 text-white text-xs py-2 px-3 rounded hover:bg-yellow-600 transition-colors"
+                        title="Enable auto-fetch with optimal settings"
+                    >
+                        <i class="bi bi-magic mr-1"></i>
+                        Quick Setup
+                    </button>
+                    <button 
+                        id="resetAutoFetchBtn"
+                        class="bg-gray-500 text-white text-xs py-2 px-3 rounded hover:bg-gray-600 transition-colors"
+                        title="Reset auto-fetch settings to default"
+                    >
+                        <i class="bi bi-arrow-clockwise mr-1"></i>
+                        Reset
+                    </button>
+                </div>
             </div>
         </div>
     </div>
     
     <!-- Last Fetch Info -->
-    <div id="lastFetchInfo" class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-        <div class="flex items-center">
-            <i class="bi bi-info-circle text-blue-600 mr-2"></i>
-            <span class="text-sm text-blue-800">Last fetch: Never</span>
+    <div id="lastFetchInfo" class="mt-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <i class="bi bi-info-circle text-blue-600 mr-2"></i>
+                <span class="text-sm text-blue-800">Last fetch: Never</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-xs text-blue-600">
+                    <i class="bi bi-clock mr-1"></i>
+                    <span id="timeSinceLastFetch">-</span>
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Auto-fetch Help -->
+    <div class="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+        <div class="flex items-start space-x-3">
+            <div class="flex-shrink-0">
+                <i class="bi bi-question-circle text-yellow-600 text-lg"></i>
+            </div>
+            <div class="flex-1">
+                <p class="text-sm font-medium text-yellow-800 mb-1">Auto-fetch Tips:</p>
+                <ul class="text-xs text-yellow-700 space-y-1">
+                    <li>• Auto-fetch will only run when websites are being tracked</li>
+                    <li>• Shorter intervals may increase server load but provide fresher content</li>
+                    <li>• Use "Test Auto-fetch" to verify your setup is working correctly</li>
+                    <li>• Auto-fetch will automatically pause if no websites are tracked</li>
+                </ul>
+            </div>
         </div>
     </div>
 </div>

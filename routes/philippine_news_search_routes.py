@@ -22,12 +22,15 @@ philippine_news_bp = Blueprint('philippine_news', __name__)
 # Initialize the Philippine news search index (will be set by main app)
 philippine_search_index = None
 
-
 def init_philippine_search_index():
     """Initialize the Philippine news search index"""
     global philippine_search_index
     philippine_search_index = PhilippineNewsSearchIndex()
+    return philippine_search_index
 
+def get_philippine_search_index():
+    """Get the initialized Philippine search index instance"""
+    return philippine_search_index
 
 @philippine_news_bp.route('/index-philippine-article', methods=['POST'])
 def index_philippine_article():

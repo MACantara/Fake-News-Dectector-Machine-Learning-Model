@@ -39,7 +39,7 @@ from textblob import TextBlob
 from fuzzywuzzy import fuzz, process
 from url_news_classifier import URLNewsClassifier
 from routes.news_crawler_routes import news_crawler_bp, init_news_crawler
-from routes.philippine_news_search_routes import philippine_news_bp, init_philippine_search_index
+from routes.philippine_news_search_routes import philippine_news_bp, init_philippine_search_index, get_philippine_search_index
 from routes.political_news_routes import political_news_bp, init_political_detector
 from modules.political_news_detector import PoliticalNewsDetector, extract_political_content_from_url
 warnings.filterwarnings('ignore')
@@ -855,7 +855,7 @@ url_news_classifier = URLNewsClassifier()
 init_news_crawler(url_news_classifier)
 
 # Initialize Philippine news search routes
-init_philippine_search_index()
+philippine_search_index = init_philippine_search_index()
 
 # Initialize political news detector routes
 init_political_detector(political_detector)

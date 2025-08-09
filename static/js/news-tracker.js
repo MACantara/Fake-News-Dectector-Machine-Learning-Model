@@ -10,6 +10,7 @@ class NewsTracker {
         this.currentPage = 1;
         this.itemsPerPage = 10;
         this.autoFetchInterval = null;
+        this.selectedArticles = new Set(); // Track selected articles
         
         this.init();
     }
@@ -20,6 +21,10 @@ class NewsTracker {
         this.loadArticleQueue();
         this.updateStatistics();
         this.setupAutoFetch();
+        
+        // Initialize selection interface
+        this.updateSelectionCount();
+        this.updateBatchActionButtons();
     }
     
     bindEvents() {
@@ -381,25 +386,25 @@ class NewsTracker {
         container.innerHTML = paginatedArticles.map(article => {
             const isSelectable = !article.verified;
             const baseClasses = isSelectable 
-                ? 'cursor-pointer hover:shadow-lg hover:-translate-y-1 hover:border-blue-300 transition-all duration-200' 
+                ? 'cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all duration-200' 
                 : 'opacity-75';
             
             return `
                 <div data-article-id="${article.id}" 
-                     class="flex items-start justify-between p-4 bg-gray-50 rounded-lg border ${baseClasses} relative"
+                     class="${baseClasses} p-4 bg-gray-50 rounded-lg border border-gray-200 relative"
                      ${isSelectable ? `onclick="newsTracker.toggleArticleSelection('${article.id}')"` : ''}>
                     
-                    <!-- Selection indicator (will be updated by JS) -->
-                    <div class="selection-indicator hidden absolute top-2 right-2 bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold z-10">
-                        ✓
-                    </div>
-                    
                     ${isSelectable ? `
-                        <!-- Selection area - makes it clear this is clickable -->
-                        <div class="absolute inset-0 rounded-lg border-2 border-dashed border-transparent hover:border-blue-400 pointer-events-none transition-all duration-200"></div>
+                        <!-- Selection indicator (hidden by default) -->
+                        <div class="selection-indicator hidden absolute top-2 right-2 bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold z-10">
+                            ✓
+                        </div>
+                        
+                        <!-- Dashed border overlay for selection -->
+                        <div class="selection-overlay absolute inset-0 rounded-lg border-2 border-dashed border-transparent pointer-events-none transition-all duration-200"></div>
                         
                         <!-- Click to select button -->
-                        <div class="absolute top-3 left-3 bg-white border border-gray-300 rounded-full px-3 py-1 shadow-sm hover:bg-blue-50 hover:border-blue-400 transition-all duration-200">
+                        <div class="selection-button absolute top-3 left-3 bg-white border border-gray-300 rounded-full px-3 py-1 shadow-sm hover:bg-blue-50 hover:border-blue-400 transition-all duration-200 z-20">
                             <span class="text-xs font-medium text-gray-600 hover:text-blue-600 flex items-center">
                                 <i class="bi bi-plus-circle mr-1"></i>
                                 Click to select
@@ -407,39 +412,43 @@ class NewsTracker {
                         </div>
                     ` : ''}
                     
-                    <div class="flex-1 ${isSelectable ? 'mt-8' : ''}">
+                    <div class="content flex-1 ${isSelectable ? 'mt-8' : ''}">
                         <h4 class="font-medium text-gray-800 mb-1">${this.escapeHtml(article.title || 'No Title')}</h4>
                         <p class="text-sm text-blue-600 hover:text-blue-800 mb-2">
                             <a href="${article.url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${article.url}</a>
                         </p>
                         ${article.description ? `<p class="text-sm text-gray-600 mb-2">${this.escapeHtml(article.description)}</p>` : ''}
-                        <div class="flex items-center text-xs text-gray-500">
-                            <span class="mr-3">
-                                <i class="bi bi-globe mr-1"></i>
-                                ${this.escapeHtml(article.site_name || article.siteName || 'Unknown')}
-                            </span>
-                            <span class="mr-3">
-                                <i class="bi bi-calendar mr-1"></i>
-                                ${new Date(article.found_at || article.foundAt).toLocaleString()}
-                            </span>
-                            ${article.confidence ? `
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center text-xs text-gray-500">
                                 <span class="mr-3">
-                                    <i class="bi bi-speedometer2 mr-1"></i>
-                                    ${(article.confidence * 100).toFixed(0)}% conf.
+                                    <i class="bi bi-globe mr-1"></i>
+                                    ${this.escapeHtml(article.site_name || article.siteName || 'Unknown')}
                                 </span>
-                            ` : ''}
+                                <span class="mr-3">
+                                    <i class="bi bi-calendar mr-1"></i>
+                                    ${new Date(article.found_at || article.foundAt).toLocaleString()}
+                                </span>
+                                ${article.confidence ? `
+                                    <span class="mr-3">
+                                        <i class="bi bi-speedometer2 mr-1"></i>
+                                        ${(article.confidence * 100).toFixed(0)}% conf.
+                                    </span>
+                                ` : ''}
+                            </div>
+                            <span class="px-2 py-1 text-xs rounded-full ${this.getStatusBadgeClass(article)}">
+                                ${this.getStatusText(article)}
+                            </span>
                         </div>
-                    </div>
-                    <div class="ml-4 flex flex-col items-end">
-                        <span class="px-2 py-1 text-xs rounded-full mb-2 ${this.getStatusBadgeClass(article)}">
-                            ${this.getStatusText(article)}
-                        </span>
                     </div>
                 </div>
             `;
         }).join('');
         
         this.updatePagination(filteredArticles.length);
+        
+        // Initialize selection count
+        this.updateSelectionCount();
+        this.updateBatchActionButtons();
     }
     
     filterArticlesByType(filter) {
@@ -749,15 +758,19 @@ class NewsTracker {
     
     selectArticle(articleElement) {
         articleElement.dataset.batchSelected = 'true';
+        
+        // Update main container styling
         articleElement.classList.remove('bg-gray-50', 'border-gray-200');
         articleElement.classList.add('bg-blue-50', 'border-blue-400', 'border-2');
         
-        // Show checkmark
+        // Show checkmark indicator
         const indicator = articleElement.querySelector('.selection-indicator');
-        indicator.classList.remove('hidden');
+        if (indicator) {
+            indicator.classList.remove('hidden');
+        }
         
         // Update the selection button
-        const selectionButton = articleElement.querySelector('.absolute.top-3.left-3');
+        const selectionButton = articleElement.querySelector('.selection-button');
         if (selectionButton) {
             selectionButton.innerHTML = `
                 <span class="text-xs font-medium text-blue-600 flex items-center">
@@ -770,24 +783,28 @@ class NewsTracker {
         }
         
         // Update dashed border overlay
-        const dashedBorder = articleElement.querySelector('.absolute.inset-0');
-        if (dashedBorder) {
-            dashedBorder.classList.remove('border-transparent');
-            dashedBorder.classList.add('border-blue-400');
+        const selectionOverlay = articleElement.querySelector('.selection-overlay');
+        if (selectionOverlay) {
+            selectionOverlay.classList.remove('border-transparent');
+            selectionOverlay.classList.add('border-blue-400');
         }
     }
     
     unselectArticle(articleElement) {
         delete articleElement.dataset.batchSelected;
+        
+        // Reset main container styling
         articleElement.classList.remove('bg-blue-50', 'border-blue-400', 'border-2');
         articleElement.classList.add('bg-gray-50', 'border-gray-200');
         
-        // Hide checkmark
+        // Hide checkmark indicator
         const indicator = articleElement.querySelector('.selection-indicator');
-        indicator.classList.add('hidden');
+        if (indicator) {
+            indicator.classList.add('hidden');
+        }
         
         // Reset the selection button
-        const selectionButton = articleElement.querySelector('.absolute.top-3.left-3');
+        const selectionButton = articleElement.querySelector('.selection-button');
         if (selectionButton) {
             selectionButton.innerHTML = `
                 <span class="text-xs font-medium text-gray-600 hover:text-blue-600 flex items-center">
@@ -800,16 +817,19 @@ class NewsTracker {
         }
         
         // Reset dashed border overlay
-        const dashedBorder = articleElement.querySelector('.absolute.inset-0');
-        if (dashedBorder) {
-            dashedBorder.classList.remove('border-blue-400');
-            dashedBorder.classList.add('border-transparent');
+        const selectionOverlay = articleElement.querySelector('.selection-overlay');
+        if (selectionOverlay) {
+            selectionOverlay.classList.remove('border-blue-400');
+            selectionOverlay.classList.add('border-transparent');
         }
     }
     
     updateSelectionCount() {
         const selectedCount = document.querySelectorAll('[data-batch-selected="true"]').length;
-        document.getElementById('selectionCount').textContent = `${selectedCount} articles selected`;
+        const selectionCountElement = document.getElementById('selectionCount');
+        if (selectionCountElement) {
+            selectionCountElement.textContent = `${selectedCount} articles selected`;
+        }
     }
     
     updateBatchActionButtons() {
@@ -817,20 +837,32 @@ class NewsTracker {
         const newsBtn = document.getElementById('batchMarkNewsBtn');
         const notNewsBtn = document.getElementById('batchMarkNotNewsBtn');
         
-        if (selectedCount > 0) {
-            newsBtn.disabled = false;
-            notNewsBtn.disabled = false;
-        } else {
-            newsBtn.disabled = true;
-            notNewsBtn.disabled = true;
+        if (newsBtn && notNewsBtn) {
+            if (selectedCount > 0) {
+                newsBtn.disabled = false;
+                notNewsBtn.disabled = false;
+                newsBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                notNewsBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                newsBtn.disabled = true;
+                notNewsBtn.disabled = true;
+                newsBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                notNewsBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
         }
     }
     
     selectBatchArticles() {
         const batchSize = parseInt(document.getElementById('batchSize').value);
-        const unverifiedArticles = this.articleQueue.filter(article => !article.verified);
         
-        if (unverifiedArticles.length === 0) {
+        // Get currently visible unverified articles from the DOM
+        const unverifiedElements = Array.from(document.querySelectorAll('[data-article-id]')).filter(element => {
+            const articleId = element.dataset.articleId;
+            const article = this.articleQueue.find(a => a.id == articleId);
+            return article && !article.verified;
+        });
+        
+        if (unverifiedElements.length === 0) {
             this.showError('No unverified articles available for selection');
             return;
         }
@@ -842,19 +874,16 @@ class NewsTracker {
         this.clearBatchSelection();
         
         // Select up to batchSize unverified articles
-        const articlesToSelect = unverifiedArticles.slice(0, batchSize);
+        const elementsToSelect = unverifiedElements.slice(0, batchSize);
         
-        articlesToSelect.forEach(article => {
-            const articleElement = document.querySelector(`[data-article-id="${article.id}"]`);
-            if (articleElement) {
-                this.selectArticle(articleElement);
-            }
+        elementsToSelect.forEach(element => {
+            this.selectArticle(element);
         });
         
         this.updateSelectionCount();
         this.updateBatchActionButtons();
         
-        this.showInfo(`Selected ${articlesToSelect.length} articles for batch verification`);
+        this.showInfo(`Selected ${elementsToSelect.length} articles for batch verification`);
     }
     
     clearBatchSelection() {
@@ -867,7 +896,14 @@ class NewsTracker {
         this.updateBatchActionButtons();
         
         // Hide any batch status messages
-        document.getElementById('batchStatus').classList.add('hidden');
+        const batchStatus = document.getElementById('batchStatus');
+        if (batchStatus) {
+            batchStatus.classList.add('hidden');
+        }
+        
+        // Remove any filter hints
+        const filterHints = document.querySelectorAll('.filter-hint');
+        filterHints.forEach(hint => hint.remove());
     }
     
     async batchVerifyArticles(isNews) {

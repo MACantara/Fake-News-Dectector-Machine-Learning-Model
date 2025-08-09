@@ -42,6 +42,17 @@ class NewsTracker {
             this.filterQueue(e.target.value);
         });
         
+        // Batch verification controls
+        document.getElementById('batchSize').addEventListener('change', (e) => {
+            const size = e.target.value;
+            document.getElementById('selectedBatchSize').textContent = size;
+            this.clearBatchSelection();
+        });
+        document.getElementById('selectBatchBtn').addEventListener('click', () => this.selectBatchArticles());
+        document.getElementById('batchMarkNewsBtn').addEventListener('click', () => this.batchVerifyArticles(true));
+        document.getElementById('batchMarkNotNewsBtn').addEventListener('click', () => this.batchVerifyArticles(false));
+        document.getElementById('clearSelectionBtn').addEventListener('click', () => this.clearBatchSelection());
+        
         // Verification
         document.getElementById('verifyNewsBtn').addEventListener('click', () => this.verifyArticle(true));
         document.getElementById('verifyNotNewsBtn').addEventListener('click', () => this.verifyArticle(false));
@@ -395,7 +406,7 @@ class NewsTracker {
         const paginatedArticles = filteredArticles.slice(startIndex, endIndex);
         
         container.innerHTML = paginatedArticles.map(article => `
-            <div class="flex items-start justify-between p-4 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
+            <div data-article-id="${article.id}" class="flex items-start justify-between p-4 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors batch-selectable">
                 <div class="flex-1">
                     <h4 class="font-medium text-gray-800 mb-1">${this.escapeHtml(article.title || 'No Title')}</h4>
                     <p class="text-sm text-blue-600 hover:text-blue-800 mb-2">
@@ -407,10 +418,16 @@ class NewsTracker {
                             <i class="bi bi-globe mr-1"></i>
                             ${this.escapeHtml(article.site_name || article.siteName || 'Unknown')}
                         </span>
-                        <span>
+                        <span class="mr-3">
                             <i class="bi bi-calendar mr-1"></i>
                             ${new Date(article.found_at || article.foundAt).toLocaleString()}
                         </span>
+                        ${article.confidence ? `
+                            <span class="mr-3">
+                                <i class="bi bi-speedometer2 mr-1"></i>
+                                ${(article.confidence * 100).toFixed(0)}% conf.
+                            </span>
+                        ` : ''}
                     </div>
                 </div>
                 <div class="ml-4 flex flex-col items-end">
@@ -704,6 +721,163 @@ class NewsTracker {
             const body = encodeURIComponent(`Article URL: ${article.url}\n\nIssue description: `);
             window.open(`mailto:support@example.com?subject=${subject}&body=${body}`);
         }
+    }
+    
+    // Batch verification methods
+    selectBatchArticles() {
+        const batchSize = parseInt(document.getElementById('batchSize').value);
+        const unverifiedArticles = this.articleQueue.filter(article => !article.verified);
+        
+        if (unverifiedArticles.length === 0) {
+            this.showError('No unverified articles available for batch selection');
+            return;
+        }
+        
+        const articlesToSelect = unverifiedArticles.slice(0, batchSize);
+        
+        // Clear any existing selections
+        this.clearBatchSelection();
+        
+        // Add batch-selected class to articles
+        articlesToSelect.forEach(article => {
+            const articleElement = document.querySelector(`[data-article-id="${article.id}"]`);
+            if (articleElement) {
+                articleElement.classList.add('batch-selected');
+                articleElement.dataset.batchSelected = 'true';
+            }
+        });
+        
+        // Show batch actions
+        document.getElementById('batchActions').classList.remove('hidden');
+        document.getElementById('selectBatchBtn').classList.add('hidden');
+        
+        this.showInfo(`Selected ${articlesToSelect.length} articles for batch verification`);
+    }
+    
+    clearBatchSelection() {
+        // Remove batch-selected class from all articles
+        document.querySelectorAll('.batch-selected').forEach(element => {
+            element.classList.remove('batch-selected');
+            delete element.dataset.batchSelected;
+        });
+        
+        // Hide batch actions
+        document.getElementById('batchActions').classList.add('hidden');
+        document.getElementById('selectBatchBtn').classList.remove('hidden');
+        
+        // Hide any batch status messages
+        document.getElementById('batchStatus').classList.add('hidden');
+    }
+    
+    async batchVerifyArticles(isNews) {
+        const selectedElements = document.querySelectorAll('[data-batch-selected="true"]');
+        
+        if (selectedElements.length === 0) {
+            this.showError('No articles selected for batch verification');
+            return;
+        }
+        
+        // Show progress indicator
+        document.getElementById('batchProgress').classList.remove('hidden');
+        document.getElementById('batchActions').classList.add('hidden');
+        
+        // Prepare batch data
+        const articles = Array.from(selectedElements).map(element => {
+            const articleId = element.dataset.articleId;
+            const article = this.articleQueue.find(a => a.id == articleId);
+            return {
+                articleId: parseInt(articleId),
+                isNews: isNews,
+                url: article ? article.url : null
+            };
+        });
+        
+        try {
+            const response = await fetch('/api/news-tracker/batch-verify-articles', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ articles })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update article queue with verification results
+                data.results.forEach(result => {
+                    if (result.success) {
+                        const article = this.articleQueue.find(a => a.id === result.articleId);
+                        if (article) {
+                            article.verified = true;
+                            article.isNews = isNews;
+                            article.verifiedAt = new Date().toISOString();
+                        }
+                    }
+                });
+                
+                // Show success message with summary
+                const summary = data.summary;
+                const statusDiv = document.getElementById('batchStatus');
+                statusDiv.className = 'mt-3 p-3 rounded-lg bg-green-50 border border-green-200';
+                statusDiv.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="bi bi-check-circle text-green-600 mr-2"></i>
+                        <div>
+                            <p class="font-semibold text-green-800">Batch verification completed!</p>
+                            <p class="text-sm text-green-700">
+                                ${summary.successful_verifications}/${summary.total_articles} articles verified as ${isNews ? 'news' : 'not news'}
+                                ${summary.news_articles_found > 0 ? `, ${summary.successful_philippine_indexing}/${summary.news_articles_found} indexed in Philippine news system` : ''}
+                            </p>
+                        </div>
+                    </div>
+                `;
+                statusDiv.classList.remove('hidden');
+                
+                // Clear selection and refresh display
+                this.clearBatchSelection();
+                this.renderArticleQueue();
+                this.updateCounts();
+                
+                // Hide verification interface if no more unverified articles
+                const unverifiedCount = this.articleQueue.filter(a => !a.verified).length;
+                if (unverifiedCount === 0) {
+                    this.hideVerificationInterface();
+                }
+                
+            } else {
+                this.showError(data.error || 'Failed to perform batch verification');
+            }
+            
+        } catch (error) {
+            console.error('Batch verification error:', error);
+            this.showError('Network error during batch verification');
+        } finally {
+            // Hide progress indicator
+            document.getElementById('batchProgress').classList.add('hidden');
+            document.getElementById('batchActions').classList.remove('hidden');
+        }
+    }
+    
+    showInfo(message) {
+        // Show info message (similar to showSuccess but with blue styling)
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'fixed top-4 right-4 bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded shadow-lg z-50';
+        alertDiv.innerHTML = `
+            <div class="flex items-center">
+                <i class="bi bi-info-circle mr-2"></i>
+                <span>${message}</span>
+                <button class="ml-4 text-blue-700 hover:text-blue-900" onclick="this.parentElement.parentElement.remove()">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+        document.body.appendChild(alertDiv);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentElement) {
+                alertDiv.remove();
+            }
+        }, 5000);
     }
 }
 

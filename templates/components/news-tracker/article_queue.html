@@ -18,6 +18,54 @@
         </div>
     </div>
     
+    <!-- Batch Verification Controls -->
+    <div id="batchControls" class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div class="flex items-center justify-between mb-3">
+            <h4 class="text-lg font-semibold text-blue-800">
+                <i class="bi bi-check2-square"></i>
+                Batch Verification
+            </h4>
+            <div class="flex items-center space-x-2">
+                <label for="batchSize" class="text-sm text-blue-700">Articles to verify:</label>
+                <select id="batchSize" class="p-2 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="5">5 articles</option>
+                    <option value="7">7 articles</option>
+                    <option value="10">10 articles</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="flex items-center space-x-4">
+            <button id="selectBatchBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                <i class="bi bi-cursor"></i>
+                Select Next <span id="selectedBatchSize">5</span> Articles
+            </button>
+            
+            <div id="batchActions" class="hidden flex items-center space-x-2">
+                <span class="text-sm text-blue-700">Mark selected as:</span>
+                <button id="batchMarkNewsBtn" class="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 transition-colors">
+                    <i class="bi bi-newspaper"></i>
+                    News
+                </button>
+                <button id="batchMarkNotNewsBtn" class="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 transition-colors">
+                    <i class="bi bi-x-circle"></i>
+                    Not News
+                </button>
+                <button id="clearSelectionBtn" class="bg-gray-500 text-white px-3 py-2 rounded hover:bg-gray-600 transition-colors">
+                    <i class="bi bi-x"></i>
+                    Clear
+                </button>
+            </div>
+            
+            <div id="batchProgress" class="hidden flex items-center space-x-2">
+                <div class="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                <span class="text-sm text-blue-700">Processing batch...</span>
+            </div>
+        </div>
+        
+        <div id="batchStatus" class="hidden mt-3 p-3 rounded-lg"></div>
+    </div>
+    
     <!-- Queue Stats -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div class="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">

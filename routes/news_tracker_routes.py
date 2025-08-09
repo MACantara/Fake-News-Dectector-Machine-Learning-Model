@@ -354,8 +354,131 @@ def verify_article():
     except Exception as e:
         logging.error(f"Error verifying article: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
+
+@news_tracker_bp.route('/api/news-tracker/batch-verify-articles', methods=['POST'])
+def batch_verify_articles():
+    """Verify multiple articles at once for efficiency"""
+    try:
+        data = request.get_json()
+        articles = data.get('articles', [])
+        
+        if not articles or not isinstance(articles, list):
+            return jsonify({'success': False, 'error': 'Articles array is required'})
+        
+        if len(articles) > 10:  # Max 10 articles per batch
+            return jsonify({'success': False, 'error': 'Maximum 10 articles allowed per batch'})
+        
+        user_session = session.get('session_id', 'default')
+        
+        # Process each article in the batch
+        results = []
+        news_articles_for_indexing = []
+        
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+        
+        for article in articles:
+            try:
+                article_id = article.get('articleId')
+                is_news = article.get('isNews')
+                url = article.get('url')
+                
+                if not article_id or is_news is None:
+                    results.append({
+                        'articleId': article_id,
+                        'success': False,
+                        'error': 'Missing articleId or isNews'
+                    })
+                    continue
+                
+                # Get article data including crawler metadata before updating
+                cursor.execute('''
+                    SELECT url, confidence, is_news_prediction, probability_news
+                    FROM article_queue 
+                    WHERE id = ? AND user_session = ?
+                ''', (article_id, user_session))
+                
+                article_data = cursor.fetchone()
+                
+                if not article_data:
+                    results.append({
+                        'articleId': article_id,
+                        'success': False,
+                        'error': 'Article not found'
+                    })
+                    continue
+                
+                # Update article verification
+                cursor.execute('''
+                    UPDATE article_queue 
+                    SET verified = TRUE, is_news = ?, verified_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_session = ?
+                ''', (is_news, article_id, user_session))
+                
+                # Send feedback to URL classifier for model improvement
+                send_url_classifier_feedback(
+                    url=url or article_data[0],
+                    article_data=article_data,
+                    user_verification=is_news
+                )
+                
+                # Collect news articles for batch Philippine indexing
+                if is_news:
+                    news_articles_for_indexing.append(url or article_data[0])
+                
+                results.append({
+                    'articleId': article_id,
+                    'success': True,
+                    'message': f'Article marked as {"news" if is_news else "not news"}',
+                    'url_classifier_feedback_sent': True,
+                    'philippine_indexing_queued': is_news
+                })
+                
+            except Exception as e:
+                logging.error(f"Error verifying article {article.get('articleId')}: {str(e)}")
+                results.append({
+                    'articleId': article.get('articleId'),
+                    'success': False,
+                    'error': str(e)
+                })
+        
+        conn.commit()
+        conn.close()
+        
+        # Batch index news articles into Philippine news system
+        philippine_indexing_results = []
+        if news_articles_for_indexing:
+            logging.info(f"🚀 Batch indexing {len(news_articles_for_indexing)} verified news articles into Philippine system")
+            for url in news_articles_for_indexing:
+                indexing_success = index_philippine_news_article(url)
+                philippine_indexing_results.append({
+                    'url': url,
+                    'success': indexing_success
+                })
+        
+        # Calculate summary statistics
+        successful_verifications = len([r for r in results if r['success']])
+        failed_verifications = len([r for r in results if not r['success']])
+        news_count = len([r for r in results if r.get('philippine_indexing_queued')])
+        successful_indexing = len([r for r in philippine_indexing_results if r['success']])
+        
+        return jsonify({
+            'success': True,
+            'message': f'Batch verification completed: {successful_verifications} successful, {failed_verifications} failed',
+            'summary': {
+                'total_articles': len(articles),
+                'successful_verifications': successful_verifications,
+                'failed_verifications': failed_verifications,
+                'news_articles_found': news_count,
+                'philippine_indexing_attempts': len(philippine_indexing_results),
+                'successful_philippine_indexing': successful_indexing
+            },
+            'results': results,
+            'philippine_indexing_results': philippine_indexing_results
+        })
+        
     except Exception as e:
-        logging.error(f"Error verifying article: {str(e)}")
+        logging.error(f"Error in batch verification: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
 
 @news_tracker_bp.route('/api/news-tracker/get-data')

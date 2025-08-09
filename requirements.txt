@@ -13,3 +13,4 @@ lxml
 textblob
 fuzzywuzzy
 python-levenshtein
+feedparser

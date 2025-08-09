@@ -1,6 +1,7 @@
 """
 News Tracker Routes
 Handles website tracking, article fetching, and verification
+Uses the sophisticated news crawler for intelligent article extraction
 """
 
 from flask import Blueprint, render_template, request, jsonify, session
@@ -8,11 +9,9 @@ import json
 import sqlite3
 import requests
 from datetime import datetime, timedelta
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 import time
 import threading
-from bs4 import BeautifulSoup
-import feedparser
 import hashlib
 import logging
 
@@ -20,7 +19,6 @@ news_tracker_bp = Blueprint('news_tracker', __name__)
 
 # Configuration
 DATABASE_FILE = 'news_tracker.db'
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 
 # Initialize database
 def init_news_tracker_db():
@@ -194,7 +192,7 @@ def fetch_articles():
         
         for website_id, url, name in websites:
             try:
-                articles = fetch_articles_from_website(url, name, website_id)
+                articles = fetch_articles_from_crawler(url, name, website_id)
                 all_articles.extend(articles)
                 
                 # Update last fetch time
@@ -369,142 +367,65 @@ def get_tracker_data():
         logging.error(f"Error getting tracker data: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
 
-def fetch_articles_from_website(url, site_name, website_id):
-    """Fetch articles from a website using multiple methods"""
+def fetch_articles_from_crawler(url, site_name, website_id):
+    """Fetch articles from a website using the news crawler endpoint"""
     articles = []
     
     try:
-        # Method 1: Try RSS/Atom feeds
-        rss_articles = fetch_from_rss(url, site_name, website_id)
-        articles.extend(rss_articles)
+        # Prepare request to crawler endpoint
+        crawler_data = {
+            'website_url': url,
+            'max_articles': 15,  # Get more articles than before
+            'enable_filtering': True,  # Use intelligent filtering
+            'confidence_threshold': 0.6  # Only get likely news articles
+        }
         
-        if not articles:
-            # Method 2: Web scraping
-            scraped_articles = fetch_from_scraping(url, site_name, website_id)
-            articles.extend(scraped_articles)
+        # Make request to crawler endpoint
+        # Use 127.0.0.1 to avoid potential localhost resolution issues
+        response = requests.post(
+            'http://127.0.0.1:5000/crawl-website',
+            json=crawler_data,
+            headers={'Content-Type': 'application/json'},
+            timeout=30
+        )
         
-    except Exception as e:
-        logging.error(f"Error fetching from {url}: {str(e)}")
-    
-    return articles
-
-def fetch_from_rss(base_url, site_name, website_id):
-    """Try to find and parse RSS feeds"""
-    articles = []
-    
-    # Common RSS feed URLs to try
-    rss_urls = [
-        urljoin(base_url, '/rss'),
-        urljoin(base_url, '/feed'),
-        urljoin(base_url, '/rss.xml'),
-        urljoin(base_url, '/feed.xml'),
-        urljoin(base_url, '/atom.xml'),
-        urljoin(base_url, '/news/rss'),
-        urljoin(base_url, '/news/feed'),
-    ]
-    
-    for rss_url in rss_urls:
-        try:
-            feed = feedparser.parse(rss_url)
+        if response.status_code == 200:
+            crawler_result = response.json()
             
-            if feed.entries:
-                for entry in feed.entries[:10]:  # Limit to 10 articles
-                    article = {
-                        'url': entry.get('link', ''),
-                        'title': entry.get('title', ''),
-                        'description': entry.get('summary', ''),
-                        'content': entry.get('content', [{}])[0].get('value', '') if entry.get('content') else '',
+            if crawler_result.get('success') and crawler_result.get('articles'):
+                # Convert crawler results to news tracker format
+                for article in crawler_result['articles']:
+                    # Extract data from crawler's normalized format
+                    article_data = {
+                        'url': article.get('url', ''),
+                        'title': article.get('title', '') or article.get('link_text', ''),
+                        'description': '',  # Crawler doesn't provide descriptions yet
+                        'content': '',
                         'site_name': site_name,
                         'website_id': website_id,
-                        'found_at': datetime.now().isoformat()
+                        'found_at': datetime.now().isoformat(),
+                        # Add crawler-specific metadata
+                        'confidence': article.get('confidence', 0.0),
+                        'is_news_prediction': article.get('is_news_prediction', True),
+                        'probability_news': article.get('probability_news', 0.0)
                     }
                     
-                    if article['url']:
-                        articles.append(article)
+                    # Only include articles with valid URLs
+                    if article_data['url']:
+                        articles.append(article_data)
                 
-                break  # Stop after finding a working feed
-                
-        except Exception as e:
-            logging.debug(f"RSS feed {rss_url} failed: {str(e)}")
-            continue
-    
-    return articles
-
-def fetch_from_scraping(url, site_name, website_id):
-    """Scrape articles from website"""
-    articles = []
-    
-    try:
-        headers = {'User-Agent': USER_AGENT}
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Common article link selectors
-        article_selectors = [
-            'article a[href]',
-            '.article a[href]',
-            '.post a[href]',
-            '.news-item a[href]',
-            'h1 a[href], h2 a[href], h3 a[href]',
-            'a[href*="article"]',
-            'a[href*="news"]',
-            'a[href*="post"]',
-        ]
-        
-        found_links = set()
-        
-        for selector in article_selectors:
-            links = soup.select(selector)
+                logging.info(f"✅ Crawler found {len(articles)} articles from {url}")
+                logging.info(f"📊 Crawler stats: {crawler_result.get('crawler_stats', {})}")
+            else:
+                logging.warning(f"⚠️ Crawler returned no articles for {url}")
+        else:
+            logging.error(f"❌ Crawler request failed for {url}: {response.status_code}")
+            # Fallback to empty list - could implement basic scraping here if needed
             
-            for link in links[:5]:  # Limit per selector
-                href = link.get('href')
-                if not href:
-                    continue
-                
-                # Convert relative URLs to absolute
-                if href.startswith('/'):
-                    href = urljoin(url, href)
-                elif not href.startswith(('http://', 'https://')):
-                    continue
-                
-                # Skip duplicate URLs
-                if href in found_links:
-                    continue
-                found_links.add(href)
-                
-                # Extract article info
-                title = link.get_text(strip=True) or link.get('title', '')
-                description = ''
-                
-                # Try to find description from parent elements
-                parent = link.find_parent(['article', 'div', 'section'])
-                if parent:
-                    desc_elem = parent.find(['p', '.description', '.summary', '.excerpt'])
-                    if desc_elem:
-                        description = desc_elem.get_text(strip=True)
-                
-                article = {
-                    'url': href,
-                    'title': title,
-                    'description': description,
-                    'content': '',
-                    'site_name': site_name,
-                    'website_id': website_id,
-                    'found_at': datetime.now().isoformat()
-                }
-                
-                articles.append(article)
-                
-                if len(articles) >= 10:  # Limit total articles
-                    break
-            
-            if len(articles) >= 10:
-                break
-    
+    except requests.exceptions.RequestException as e:
+        logging.error(f"❌ Network error calling crawler for {url}: {str(e)}")
     except Exception as e:
-        logging.error(f"Error scraping {url}: {str(e)}")
+        logging.error(f"❌ Error fetching from crawler for {url}: {str(e)}")
     
     return articles
 
@@ -534,8 +455,8 @@ def start_auto_fetch():
                             if current_time - last_fetch_time < timedelta(minutes=interval):
                                 continue
                         
-                        # Fetch articles
-                        articles = fetch_articles_from_website(url, name, website_id)
+                        # Fetch articles using crawler
+                        articles = fetch_articles_from_crawler(url, name, website_id)
                         
                         # Save new articles
                         for article in articles:

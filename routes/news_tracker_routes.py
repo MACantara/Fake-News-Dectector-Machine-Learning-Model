@@ -7,6 +7,7 @@ INTEGRATION FEATURES:
 - Uses /crawl-website endpoint for intelligent article discovery
 - Stores crawler metadata (confidence, predictions) for feedback
 - Contributes to ML model improvement through user verifications
+- Automatically indexes verified news articles into Philippine news search system
 """
 
 import sys
@@ -26,6 +27,7 @@ import logging
 import uuid
 from modules.url_news_classifier import URLNewsClassifier
 from routes.url_classifier_routes import get_url_classifier
+from routes.philippine_news_search_routes import get_philippine_search_index
 
 news_tracker_bp = Blueprint('news_tracker', __name__)
 
@@ -336,10 +338,17 @@ def verify_article():
             user_verification=is_news
         )
         
+        # If article is verified as news, index it in Philippine news search system
+        philippine_indexing_success = False
+        if is_news:
+            philippine_indexing_success = index_philippine_news_article(url)
+        
         return jsonify({
             'success': True,
             'message': f'Article marked as {"news" if is_news else "not news"}',
-            'url_classifier_feedback_sent': True  # Indicate feedback was attempted
+            'url_classifier_feedback_sent': True,  # Indicate feedback was attempted
+            'philippine_indexing_attempted': is_news,  # Indicate if indexing was attempted
+            'philippine_indexing_success': philippine_indexing_success  # Indicate if indexing succeeded
         })
         
     except Exception as e:
@@ -544,6 +553,54 @@ def send_url_classifier_feedback(url, article_data, user_verification):
     except Exception as e:
         logging.warning(f"⚠️ Error sending URL classifier feedback: {str(e)}")
     # Don't raise exceptions - feedback is optional and shouldn't break verification
+
+def index_philippine_news_article(url, force_reindex=False):
+    """Index a verified news article into the Philippine news search system using direct method calls"""
+    try:
+        if not url:
+            logging.warning("⚠️ No URL provided for Philippine news indexing")
+            return False
+            
+        # Get the Philippine search index instance
+        philippine_search_index = get_philippine_search_index()
+        
+        if philippine_search_index is None:
+            logging.warning("⚠️ Philippine search index not available for indexing")
+            return False
+        
+        # Validate URL format (same as in philippine_news_search_routes.py)
+        from urllib.parse import urlparse
+        parsed_url = urlparse(url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            logging.warning(f"⚠️ Invalid URL format for Philippine indexing: {url}")
+            return False
+        
+        # Index the article using direct method call
+        start_time = time.time()
+        
+        result = philippine_search_index.index_article(url, force_reindex)
+        
+        end_time = time.time()
+        duration_ms = (end_time - start_time) * 1000
+        
+        if result['status'] == 'success':
+            logging.info(f"✅ Article indexed successfully in Philippine news system: {url} (took {duration_ms:.1f}ms)")
+            logging.info(f"📊 Philippine indexing details: ID={result.get('article_id')}, Score={result.get('relevance_score')}")
+            return True
+        elif result['status'] == 'already_indexed':
+            logging.info(f"ℹ️ Article already indexed in Philippine news system: {url}")
+            return True
+        elif result['status'] == 'skipped':
+            logging.info(f"⏭️ Article skipped - not relevant to Philippine news: {url}")
+            return True
+        else:
+            logging.warning(f"⚠️ Philippine news indexing failed for {url}: {result.get('message', 'Unknown error')}")
+            return False
+            
+    except Exception as e:
+        logging.warning(f"⚠️ Error indexing article into Philippine news system: {str(e)}")
+        return False
+    # Don't raise exceptions - indexing is optional and shouldn't break verification
 
 # Auto-fetch functionality (would run in background)
 def start_auto_fetch():

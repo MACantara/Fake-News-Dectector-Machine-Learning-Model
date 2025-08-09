@@ -3,206 +3,33 @@
 {% block title %}URL News Classifier - Advanced News Analyzer{% endblock %}
 
 {% block content %}
-<!-- URL News Classifier Section -->
-<div class="mb-8">
-    <h2 class="text-3xl font-semibold text-gray-800 mb-4">
-        <i class="bi bi-link-45deg"></i>
-        URL News Article Classifier
-    </h2>
-    <p class="text-gray-600 mb-6">
-        This AI-powered tool uses reinforcement learning to classify whether a URL is a news article or just a regular website link. 
-        The system learns and improves from your feedback!
-    </p>
-</div>
+<!-- Header Section -->
+{% include 'components/url-classifier/header_section.html' %}
 
 <!-- Model Status -->
-<div id="modelStatus" class="glass-effect rounded-xl p-4 mb-8 text-center">
-    <div class="flex items-center justify-center">
-        <i class="bi bi-hourglass-split spin text-blue-600 mr-2"></i>
-        <span class="text-gray-700">Loading model status...</span>
-    </div>
-</div>
+{% include 'components/url-classifier/model_status.html' %}
 
 <!-- URL Input Section -->
-<div class="mb-8">
-    <h3 class="text-xl font-semibold text-gray-800 mb-4">
-        <i class="bi bi-globe"></i>
-        Enter URL to Classify
-    </h3>
-    <div class="relative">
-        <input 
-            type="url" 
-            id="urlInput" 
-            placeholder="https://example.com/some-article-or-page"
-            class="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            aria-label="URL input for classification"
-        />
-        <i class="bi bi-link absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-    </div>
-    <p class="text-sm text-gray-600 mt-2">
-        <i class="bi bi-info-circle mr-1"></i>
-        Enter any URL to classify whether it's a news article or regular webpage
-    </p>
-</div>
+{% include 'components/url-classifier/url_input_section.html' %}
 
 <!-- Classify Button -->
-<div class="text-center mb-8">
-    <button 
-        id="classifyBtn"
-        disabled
-        class="bg-gradient-to-r from-green-600 to-blue-600 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:from-green-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-        aria-label="Classify URL"
-    >
-        <i class="bi bi-search mr-2"></i>
-        Classify URL
-    </button>
-</div>
+{% include 'components/url-classifier/classify_button.html' %}
 
 <!-- Loading Indicator -->
-<div id="loading" class="hidden text-center mb-8">
-    <div class="inline-flex items-center">
-        <i class="bi bi-hourglass-split spin text-green-600 text-2xl mr-3"></i>
-        <span class="text-gray-700 text-lg">Analyzing URL...</span>
-    </div>
-</div>
+{% include 'components/url-classifier/loading_indicator.html' %}
 
 <!-- Classification Results -->
-<div id="results" class="hidden mb-8">
-    <h3 class="text-2xl font-semibold text-gray-800 mb-6">
-        <i class="bi bi-clipboard-data"></i>
-        Classification Results
-    </h3>
-    
-    <!-- Prediction Card -->
-    <div id="predictionCard" class="rounded-xl p-6 mb-6 border-l-4 shadow-lg">
-        <div class="flex items-center justify-between">
-            <div>
-                <h4 class="text-lg font-semibold mb-2">Prediction</h4>
-                <p id="predictionText" class="text-3xl font-bold mb-2"></p>
-                <p id="modelType" class="text-sm text-gray-600"></p>
-            </div>
-            <div class="text-right">
-                <p class="text-sm text-gray-600 mb-1">Confidence</p>
-                <p id="confidenceText" class="text-2xl font-semibold"></p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Probability Bars -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div class="bg-white rounded-lg p-4 shadow-md">
-            <div class="flex items-center justify-between mb-2">
-                <span class="font-medium text-green-700">
-                    <i class="bi bi-newspaper"></i>
-                    News Article
-                </span>
-                <span id="newsPercentage" class="font-semibold text-green-700"></span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-3">
-                <div id="newsBar" class="bg-green-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
-            </div>
-        </div>
-        
-        <div class="bg-white rounded-lg p-4 shadow-md">
-            <div class="flex items-center justify-between mb-2">
-                <span class="font-medium text-gray-700">
-                    <i class="bi bi-globe2"></i>
-                    Regular Website
-                </span>
-                <span id="regularPercentage" class="font-semibold text-gray-700"></span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-3">
-                <div id="regularBar" class="bg-gray-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Feedback Section -->
-    <div class="bg-blue-50 border border-blue-200 rounded-xl p-6">
-        <h4 class="text-lg font-semibold text-gray-800 mb-4">
-            <i class="bi bi-hand-thumbs-up"></i>
-            Help Improve the Model
-        </h4>
-        <p class="text-gray-700 mb-4">
-            Was this prediction correct? Your feedback helps the AI learn and improve!
-        </p>
-        
-        <div class="flex flex-wrap gap-4 items-center">
-            <div class="flex gap-2">
-                <button id="correctBtn" class="feedback-btn bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
-                    <i class="bi bi-check-circle mr-1"></i>
-                    Correct
-                </button>
-                <button id="incorrectBtn" class="feedback-btn bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500">
-                    <i class="bi bi-x-circle mr-1"></i>
-                    Incorrect
-                </button>
-            </div>
-            
-            <div class="flex items-center gap-2">
-                <label for="confidenceSlider" class="text-sm font-medium text-gray-700">
-                    Your Confidence:
-                </label>
-                <input type="range" id="confidenceSlider" min="0.1" max="1" step="0.1" value="0.8" 
-                       class="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                <span id="confidenceValue" class="text-sm font-medium text-gray-700">80%</span>
-            </div>
-        </div>
-        
-        <div id="feedbackMessage" class="hidden mt-4 p-3 rounded-lg"></div>
-    </div>
-</div>
+{% include 'components/url-classifier/classification_results.html' %}
 
 <!-- Model Statistics -->
-<div class="bg-gray-50 rounded-xl p-6 mb-8">
-    <h3 class="text-xl font-semibold text-gray-800 mb-4">
-        <i class="bi bi-graph-up"></i>
-        Model Performance
-    </h3>
-    
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div class="text-center">
-            <div class="text-2xl font-bold text-blue-600" id="feedbackCount">0</div>
-            <div class="text-sm text-gray-600">Feedback Samples</div>
-        </div>
-        <div class="text-center">
-            <div class="text-2xl font-bold text-green-600" id="modelAccuracy">0%</div>
-            <div class="text-sm text-gray-600">Model Accuracy</div>
-        </div>
-        <div class="text-center">
-            <div class="text-2xl font-bold text-purple-600" id="trainingIterations">0</div>
-            <div class="text-sm text-gray-600">Training Iterations</div>
-        </div>
-        <div class="text-center">
-            <button id="retrainBtn" class="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                <i class="bi bi-arrow-clockwise mr-1"></i>
-                Retrain Model
-            </button>
-        </div>
-    </div>
-</div>
+{% include 'components/url-classifier/model_statistics.html' %}
 
 <!-- Recent Feedback -->
-<div id="recentFeedback" class="bg-white rounded-xl p-6 shadow-lg">
-    <h3 class="text-xl font-semibold text-gray-800 mb-4">
-        <i class="bi bi-clock-history"></i>
-        Recent Feedback
-    </h3>
-    <div id="feedbackList" class="space-y-2">
-        <!-- Recent feedback items will be dynamically inserted here -->
-    </div>
-</div>
+{% include 'components/url-classifier/recent_feedback.html' %}
 
 <!-- Error Display -->
-<div id="error" class="hidden mt-8 bg-red-50 border border-red-200 rounded-lg p-4">
-    <div class="flex items-center">
-        <i class="bi bi-exclamation-circle text-red-500 text-xl mr-3"></i>
-        <div class="flex-1">
-            <h4 class="text-red-800 font-semibold">Error</h4>
-            <p id="errorMessage" class="text-red-700"></p>
-        </div>
-    </div>
-</div>
+{% include 'components/url-classifier/error_display.html' %}
+
 {% endblock %}
 
 {% block scripts %}

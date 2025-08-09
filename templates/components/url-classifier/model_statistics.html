@@ -1,0 +1,28 @@
+<!-- Model Statistics -->
+<div class="bg-gray-50 rounded-xl p-6 mb-8">
+    <h3 class="text-xl font-semibold text-gray-800 mb-4">
+        <i class="bi bi-graph-up"></i>
+        Model Performance
+    </h3>
+    
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="text-center">
+            <div class="text-2xl font-bold text-blue-600" id="feedbackCount">0</div>
+            <div class="text-sm text-gray-600">Feedback Samples</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-green-600" id="modelAccuracy">0%</div>
+            <div class="text-sm text-gray-600">Model Accuracy</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-purple-600" id="trainingIterations">0</div>
+            <div class="text-sm text-gray-600">Training Iterations</div>
+        </div>
+        <div class="text-center">
+            <button id="retrainBtn" class="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                <i class="bi bi-arrow-clockwise mr-1"></i>
+                Retrain Model
+            </button>
+        </div>
+    </div>
+</div>

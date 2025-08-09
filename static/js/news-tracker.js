@@ -10,7 +10,6 @@ class NewsTracker {
         this.currentPage = 1;
         this.itemsPerPage = 10;
         this.autoFetchInterval = null;
-        this.currentArticleIndex = 0;
         
         this.init();
     }
@@ -48,17 +47,10 @@ class NewsTracker {
             document.getElementById('selectedBatchSize').textContent = size;
             this.clearBatchSelection();
         });
-        document.getElementById('selectBatchBtn').addEventListener('click', () => this.selectBatchArticles());
+        document.getElementById('selectAllBtn').addEventListener('click', () => this.selectBatchArticles());
         document.getElementById('batchMarkNewsBtn').addEventListener('click', () => this.batchVerifyArticles(true));
         document.getElementById('batchMarkNotNewsBtn').addEventListener('click', () => this.batchVerifyArticles(false));
         document.getElementById('clearSelectionBtn').addEventListener('click', () => this.clearBatchSelection());
-        
-        // Verification
-        document.getElementById('verifyNewsBtn').addEventListener('click', () => this.verifyArticle(true));
-        document.getElementById('verifyNotNewsBtn').addEventListener('click', () => this.verifyArticle(false));
-        document.getElementById('skipArticleBtn').addEventListener('click', () => this.skipArticle());
-        document.getElementById('viewFullArticleBtn').addEventListener('click', () => this.viewFullArticle());
-        document.getElementById('reportIssueBtn').addEventListener('click', () => this.reportIssue());
         
         // Pagination
         document.getElementById('prevPageBtn').addEventListener('click', () => this.previousPage());
@@ -187,7 +179,6 @@ class NewsTracker {
                 
                 if (data.articles.length > 0) {
                     this.showSuccess(`Found ${data.articles.length} new articles`);
-                    this.showVerificationInterface();
                 } else {
                     this.showSuccess('No new articles found');
                 }
@@ -246,7 +237,6 @@ class NewsTracker {
         const unverifiedArticles = this.articleQueue.filter(article => !article.verified);
         
         if (unverifiedArticles.length === 0) {
-            this.hideVerificationInterface();
             this.showSuccess('All articles have been verified!');
             return;
         }
@@ -307,23 +297,6 @@ class NewsTracker {
                 </div>
             </div>
         `;
-    }
-    
-    showVerificationInterface() {
-        const verificationPanel = document.getElementById('verificationInterface');
-        verificationPanel.classList.remove('hidden');
-        
-        // Find first unverified article
-        const unverifiedIndex = this.articleQueue.findIndex(article => !article.verified);
-        if (unverifiedIndex !== -1) {
-            this.currentArticleIndex = unverifiedIndex;
-            this.displayCurrentArticle();
-            this.updateVerificationProgress();
-        }
-    }
-    
-    hideVerificationInterface() {
-        document.getElementById('verificationInterface').classList.add('hidden');
     }
     
     updateVerificationProgress() {
@@ -405,47 +378,59 @@ class NewsTracker {
         const endIndex = startIndex + this.itemsPerPage;
         const paginatedArticles = filteredArticles.slice(startIndex, endIndex);
         
-        container.innerHTML = paginatedArticles.map(article => `
-            <div data-article-id="${article.id}" class="flex items-start justify-between p-4 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors batch-selectable">
-                <div class="flex-1">
-                    <h4 class="font-medium text-gray-800 mb-1">${this.escapeHtml(article.title || 'No Title')}</h4>
-                    <p class="text-sm text-blue-600 hover:text-blue-800 mb-2">
-                        <a href="${article.url}" target="_blank" rel="noopener noreferrer">${article.url}</a>
-                    </p>
-                    ${article.description ? `<p class="text-sm text-gray-600 mb-2">${this.escapeHtml(article.description)}</p>` : ''}
-                    <div class="flex items-center text-xs text-gray-500">
-                        <span class="mr-3">
-                            <i class="bi bi-globe mr-1"></i>
-                            ${this.escapeHtml(article.site_name || article.siteName || 'Unknown')}
-                        </span>
-                        <span class="mr-3">
-                            <i class="bi bi-calendar mr-1"></i>
-                            ${new Date(article.found_at || article.foundAt).toLocaleString()}
-                        </span>
-                        ${article.confidence ? `
+        container.innerHTML = paginatedArticles.map(article => {
+            const isSelectable = !article.verified;
+            const baseClasses = isSelectable 
+                ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200' 
+                : 'opacity-75';
+            
+            return `
+                <div data-article-id="${article.id}" 
+                     class="flex items-start justify-between p-4 bg-gray-50 rounded-lg border ${baseClasses} relative"
+                     ${isSelectable ? `onclick="newsTracker.toggleArticleSelection('${article.id}')"` : ''}>
+                    
+                    <!-- Selection indicator (will be updated by JS) -->
+                    <div class="selection-indicator hidden absolute top-2 right-2 bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold z-10">
+                        ✓
+                    </div>
+                    
+                    <div class="flex-1">
+                        <h4 class="font-medium text-gray-800 mb-1">${this.escapeHtml(article.title || 'No Title')}</h4>
+                        <p class="text-sm text-blue-600 hover:text-blue-800 mb-2">
+                            <a href="${article.url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${article.url}</a>
+                        </p>
+                        ${article.description ? `<p class="text-sm text-gray-600 mb-2">${this.escapeHtml(article.description)}</p>` : ''}
+                        <div class="flex items-center text-xs text-gray-500">
                             <span class="mr-3">
-                                <i class="bi bi-speedometer2 mr-1"></i>
-                                ${(article.confidence * 100).toFixed(0)}% conf.
+                                <i class="bi bi-globe mr-1"></i>
+                                ${this.escapeHtml(article.site_name || article.siteName || 'Unknown')}
+                            </span>
+                            <span class="mr-3">
+                                <i class="bi bi-calendar mr-1"></i>
+                                ${new Date(article.found_at || article.foundAt).toLocaleString()}
+                            </span>
+                            ${article.confidence ? `
+                                <span class="mr-3">
+                                    <i class="bi bi-speedometer2 mr-1"></i>
+                                    ${(article.confidence * 100).toFixed(0)}% conf.
+                                </span>
+                            ` : ''}
+                        </div>
+                    </div>
+                    <div class="ml-4 flex flex-col items-end">
+                        <span class="px-2 py-1 text-xs rounded-full mb-2 ${this.getStatusBadgeClass(article)}">
+                            ${this.getStatusText(article)}
+                        </span>
+                        ${isSelectable ? `
+                            <span class="text-xs text-blue-600 select-hint">
+                                <i class="bi bi-hand-index mr-1"></i>
+                                Click to select
                             </span>
                         ` : ''}
                     </div>
                 </div>
-                <div class="ml-4 flex flex-col items-end">
-                    <span class="px-2 py-1 text-xs rounded-full mb-2 ${this.getStatusBadgeClass(article)}">
-                        ${this.getStatusText(article)}
-                    </span>
-                    ${!article.verified ? `
-                        <button 
-                            onclick="newsTracker.verifyFromQueue('${article.id}')"
-                            class="text-blue-600 hover:text-blue-800 text-xs"
-                        >
-                            <i class="bi bi-check-square mr-1"></i>
-                            Verify
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
         
         this.updatePagination(filteredArticles.length);
     }
@@ -613,11 +598,6 @@ class NewsTracker {
                 this.updateCounts();
                 this.updateStatistics();
                 
-                // Show verification interface if there are unverified articles
-                const unverifiedArticles = this.articleQueue.filter(article => !article.verified);
-                if (unverifiedArticles.length > 0) {
-                    this.showVerificationInterface();
-                }
             } else {
                 console.error('Failed to load data:', data.error);
                 this.showError('Failed to load tracked websites');
@@ -657,7 +637,6 @@ class NewsTracker {
         this.articleQueue = [];
         this.renderArticleQueue();
         this.updateCounts();
-        this.hideVerificationInterface();
         this.showSuccess('Queue cleared successfully');
     }
     
@@ -699,71 +678,119 @@ class NewsTracker {
         }
     }
     
-    verifyFromQueue(articleId) {
-        const articleIndex = this.articleQueue.findIndex(article => article.id === articleId);
-        if (articleIndex !== -1) {
-            this.currentArticleIndex = articleIndex;
-            this.showVerificationInterface();
+    // Batch verification methods (individual verification removed)
+    toggleArticleSelection(articleId) {
+        const articleElement = document.querySelector(`[data-article-id="${articleId}"]`);
+        const article = this.articleQueue.find(a => a.id == articleId);
+        
+        if (!articleElement || !article || article.verified) {
+            return; // Can't select verified articles
+        }
+        
+        const isSelected = articleElement.dataset.batchSelected === 'true';
+        
+        if (isSelected) {
+            this.unselectArticle(articleElement);
+        } else {
+            // Check if we've reached the max selection limit
+            const currentSelections = document.querySelectorAll('[data-batch-selected="true"]').length;
+            const maxSelections = parseInt(document.getElementById('batchSize').value);
+            
+            if (currentSelections >= maxSelections) {
+                this.showError(`Maximum ${maxSelections} articles can be selected at once`);
+                return;
+            }
+            
+            this.selectArticle(articleElement);
+        }
+        
+        this.updateSelectionCount();
+        this.updateBatchActionButtons();
+    }
+    
+    selectArticle(articleElement) {
+        articleElement.dataset.batchSelected = 'true';
+        articleElement.classList.remove('bg-gray-50', 'border-gray-200');
+        articleElement.classList.add('bg-blue-50', 'border-blue-400', 'border-2');
+        
+        // Show checkmark
+        const indicator = articleElement.querySelector('.selection-indicator');
+        indicator.classList.remove('hidden');
+        
+        // Hide the "click to select" hint
+        const hint = articleElement.querySelector('.select-hint');
+        if (hint) hint.classList.add('hidden');
+    }
+    
+    unselectArticle(articleElement) {
+        delete articleElement.dataset.batchSelected;
+        articleElement.classList.remove('bg-blue-50', 'border-blue-400', 'border-2');
+        articleElement.classList.add('bg-gray-50', 'border-gray-200');
+        
+        // Hide checkmark
+        const indicator = articleElement.querySelector('.selection-indicator');
+        indicator.classList.add('hidden');
+        
+        // Show the "click to select" hint
+        const hint = articleElement.querySelector('.select-hint');
+        if (hint) hint.classList.remove('hidden');
+    }
+    
+    updateSelectionCount() {
+        const selectedCount = document.querySelectorAll('[data-batch-selected="true"]').length;
+        document.getElementById('selectionCount').textContent = `${selectedCount} articles selected`;
+    }
+    
+    updateBatchActionButtons() {
+        const selectedCount = document.querySelectorAll('[data-batch-selected="true"]').length;
+        const newsBtn = document.getElementById('batchMarkNewsBtn');
+        const notNewsBtn = document.getElementById('batchMarkNotNewsBtn');
+        
+        if (selectedCount > 0) {
+            newsBtn.disabled = false;
+            notNewsBtn.disabled = false;
+        } else {
+            newsBtn.disabled = true;
+            notNewsBtn.disabled = true;
         }
     }
     
-    viewFullArticle() {
-        const article = this.articleQueue[this.currentArticleIndex];
-        if (article) {
-            window.open(article.url, '_blank');
-        }
-    }
-    
-    reportIssue() {
-        const article = this.articleQueue[this.currentArticleIndex];
-        if (article) {
-            const subject = encodeURIComponent(`Issue with article: ${article.title || article.url}`);
-            const body = encodeURIComponent(`Article URL: ${article.url}\n\nIssue description: `);
-            window.open(`mailto:support@example.com?subject=${subject}&body=${body}`);
-        }
-    }
-    
-    // Batch verification methods
     selectBatchArticles() {
         const batchSize = parseInt(document.getElementById('batchSize').value);
         const unverifiedArticles = this.articleQueue.filter(article => !article.verified);
         
         if (unverifiedArticles.length === 0) {
-            this.showError('No unverified articles available for batch selection');
+            this.showError('No unverified articles available for selection');
             return;
         }
-        
-        const articlesToSelect = unverifiedArticles.slice(0, batchSize);
         
         // Clear any existing selections
         this.clearBatchSelection();
         
-        // Add batch-selected class to articles
+        // Select up to batchSize unverified articles
+        const articlesToSelect = unverifiedArticles.slice(0, batchSize);
+        
         articlesToSelect.forEach(article => {
             const articleElement = document.querySelector(`[data-article-id="${article.id}"]`);
             if (articleElement) {
-                articleElement.classList.add('batch-selected');
-                articleElement.dataset.batchSelected = 'true';
+                this.selectArticle(articleElement);
             }
         });
         
-        // Show batch actions
-        document.getElementById('batchActions').classList.remove('hidden');
-        document.getElementById('selectBatchBtn').classList.add('hidden');
+        this.updateSelectionCount();
+        this.updateBatchActionButtons();
         
         this.showInfo(`Selected ${articlesToSelect.length} articles for batch verification`);
     }
     
     clearBatchSelection() {
-        // Remove batch-selected class from all articles
-        document.querySelectorAll('.batch-selected').forEach(element => {
-            element.classList.remove('batch-selected');
-            delete element.dataset.batchSelected;
+        // Unselect all selected articles
+        document.querySelectorAll('[data-batch-selected="true"]').forEach(element => {
+            this.unselectArticle(element);
         });
         
-        // Hide batch actions
-        document.getElementById('batchActions').classList.add('hidden');
-        document.getElementById('selectBatchBtn').classList.remove('hidden');
+        this.updateSelectionCount();
+        this.updateBatchActionButtons();
         
         // Hide any batch status messages
         document.getElementById('batchStatus').classList.add('hidden');
@@ -779,7 +806,10 @@ class NewsTracker {
         
         // Show progress indicator
         document.getElementById('batchProgress').classList.remove('hidden');
-        document.getElementById('batchActions').classList.add('hidden');
+        
+        // Disable batch action buttons during processing
+        document.getElementById('batchMarkNewsBtn').disabled = true;
+        document.getElementById('batchMarkNotNewsBtn').disabled = true;
         
         // Prepare batch data
         const articles = Array.from(selectedElements).map(element => {
@@ -837,12 +867,6 @@ class NewsTracker {
                 this.renderArticleQueue();
                 this.updateCounts();
                 
-                // Hide verification interface if no more unverified articles
-                const unverifiedCount = this.articleQueue.filter(a => !a.verified).length;
-                if (unverifiedCount === 0) {
-                    this.hideVerificationInterface();
-                }
-                
             } else {
                 this.showError(data.error || 'Failed to perform batch verification');
             }
@@ -851,9 +875,9 @@ class NewsTracker {
             console.error('Batch verification error:', error);
             this.showError('Network error during batch verification');
         } finally {
-            // Hide progress indicator
+            // Hide progress indicator and re-enable buttons
             document.getElementById('batchProgress').classList.add('hidden');
-            document.getElementById('batchActions').classList.remove('hidden');
+            this.updateBatchActionButtons();
         }
     }
     

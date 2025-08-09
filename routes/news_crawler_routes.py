@@ -8,7 +8,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Blueprint, request, jsonify
-from modules.news_website_crawler.crawler import NewsWebsiteCrawler
+from modules.news_website_crawler import NewsWebsiteCrawler
 
 # Create blueprint for news crawler routes
 news_crawler_bp = Blueprint('news_crawler', __name__)

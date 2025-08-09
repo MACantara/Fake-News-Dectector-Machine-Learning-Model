@@ -292,7 +292,7 @@ class PhilippineNewsSearch {
     // Display article details modal
     displayArticleDetails(article) {
         const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
         modal.innerHTML = `
             <div class="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-y-auto">
                 <div class="p-6">

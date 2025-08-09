@@ -5,7 +5,6 @@ Uses the sophisticated news crawler for intelligent article extraction
 
 INTEGRATION FEATURES:
 - Uses /crawl-website endpoint for intelligent article discovery
-- Sends verification feedback to /url-classifier-feedback endpoint
 - Stores crawler metadata (confidence, predictions) for feedback
 - Contributes to ML model improvement through user verifications
 """
@@ -486,7 +485,7 @@ def fetch_articles_from_crawler(url, site_name, website_id):
     return articles
 
 def send_url_classifier_feedback(url, article_data, user_verification):
-    """Send feedback to URL classifier to improve the model"""
+    """Send feedback to URL classifier to improve the model using direct method calls"""
     try:
         if not url or article_data is None:
             logging.warning("⚠️ Incomplete data for URL classifier feedback")
@@ -498,7 +497,14 @@ def send_url_classifier_feedback(url, article_data, user_verification):
         predicted_is_news = article_data[2] if len(article_data) > 2 else True  # Default to True if no prediction
         probability_news = article_data[3] if len(article_data) > 3 else None
         
-        # Prepare feedback data for URL classifier
+        # Get the shared URL classifier instance
+        url_classifier = get_url_classifier()
+        
+        if url_classifier is None:
+            logging.warning("⚠️ URL classifier not available for feedback")
+            return
+        
+        # Prepare feedback data (same format as HTTP endpoint)
         feedback_data = {
             'url': article_url,
             'predicted_label': bool(predicted_is_news),  # What the crawler/model predicted
@@ -507,30 +513,34 @@ def send_url_classifier_feedback(url, article_data, user_verification):
             'comment': f'News Tracker verification - Confidence: {confidence}, Prob: {probability_news}'
         }
         
-        # Send feedback to URL classifier endpoint
-        response = requests.post(
-            'http://127.0.0.1:5000/url-classifier-feedback',
-            json=feedback_data,
-            headers={'Content-Type': 'application/json'},
-            timeout=10
+        # Use direct method call instead of HTTP request
+        start_time = time.time()
+        
+        # Add feedback directly to the classifier
+        success = url_classifier.add_feedback(
+            url=feedback_data['url'],
+            predicted_label=feedback_data['predicted_label'],
+            actual_label=feedback_data['actual_label'],
+            user_confidence=feedback_data['user_confidence']
         )
         
-        if response.status_code == 200:
-            result = response.json()
-            if result.get('success'):
-                logging.info(f"✅ URL classifier feedback sent successfully for {url}")
-                logging.info(f"📊 Model stats: {result.get('model_stats', {})}")
-                
-                # Check if retraining was triggered
-                if result.get('retraining_triggered'):
-                    logging.info("🚀 URL classifier retraining triggered by feedback!")
-            else:
-                logging.warning(f"⚠️ URL classifier feedback failed: {result.get('error')}")
-        else:
-            logging.error(f"❌ URL classifier feedback HTTP error: {response.status_code}")
+        end_time = time.time()
+        duration_ms = (end_time - start_time) * 1000
+        
+        if success:
+            logging.info(f"✅ URL classifier feedback added successfully for {url} (took {duration_ms:.1f}ms)")
             
-    except requests.exceptions.RequestException as e:
-        logging.warning(f"⚠️ Network error sending URL classifier feedback: {str(e)}")
+            # Get current model stats
+            stats = url_classifier.get_model_stats()
+            logging.info(f"📊 Model stats: {stats}")
+            
+            # Check if retraining should be triggered (every 10 feedback entries)
+            feedback_count = stats.get('total_feedback', 0)
+            if feedback_count > 0 and feedback_count % 10 == 0:
+                logging.info("🚀 URL classifier retraining recommended (10 new feedback entries)")
+        else:
+            logging.warning(f"⚠️ URL classifier feedback failed for {url}")
+            
     except Exception as e:
         logging.warning(f"⚠️ Error sending URL classifier feedback: {str(e)}")
     # Don't raise exceptions - feedback is optional and shouldn't break verification

@@ -275,7 +275,7 @@ class NewsTracker {
                         </p>
                     </div>
                     <span class="text-xs text-gray-500 ml-4">
-                        ${new Date(article.foundAt).toLocaleString()}
+                        ${new Date(article.found_at || article.foundAt).toLocaleString()}
                     </span>
                 </div>
                 
@@ -288,7 +288,7 @@ class NewsTracker {
                 <div class="flex items-center justify-between text-xs text-gray-500">
                     <span>
                         <i class="bi bi-globe mr-1"></i>
-                        ${this.escapeHtml(article.siteName || 'Unknown Source')}
+                        ${this.escapeHtml(article.site_name || article.siteName || 'Unknown Source')}
                     </span>
                     <span>
                         Article ${this.currentArticleIndex + 1} of ${this.articleQueue.length}
@@ -346,15 +346,15 @@ class NewsTracker {
                     <div class="flex items-center mt-1 text-xs text-gray-500">
                         <span class="mr-3">
                             <i class="bi bi-clock mr-1"></i>
-                            Every ${website.interval} min
+                            Every ${website.fetch_interval || website.interval || 60} min
                         </span>
                         <span class="mr-3">
                             <i class="bi bi-newspaper mr-1"></i>
-                            ${website.articleCount} articles
+                            ${website.article_count || website.articleCount || 0} articles
                         </span>
                         <span>
                             <i class="bi bi-calendar mr-1"></i>
-                            ${website.lastFetch ? new Date(website.lastFetch).toLocaleString() : 'Never fetched'}
+                            ${website.last_fetch || website.lastFetch ? new Date(website.last_fetch || website.lastFetch).toLocaleString() : 'Never fetched'}
                         </span>
                     </div>
                 </div>
@@ -405,11 +405,11 @@ class NewsTracker {
                     <div class="flex items-center text-xs text-gray-500">
                         <span class="mr-3">
                             <i class="bi bi-globe mr-1"></i>
-                            ${this.escapeHtml(article.siteName || 'Unknown')}
+                            ${this.escapeHtml(article.site_name || article.siteName || 'Unknown')}
                         </span>
                         <span>
                             <i class="bi bi-calendar mr-1"></i>
-                            ${new Date(article.foundAt).toLocaleString()}
+                            ${new Date(article.found_at || article.foundAt).toLocaleString()}
                         </span>
                     </div>
                 </div>
@@ -440,9 +440,15 @@ class NewsTracker {
             case 'verified':
                 return this.articleQueue.filter(article => article.verified);
             case 'news':
-                return this.articleQueue.filter(article => article.verified && article.isNews);
+                return this.articleQueue.filter(article => {
+                    const isNews = article.is_news !== undefined ? article.is_news : article.isNews;
+                    return article.verified && isNews;
+                });
             case 'not-news':
-                return this.articleQueue.filter(article => article.verified && !article.isNews);
+                return this.articleQueue.filter(article => {
+                    const isNews = article.is_news !== undefined ? article.is_news : article.isNews;
+                    return article.verified && !isNews;
+                });
             default:
                 return this.articleQueue;
         }
@@ -450,20 +456,28 @@ class NewsTracker {
     
     getStatusBadgeClass(article) {
         if (!article.verified) return 'bg-yellow-100 text-yellow-800';
-        if (article.isNews) return 'bg-green-100 text-green-800';
+        const isNews = article.is_news !== undefined ? article.is_news : article.isNews;
+        if (isNews) return 'bg-green-100 text-green-800';
         return 'bg-red-100 text-red-800';
     }
     
     getStatusText(article) {
         if (!article.verified) return 'Pending';
-        if (article.isNews) return 'News';
+        const isNews = article.is_news !== undefined ? article.is_news : article.isNews;
+        if (isNews) return 'News';
         return 'Not News';
     }
     
     updateCounts() {
         const verifiedCount = this.articleQueue.filter(article => article.verified).length;
-        const verifiedNewsCount = this.articleQueue.filter(article => article.verified && article.isNews).length;
-        const notNewsCount = this.articleQueue.filter(article => article.verified && !article.isNews).length;
+        const verifiedNewsCount = this.articleQueue.filter(article => {
+            const isNews = article.is_news !== undefined ? article.is_news : article.isNews;
+            return article.verified && isNews;
+        }).length;
+        const notNewsCount = this.articleQueue.filter(article => {
+            const isNews = article.is_news !== undefined ? article.is_news : article.isNews;
+            return article.verified && !isNews;
+        }).length;
         const pendingCount = this.articleQueue.filter(article => !article.verified).length;
         
         document.getElementById('trackedWebsitesCount').textContent = this.trackedWebsites.length;
@@ -568,17 +582,38 @@ class NewsTracker {
         document.getElementById('successDisplay').classList.add('hidden');
     }
     
-    // Placeholder methods for features that would need backend implementation
+    // Load data from server
     async loadTrackedWebsites() {
-        // Load from server/localStorage
-        this.renderTrackedWebsites();
-        this.updateCounts();
+        try {
+            const response = await fetch('/api/news-tracker/get-data');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.trackedWebsites = data.websites || [];
+                this.articleQueue = data.articles || [];
+                this.renderTrackedWebsites();
+                this.renderArticleQueue();
+                this.updateCounts();
+                this.updateStatistics();
+                
+                // Show verification interface if there are unverified articles
+                const unverifiedArticles = this.articleQueue.filter(article => !article.verified);
+                if (unverifiedArticles.length > 0) {
+                    this.showVerificationInterface();
+                }
+            } else {
+                console.error('Failed to load data:', data.error);
+                this.showError('Failed to load tracked websites');
+            }
+        } catch (error) {
+            console.error('Error loading data:', error);
+            this.showError('Network error while loading data');
+        }
     }
     
     async loadArticleQueue() {
-        // Load from server/localStorage
-        this.renderArticleQueue();
-        this.updateCounts();
+        // This is now handled by loadTrackedWebsites()
+        return;
     }
     
     setupAutoFetch() {

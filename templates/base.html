@@ -39,7 +39,7 @@
                         <i class="bi bi-search mr-2"></i>
                         Philippine News Search
                     </a>
-                    <a href="{{ url_for('url_classifier') }}" class="nav-link {% if request.endpoint == 'url_classifier' %}bg-purple-700{% else %}bg-purple-600 hover:bg-purple-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    <a href="{{ url_for('url_classifier.url_classifier_page') }}" class="nav-link {% if request.endpoint == 'url_classifier.url_classifier_page' %}bg-purple-700{% else %}bg-purple-600 hover:bg-purple-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
                         <i class="bi bi-robot mr-2"></i>
                         URL Classifier (RL)
                     </a>

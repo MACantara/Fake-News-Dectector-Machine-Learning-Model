@@ -15,6 +15,7 @@ from routes.news_crawler_routes import news_crawler_bp
 from routes.philippine_news_search_routes import philippine_news_bp, init_philippine_search_index
 from routes.political_news_routes import political_news_bp, init_political_detector
 from routes.fake_news_routes import fake_news_bp, init_fake_news_detector
+from routes.url_classifier_routes import url_classifier_bp, init_url_classifier
 
 # Import utility functions from political news detector
 from modules.political_news_detector.utils import extract_political_content_from_url
@@ -29,11 +30,6 @@ political_detector = PoliticalNewsDetector()
 def index():
     """Main page"""
     return render_template('news_analysis.html')
-
-@app.route('/url-classifier')
-def url_classifier():
-    """URL classifier page"""
-    return render_template('url_classifier.html')
 
 @app.route('/philippine-search')
 def philippine_search():
@@ -200,12 +196,14 @@ def initialize_models():
 philippine_search_index = init_philippine_search_index()
 init_political_detector(political_detector)
 init_fake_news_detector(detector, political_detector, philippine_search_index)
+url_classifier = init_url_classifier()
 
 # Register the blueprints
 app.register_blueprint(news_crawler_bp)
 app.register_blueprint(philippine_news_bp)
 app.register_blueprint(political_news_bp)
 app.register_blueprint(fake_news_bp)
+app.register_blueprint(url_classifier_bp)
 
 if __name__ == '__main__':
     # Initialize models in a separate thread to avoid blocking

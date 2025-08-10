@@ -254,7 +254,6 @@ def fetch_articles():
         for website_id, url, name in websites:
             try:
                 logging.info(f"🔄 Fetching articles from {name} ({url})")
-                print(f"🔄 DEBUG: Fetching articles from {name} ({url})")
                 
                 articles = fetch_articles_from_crawler(url, name, website_id)
                 all_articles.extend(articles)
@@ -266,18 +265,15 @@ def fetch_articles():
                 batch_operations['fetch_logs'].append((website_id, len(articles), True, None))
                 
                 logging.info(f"✅ Collected {len(articles)} articles from {name}")
-                print(f"✅ DEBUG: Collected {len(articles)} articles from {name}")
                 
             except Exception as e:
                 logging.error(f"❌ Error fetching from {url}: {str(e)}")
-                print(f"❌ DEBUG: Error fetching from {url}: {str(e)}")
                 
                 # Prepare error log operation
                 batch_operations['fetch_logs'].append((website_id, 0, False, str(e)))
         
         # Phase 2: Database Operation Preparation
         logging.info(f"� Phase 2: Preparing database operations for {len(all_articles)} total articles")
-        print(f"� DEBUG: Phase 2: Preparing database operations for {len(all_articles)} total articles")
         
         valid_articles = []
         if all_articles:
@@ -294,14 +290,9 @@ def fetch_articles():
                     valid_articles.append(article)
                 except KeyError as e:
                     logging.warning(f"⚠️ Skipping article with missing field: {e}")
-                    print(f"⚠️ DEBUG: Skipping article with missing field: {e}")
         
         # Phase 3: Single Atomic Database Transaction
         logging.info(f"🚀 Phase 3: Executing atomic database transaction")
-        print(f"🚀 DEBUG: Phase 3: Executing atomic database transaction")
-        print(f"   DEBUG: - {len(batch_operations['website_updates'])} website updates")
-        print(f"   DEBUG: - {len(batch_operations['fetch_logs'])} fetch logs")
-        print(f"   DEBUG: - {len(batch_operations['article_inserts'])} article inserts")
         
         new_articles = []
         conn = sqlite3.connect(DATABASE_FILE)
@@ -318,7 +309,6 @@ def fetch_articles():
                     WHERE id = ?
                 ''', batch_operations['website_updates'])
                 logging.info(f"✅ Batch updated {len(batch_operations['website_updates'])} website timestamps")
-                print(f"✅ DEBUG: Batch updated {len(batch_operations['website_updates'])} website timestamps")
             
             # 2. Insert fetch logs
             if batch_operations['fetch_logs']:
@@ -327,7 +317,6 @@ def fetch_articles():
                     VALUES (?, ?, ?, ?)
                 ''', batch_operations['fetch_logs'])
                 logging.info(f"✅ Batch inserted {len(batch_operations['fetch_logs'])} fetch logs")
-                print(f"✅ DEBUG: Batch inserted {len(batch_operations['fetch_logs'])} fetch logs")
             
             # 3. Insert articles with duplicate handling
             if batch_operations['article_inserts']:
@@ -351,17 +340,14 @@ def fetch_articles():
                         })
                 
                 logging.info(f"✅ Batch inserted articles: {len(batch_operations['article_inserts'])} attempted, {len(new_articles)} new")
-                print(f"✅ DEBUG: Batch inserted articles: {len(batch_operations['article_inserts'])} attempted, {len(new_articles)} new")
             
             # Commit entire transaction
             conn.commit()
             logging.info(f"🎉 Atomic transaction completed successfully!")
-            print(f"🎉 DEBUG: Atomic transaction completed successfully!")
             
         except Exception as e:
             conn.rollback()
             logging.error(f"❌ Atomic transaction failed, rolling back all operations: {str(e)}")
-            print(f"❌ DEBUG: Atomic transaction failed, rolling back all operations: {str(e)}")
             
             # Return error but don't crash
             conn.close()
@@ -467,7 +453,6 @@ def batch_verify_articles():
         
         # Phase 1: Data Collection and Validation (NO database writes)
         logging.info(f"🔍 Phase 1: Processing batch verification for {len(articles)} articles")
-        print(f"🔍 DEBUG: Phase 1: Processing batch verification for {len(articles)} articles")
         
         results = []
         news_articles_for_indexing = []
@@ -492,11 +477,9 @@ def batch_verify_articles():
                 url = article.get('url')
                 
                 logging.info(f"📝 Article {i+1}/{len(articles)}: ID={article_id}, isNews={is_news}, URL={url}")
-                print(f"📝 DEBUG: Article {i+1}/{len(articles)}: ID={article_id}, isNews={is_news}, URL={url}")
                 
                 if not article_id or is_news is None:
                     logging.warning(f"⚠️ Article {i+1} missing data: articleId={article_id}, isNews={is_news}")
-                    print(f"⚠️ DEBUG: Article {i+1} missing data: articleId={article_id}, isNews={is_news}")
                     results.append({
                         'articleId': article_id,
                         'success': False,
@@ -532,7 +515,6 @@ def batch_verify_articles():
                 
             except Exception as e:
                 logging.error(f"❌ Error validating article {i+1} (ID: {article.get('articleId')}): {str(e)}")
-                print(f"❌ DEBUG: Error validating article {i+1} (ID: {article.get('articleId')}): {str(e)}")
                 results.append({
                     'articleId': article.get('articleId'),
                     'success': False,
@@ -543,7 +525,6 @@ def batch_verify_articles():
         
         # Phase 2: Prepare All Database Operations (NO database writes yet)
         logging.info(f"� Phase 2: Preparing batch operations for {len(valid_articles)} valid articles")
-        print(f"� DEBUG: Phase 2: Preparing batch operations for {len(valid_articles)} valid articles")
         
         for i, article in enumerate(valid_articles):
             article_id = article['articleId']
@@ -571,10 +552,8 @@ def batch_verify_articles():
                 news_articles_for_indexing.append(final_url)
                 batch_operations['philippine_urls'].append(final_url)
                 logging.info(f"✅ Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
-                print(f"✅ DEBUG: Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
             else:
                 logging.info(f"⏭️ Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
-                print(f"⏭️ DEBUG: Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
             
             # Prepare success result
             results.append({
@@ -587,10 +566,6 @@ def batch_verify_articles():
         
         # Phase 3: Single Atomic Database Transaction
         logging.info(f"🚀 Phase 3: Executing atomic database transaction")
-        print(f"🚀 DEBUG: Phase 3: Executing atomic database transaction")
-        print(f"   DEBUG: - {len(batch_operations['article_updates'])} article verification updates")
-        print(f"   DEBUG: - {len(batch_operations['feedback_data'])} URL classifier feedback entries")
-        print(f"   DEBUG: - {len(batch_operations['philippine_urls'])} Philippine indexing URLs")
         
         if batch_operations['article_updates']:
             conn = sqlite3.connect(DATABASE_FILE)
@@ -605,17 +580,14 @@ def batch_verify_articles():
                 ''', batch_operations['article_updates'])
                 
                 logging.info(f"✅ Batch updated {len(batch_operations['article_updates'])} article verifications")
-                print(f"✅ DEBUG: Batch updated {len(batch_operations['article_updates'])} article verifications")
                 
                 # Commit database transaction
                 conn.commit()
                 logging.info(f"🎉 Atomic verification transaction completed successfully!")
-                print(f"🎉 DEBUG: Atomic verification transaction completed successfully!")
                 
             except Exception as e:
                 conn.rollback()
                 logging.error(f"❌ Atomic verification transaction failed, rolling back: {str(e)}")
-                print(f"❌ DEBUG: Atomic verification transaction failed, rolling back: {str(e)}")
                 
                 # Update all results to show failure
                 for result in results:
@@ -631,7 +603,6 @@ def batch_verify_articles():
         
         # Phase 4: Post-Database Operations (URL Classifier Feedback & Philippine Indexing)
         logging.info(f"📡 Phase 4: Processing post-database operations")
-        print(f"📡 DEBUG: Phase 4: Processing post-database operations")
         
         # Send URL classifier feedback (external system - done after DB success)
         for feedback_item in batch_operations['feedback_data']:
@@ -643,7 +614,6 @@ def batch_verify_articles():
                 )
             except Exception as e:
                 logging.warning(f"⚠️ URL classifier feedback failed: {str(e)}")
-                print(f"⚠️ DEBUG: URL classifier feedback failed: {str(e)}")
         
         # Log summary statistics
         total_articles = len(articles)
@@ -660,10 +630,8 @@ def batch_verify_articles():
         philippine_indexing_results = []
         if news_articles_for_indexing:
             logging.info(f"🚀 Starting batch indexing of {len(news_articles_for_indexing)} verified news articles into Philippine system")
-            print(f"🚀 DEBUG: Starting batch indexing of {len(news_articles_for_indexing)} verified news articles into Philippine system")
             philippine_indexing_results = batch_index_philippine_news_articles(news_articles_for_indexing)
             logging.info(f"✅ Batch Philippine indexing completed with {len(philippine_indexing_results)} results")
-            print(f"✅ DEBUG: Batch Philippine indexing completed with {len(philippine_indexing_results)} results")
         else:
             logging.info("ℹ️ No news articles to index into Philippine system")
             print("ℹ️ DEBUG: No news articles to index into Philippine system")
@@ -1052,26 +1020,12 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
             return []
         
         logging.info(f"🔍 Starting batch Philippine indexing for {len(urls)} URLs")
-        print(f"🔍 DEBUG: Starting batch Philippine indexing for {len(urls)} URLs")
         
         # Check for duplicate URLs
         unique_urls = list(set(urls))
         if len(unique_urls) != len(urls):
             duplicate_count = len(urls) - len(unique_urls)
             logging.warning(f"⚠️ Found {duplicate_count} duplicate URLs in batch - using {len(unique_urls)} unique URLs")
-            print(f"⚠️ DEBUG: Found {duplicate_count} duplicate URLs in batch - using {len(unique_urls)} unique URLs")
-            for i, url in enumerate(urls):
-                logging.info(f"   Original URL {i+1}: {url}")
-                print(f"   DEBUG: Original URL {i+1}: {url}")
-            logging.info("   Unique URLs:")
-            print("   DEBUG: Unique URLs:")
-            for i, url in enumerate(unique_urls):
-                logging.info(f"   Unique URL {i+1}: {url}")
-                print(f"   DEBUG: Unique URL {i+1}: {url}")
-        else:
-            for i, url in enumerate(urls):
-                logging.info(f"   URL {i+1}: {url}")
-                print(f"   DEBUG: URL {i+1}: {url}")
         
         # Use unique URLs to avoid processing duplicates
         urls_to_process = unique_urls
@@ -1085,7 +1039,6 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         
         # Phase 1: Data Collection and Validation (NO indexing operations yet)
         logging.info(f"📋 Phase 1: Validating and preparing {len(urls_to_process)} URLs for Philippine indexing")
-        print(f"📋 DEBUG: Phase 1: Validating and preparing {len(urls_to_process)} URLs for Philippine indexing")
         
         valid_urls = []
         batch_operations = {
@@ -1097,14 +1050,12 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         for i, url in enumerate(urls_to_process):
             try:
                 logging.info(f"� Validating URL {i+1}/{len(urls_to_process)}: {url}")
-                print(f"� DEBUG: Validating URL {i+1}/{len(urls_to_process)}: {url}")
                 
                 # Validate URL format
                 from urllib.parse import urlparse
                 parsed_url = urlparse(url.strip())
                 if not parsed_url.scheme or not parsed_url.netloc:
                     logging.warning(f"❌ Invalid URL format for URL {i+1}: {url}")
-                    print(f"❌ DEBUG: Invalid URL format for URL {i+1}: {url}")
                     batch_operations['validation_errors'].append({
                         'url': url,
                         'status': 'error',
@@ -1123,11 +1074,9 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                 })
                 
                 logging.info(f"✅ URL {i+1} validated successfully")
-                print(f"✅ DEBUG: URL {i+1} validated successfully")
                 
             except Exception as e:
                 logging.error(f"❌ Validation error for URL {i+1} ({url}): {str(e)}")
-                print(f"❌ DEBUG: Validation error for URL {i+1} ({url}): {str(e)}")
                 batch_operations['validation_errors'].append({
                     'url': url,
                     'status': 'error',
@@ -1137,7 +1086,6 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         
         # Phase 2: Batch Philippine News Indexing Operations using new atomic method
         logging.info(f"🚀 Phase 2: Executing atomic batch Philippine indexing for {len(valid_urls)} valid URLs")
-        print(f"🚀 DEBUG: Phase 2: Executing atomic batch Philippine indexing for {len(valid_urls)} valid URLs")
         
         indexing_results = []
         start_time = time.time()
@@ -1150,7 +1098,6 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                 force_reindex_flag = batch_operations['indexing_operations'][0]['force_reindex'] if batch_operations['indexing_operations'] else False
                 
                 logging.info(f"🔄 Executing atomic batch indexing for {len(urls_for_batch)} URLs")
-                print(f"🔄 DEBUG: Executing atomic batch indexing for {len(urls_for_batch)} URLs")
                 
                 # Use the new batch indexing method with atomic transactions
                 batch_results = philippine_search_index.batch_index_articles(urls_for_batch, force_reindex_flag)
@@ -1158,7 +1105,6 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                 # Convert results to consistent format
                 for i, result in enumerate(batch_results):
                     logging.info(f"✅ URL {i+1} batch indexing result: {result['status']} - {result.get('message', 'No message')}")
-                    print(f"✅ DEBUG: URL {i+1} batch indexing result: {result['status']} - {result.get('message', 'No message')}")
                     
                     indexing_results.append({
                         'url': result['url'],
@@ -1172,11 +1118,9 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                     })
                 
                 logging.info(f"✅ Atomic batch Philippine indexing operations completed for {len(indexing_results)} URLs")
-                print(f"✅ DEBUG: Atomic batch Philippine indexing operations completed for {len(indexing_results)} URLs")
                 
             except Exception as e:
                 logging.error(f"❌ Atomic batch Philippine indexing failed: {str(e)}")
-                print(f"❌ DEBUG: Atomic batch Philippine indexing failed: {str(e)}")
                 
                 # Add error results for failed batch
                 for operation in batch_operations['indexing_operations']:
@@ -1192,7 +1136,6 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         
         # Phase 3: Combine Results and Generate Final Statistics
         logging.info(f"📊 Phase 3: Combining results and generating statistics")
-        print(f"📊 DEBUG: Phase 3: Combining results and generating statistics")
         
         # Combine validation errors and indexing results
         batch_results = []
@@ -1206,28 +1149,8 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         already_indexed_count = len([r for r in batch_results if r['status'] == 'already_indexed'])
         
         logging.info(f"✅ Batch Philippine indexing completed in {duration_ms:.1f}ms:")
-        logging.info(f"   📊 Original URLs: {len(urls)}")
-        logging.info(f"   📊 Unique URLs processed: {len(urls_to_process)}")
-        logging.info(f"   📊 Results returned: {len(batch_results)}")
-        logging.info(f"   📊 Successfully indexed: {success_count}")
-        logging.info(f"   ℹ️ Already indexed: {already_indexed_count}")
-        logging.info(f"   ⏭️ Skipped (not relevant): {skipped_count}")
-        logging.info(f"   ❌ Errors: {error_count}")
-        
-        print(f"✅ DEBUG: Batch Philippine indexing completed in {duration_ms:.1f}ms:")
-        print(f"   📊 DEBUG: Original URLs: {len(urls)}")
-        print(f"   📊 DEBUG: Unique URLs processed: {len(urls_to_process)}")
-        print(f"   📊 DEBUG: Results returned: {len(batch_results)}")
-        print(f"   📊 DEBUG: Successfully indexed: {success_count}")
-        print(f"   ℹ️ DEBUG: Already indexed: {already_indexed_count}")
-        print(f"   ⏭️ DEBUG: Skipped (not relevant): {skipped_count}")
-        print(f"   ❌ DEBUG: Errors: {error_count}")
-        
-        # Log each result for debugging
-        for i, result in enumerate(batch_results):
-            status_emoji = {"success": "✅", "already_indexed": "ℹ️", "skipped": "⏭️", "error": "❌"}.get(result['status'], "❓")
-            logging.info(f"   {status_emoji} URL {i+1}: {result['status']} - {result['url']}")
-            print(f"   DEBUG: {status_emoji} URL {i+1}: {result['status']} - {result['url']}")
+        logging.info(f"   📊 URLs: {len(urls)} → {len(urls_to_process)} unique → {len(batch_results)} results")
+        logging.info(f"   ✅ Success: {success_count}, ℹ️ Already indexed: {already_indexed_count}, ⏭️ Skipped: {skipped_count}, ❌ Errors: {error_count}")
         
         return batch_results
         

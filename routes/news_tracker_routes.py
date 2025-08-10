@@ -1227,14 +1227,16 @@ def fetch_articles_from_crawler(url, site_name, website_id):
             # With filtering enabled, articles are objects with metadata
             for article in raw_articles:
                 if isinstance(article, dict):
+                    # Extract classification data properly from nested structure
+                    classification = article.get('classification', {})
                     normalized_articles.append({
                         'url': article.get('url', ''),
                         'title': article.get('title', ''),
-                        'link_text': article.get('link_text', ''),
-                        'confidence': article.get('confidence', 0.0),
-                        'is_news_prediction': article.get('is_news_prediction', True),
-                        'probability_news': article.get('probability_news', 0.0),
-                        'probability_not_news': article.get('probability_not_news', 1.0)
+                        'link_text': article.get('text', ''),
+                        'confidence': classification.get('confidence', 0.0),
+                        'is_news_prediction': classification.get('is_news_article', True),
+                        'probability_news': classification.get('probability_news', 0.0),
+                        'probability_not_news': classification.get('probability_not_news', 1.0)
                     })
         else:
             # Without filtering, articles are just URLs

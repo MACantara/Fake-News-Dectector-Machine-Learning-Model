@@ -580,13 +580,31 @@ class NewsTracker {
         const filter = document.getElementById('queueFilter').value;
         let filteredArticles = this.filterArticlesByType(filter);
         
-        // Sort articles to put unverified ones first
+        // Sort articles: unverified first, then by confidence score (lowest to highest), then by date
         filteredArticles = filteredArticles.sort((a, b) => {
             // Unverified articles should come first
             if (!a.verified && b.verified) return -1;
             if (a.verified && !b.verified) return 1;
             
-            // If both have same verification status, sort by found date (newest first)
+            // Within same verification status, sort by confidence score
+            const confidenceA = a.confidence || 0.5;
+            const confidenceB = b.confidence || 0.5;
+            
+            // For unverified articles, sort by confidence (lowest first - most uncertain articles need attention first)
+            if (!a.verified && !b.verified) {
+                if (confidenceA !== confidenceB) {
+                    return confidenceA - confidenceB; // Lowest confidence first
+                }
+            }
+            
+            // For verified articles, sort by confidence (highest first - best predictions first)
+            if (a.verified && b.verified) {
+                if (confidenceA !== confidenceB) {
+                    return confidenceB - confidenceA; // Highest confidence first
+                }
+            }
+            
+            // If confidence scores are equal, sort by found date (newest first)
             const dateA = new Date(a.found_at || a.foundAt);
             const dateB = new Date(b.found_at || b.foundAt);
             return dateB - dateA;
@@ -642,18 +660,14 @@ class NewsTracker {
                                     <i class="bi bi-calendar mr-1"></i>
                                     ${new Date(article.found_at || article.foundAt).toLocaleString()}
                                 </span>
-                                ${article.confidence ? `
-                                    <span class="mr-3">
-                                        <i class="bi bi-speedometer2 mr-1"></i>
-                                        ${(article.confidence * 100).toFixed(0)}% conf.
-                                    </span>
-                                ` : ''}
-                                ${this.renderPredictionQualityIndicator(article)}
                             </div>
                             <span class="px-2 py-1 text-xs rounded-full ${this.getStatusBadgeClass(article)}">
                                 ${this.getStatusText(article)}
                             </span>
                         </div>
+                        
+                        <!-- Confidence Score and Prediction Metrics -->
+                        ${this.renderDetailedMetrics(article)}
                     </div>
                 </div>
             `;
@@ -2234,6 +2248,98 @@ class NewsTracker {
         });
     }
     
+    renderDetailedMetrics(article) {
+        if (!article.confidence && !article.probability_news && !article.is_news_prediction) {
+            return '';
+        }
+
+        const confidence = article.confidence || 0.5;
+        const probabilityNews = article.probability_news || 0.5;
+        const probabilityNotNews = 1 - probabilityNews;
+        const prediction = article.is_news_prediction;
+
+        // Determine confidence color and level
+        let confidenceColor = '';
+        let confidenceLevel = '';
+        let confidenceIcon = '';
+        
+        if (confidence >= 0.8) {
+            confidenceColor = 'text-green-600 bg-green-50 border-green-200';
+            confidenceLevel = 'High Confidence';
+            confidenceIcon = 'bi-check-circle-fill';
+        } else if (confidence >= 0.6) {
+            confidenceColor = 'text-yellow-600 bg-yellow-50 border-yellow-200';
+            confidenceLevel = 'Medium Confidence';
+            confidenceIcon = 'bi-exclamation-triangle-fill';
+        } else {
+            confidenceColor = 'text-red-600 bg-red-50 border-red-200';
+            confidenceLevel = 'Low Confidence';
+            confidenceIcon = 'bi-question-circle-fill';
+        }
+
+        // Determine prediction color
+        const predictionColor = prediction ? 'text-blue-600 bg-blue-50 border-blue-200' : 'text-purple-600 bg-purple-50 border-purple-200';
+        const predictionIcon = prediction ? 'bi-newspaper' : 'bi-x-circle';
+        const predictionText = prediction ? 'Predicted as News' : 'Predicted as Not-News';
+
+        return `
+            <div class="mt-3 pt-3 border-t border-gray-200">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <!-- Confidence Score -->
+                    <div class="flex items-center justify-between p-3 rounded-lg border ${confidenceColor}">
+                        <div class="flex items-center">
+                            <i class="${confidenceIcon} mr-2"></i>
+                            <div>
+                                <div class="font-semibold text-sm">${confidenceLevel}</div>
+                                <div class="text-xs opacity-75">Model certainty</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-bold">${(confidence * 100).toFixed(1)}%</div>
+                            <div class="text-xs opacity-75">Confidence</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Prediction -->
+                    <div class="flex items-center justify-between p-3 rounded-lg border ${predictionColor}">
+                        <div class="flex items-center">
+                            <i class="${predictionIcon} mr-2"></i>
+                            <div>
+                                <div class="font-semibold text-sm">${predictionText}</div>
+                                <div class="text-xs opacity-75">Model prediction</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-bold">${prediction ? (probabilityNews * 100).toFixed(1) : (probabilityNotNews * 100).toFixed(1)}%</div>
+                            <div class="text-xs opacity-75">Probability</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Detailed Probability Breakdown -->
+                <div class="mt-2 p-2 bg-gray-50 rounded border">
+                    <div class="text-xs font-medium text-gray-700 mb-1">Probability Breakdown:</div>
+                    <div class="flex items-center space-x-4 text-xs">
+                        <div class="flex items-center">
+                            <div class="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
+                            <span>News: ${(probabilityNews * 100).toFixed(1)}%</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-2 h-2 bg-purple-500 rounded-full mr-1"></div>
+                            <span>Not-News: ${(probabilityNotNews * 100).toFixed(1)}%</span>
+                        </div>
+                        ${article.verified ? `
+                            <div class="flex items-center text-gray-600">
+                                <i class="bi bi-check-square mr-1"></i>
+                                <span>Verified by user</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     renderPredictionQualityIndicator(article) {
         if (!article.confidence && !article.probability_news) return '';
         

@@ -936,7 +936,7 @@ def get_tracker_data():
                 LEFT JOIN tracked_websites w ON a.website_id = w.id
                 WHERE a.user_session = ?
                 ORDER BY a.found_at DESC
-                LIMIT 1000
+                LIMIT 10000
             ''', (user_session,))
             
             # Efficiently process article data

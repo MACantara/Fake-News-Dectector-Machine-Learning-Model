@@ -27,6 +27,9 @@
                     Fetch Interval
                 </label>
                 <select id="autoFetchInterval" class="p-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="1">1 minute (testing)</option>
+                    <option value="2">2 minutes (testing)</option>
+                    <option value="5">5 minutes (testing)</option>
                     <option value="15">15 minutes</option>
                     <option value="30" selected>30 minutes</option>
                     <option value="60">1 hour</option>
@@ -247,6 +250,7 @@
                 <p class="text-sm font-medium text-yellow-800 mb-1">Auto-fetch Tips:</p>
                 <ul class="text-xs text-yellow-700 space-y-1">
                     <li>• Auto-fetch will only run when websites are being tracked</li>
+                    <li>• <strong>Testing intervals:</strong> 1-5 minute options are available for testing purposes</li>
                     <li>• Shorter intervals may increase server load but provide fresher content</li>
                     <li>• Use "Test Auto-fetch" to verify your setup is working correctly</li>
                     <li>• Auto-fetch will automatically pause if no websites are tracked</li>

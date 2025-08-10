@@ -1227,6 +1227,31 @@ class NewsTracker {
         document.getElementById('successDisplay').classList.add('hidden');
     }
     
+    // Real-time activity notifications
+    showRealtimeActivity(message) {
+        const activityElement = document.getElementById('realtimeActivity');
+        const messageElement = document.getElementById('activityMessage');
+        
+        if (activityElement && messageElement) {
+            messageElement.textContent = message;
+            activityElement.classList.remove('hidden');
+        }
+    }
+    
+    hideRealtimeActivity() {
+        const activityElement = document.getElementById('realtimeActivity');
+        if (activityElement) {
+            activityElement.classList.add('hidden');
+        }
+    }
+    
+    updateRealtimeActivity(message) {
+        const messageElement = document.getElementById('activityMessage');
+        if (messageElement) {
+            messageElement.textContent = message;
+        }
+    }
+    
     // Load data from server
     async loadTrackedWebsites() {
         try {
@@ -1375,6 +1400,8 @@ class NewsTracker {
             // Auto-indexing after fetch if enabled
             if (this.autoIndexEnabled && foundArticles > 0) {
                 console.log('Auto-indexing: Checking for high confidence articles...');
+                this.showRealtimeActivity('Auto-indexing high confidence articles...');
+                
                 try {
                     const response = await fetch('/api/news-tracker/auto-index-high-confidence', {
                         method: 'POST',
@@ -1389,17 +1416,30 @@ class NewsTracker {
                     
                     if (result.success && result.articles_indexed > 0) {
                         console.log(`Auto-indexing completed: ${result.articles_indexed} articles indexed`);
+                        this.updateRealtimeActivity(`Auto-indexed ${result.articles_indexed} articles, updating UI...`);
                         
                         // Update auto-indexing stats
                         this.autoIndexStats.totalIndexed += result.articles_indexed;
                         this.autoIndexStats.lastBatchSize = result.articles_indexed;
                         this.autoIndexStats.lastBatchTime = new Date().toISOString();
+                        this.autoIndexStats.successRate = result.stats?.success_rate || 0;
                         this.updateAutoIndexStatsDisplay();
+                        
+                        // Refresh the UI to show updated verification status
+                        await this.loadTrackedWebsites();
+                        this.updateHighConfidenceQueue();
+                        this.updateStatistics();
+                        
+                        // Hide real-time activity after a brief delay
+                        setTimeout(() => this.hideRealtimeActivity(), 3000);
+                        
                     } else {
                         console.log('Auto-indexing: No high confidence articles to index');
+                        this.hideRealtimeActivity();
                     }
                 } catch (indexError) {
                     console.error('Auto-indexing error during auto-fetch:', indexError);
+                    this.hideRealtimeActivity();
                     // Don't break auto-fetch if indexing fails
                 }
             }
@@ -1732,6 +1772,7 @@ class NewsTracker {
     async triggerAutoIndex() {
         try {
             this.showLoading('Finding high confidence articles to index...');
+            this.showRealtimeActivity('Finding high confidence articles to index...');
             
             // Use the backend API endpoint instead of frontend processing
             const response = await fetch('/api/news-tracker/auto-index-high-confidence', {
@@ -1746,19 +1787,37 @@ class NewsTracker {
             const result = await response.json();
             
             if (result.success) {
+                this.updateRealtimeActivity('Updating verification status and refreshing UI...');
+                
                 // Update stats
                 this.autoIndexStats.totalIndexed += result.articles_indexed;
                 this.autoIndexStats.lastBatchSize = result.articles_indexed;
                 this.autoIndexStats.lastBatchTime = new Date().toISOString();
+                this.autoIndexStats.successRate = result.stats?.success_rate || 0;
                 this.updateAutoIndexStatsDisplay();
                 
+                // Refresh the article queue to show updated verification status
+                await this.loadTrackedWebsites();
+                
+                // Update high confidence queue count
+                this.updateHighConfidenceQueue();
+                
+                // Update statistics to reflect changes
+                this.updateStatistics();
+                
                 this.showSuccess(result.message);
+                
+                // Hide real-time activity after a brief delay
+                setTimeout(() => this.hideRealtimeActivity(), 2000);
+                
             } else {
+                this.hideRealtimeActivity();
                 this.showError(result.error || 'Failed to trigger auto-indexing');
             }
             
         } catch (error) {
             console.error('Auto-indexing error:', error);
+            this.hideRealtimeActivity();
             this.showError('Failed to trigger auto-indexing');
         } finally {
             this.hideLoading();
@@ -1794,12 +1853,17 @@ class NewsTracker {
         if (lastAutoIndexBatch) lastAutoIndexBatch.textContent = this.autoIndexStats.lastBatchSize;
         if (highConfidenceQueue) highConfidenceQueue.textContent = this.autoIndexStats.highConfidenceQueue;
         
-        // Calculate success rate if we have data
-        if (this.autoIndexStats.totalIndexed > 0 && autoIndexSuccessRate) {
-            // This is a simplified calculation - in a real implementation, 
-            // you'd track successes vs attempts more precisely
-            const successRate = Math.round((this.autoIndexStats.totalIndexed / (this.autoIndexStats.totalIndexed + 1)) * 100);
+        // Use the success rate from backend if available
+        if (autoIndexSuccessRate) {
+            const successRate = this.autoIndexStats.successRate || 0;
             autoIndexSuccessRate.textContent = `${successRate}%`;
+        }
+        
+        // Update last batch time if available
+        const lastAutoIndexTime = document.getElementById('lastAutoIndexTime');
+        if (lastAutoIndexTime && this.autoIndexStats.lastBatchTime) {
+            const timeStr = new Date(this.autoIndexStats.lastBatchTime).toLocaleString();
+            lastAutoIndexTime.textContent = timeStr;
         }
     }
 

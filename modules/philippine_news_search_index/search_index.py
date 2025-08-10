@@ -847,7 +847,7 @@ class PhilippineNewsSearchIndex:
                             
                             if similarity_score >= minimum_similarity:
                                 results.append({
-                                    'id': result['id'],
+                                    'id': result.get('id'),
                                     'url': result['url'],
                                     'title': result['title'],
                                     'summary': result.get('summary', ''),

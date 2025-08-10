@@ -14,6 +14,7 @@ export class NewsTrackerBase {
         this.predictionMetrics = null;
         this.websiteViewMode = 'grouped';
         this.isPerformingOperation = false;
+        this.isFetchInProgress = false; // Lock to prevent concurrent fetch operations
         
         // Initialize properties that will be set by mixins
         this.autoFetchInterval = null;
@@ -284,6 +285,39 @@ export class NewsTrackerBase {
         if (!dateString) return 'Never';
         const date = new Date(dateString);
         return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    }
+    
+    /**
+     * Update fetch status indicators
+     */
+    updateFetchStatusIndicators() {
+        // Update fetch button state
+        const fetchBtn = document.getElementById('fetchNowBtn');
+        const testAutoFetchBtn = document.getElementById('testAutoFetchBtn');
+        
+        if (fetchBtn) {
+            if (this.isFetchInProgress) {
+                fetchBtn.disabled = true;
+                fetchBtn.innerHTML = '<i class="bi bi-hourglass-split mr-2"></i>Fetching...';
+                fetchBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                fetchBtn.disabled = false;
+                fetchBtn.innerHTML = '<i class="bi bi-download mr-2"></i>Fetch All Articles Now';
+                fetchBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+        
+        if (testAutoFetchBtn) {
+            if (this.isFetchInProgress) {
+                testAutoFetchBtn.disabled = true;
+                testAutoFetchBtn.innerHTML = '<i class="bi bi-hourglass-split mr-2"></i>In Progress...';
+                testAutoFetchBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                testAutoFetchBtn.disabled = false;
+                testAutoFetchBtn.innerHTML = '<i class="bi bi-play-circle mr-2"></i>Test Auto-fetch';
+                testAutoFetchBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
     }
     
     /**

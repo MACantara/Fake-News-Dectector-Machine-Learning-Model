@@ -27,12 +27,22 @@ export const ArticleQueueManagerMixin = {
      * Fetch articles from all tracked websites
      */
     async fetchAllArticles() {
+        // Check if fetch is already in progress
+        if (this.isFetchInProgress) {
+            console.log('Fetch already in progress, skipping duplicate request');
+            this.showWarning('Article fetch is already in progress, please wait...');
+            return;
+        }
+        
         if (this.trackedWebsites.length === 0) {
             this.showError('No websites are being tracked');
             return;
         }
         
+        // Set fetch lock
+        this.isFetchInProgress = true;
         this.isPerformingOperation = true;
+        this.updateFetchStatusIndicators(); // Update UI to show fetch in progress
         this.showLoading('Fetching articles from all websites...');
         this.showRealtimeActivity('Fetching articles from tracked websites...');
         
@@ -122,7 +132,9 @@ export const ArticleQueueManagerMixin = {
             this.hideRealtimeActivity();
             this.showError('Network error. Please try again.');
         } finally {
+            this.isFetchInProgress = false; // Release fetch lock
             this.isPerformingOperation = false;
+            this.updateFetchStatusIndicators(); // Update UI to show fetch completed
             this.hideLoading();
         }
     },

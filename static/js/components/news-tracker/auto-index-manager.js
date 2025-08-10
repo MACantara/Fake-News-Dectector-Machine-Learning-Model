@@ -25,6 +25,14 @@ export const AutoIndexManagerMixin = {
         }
         
         // Manual controls
+        const triggerAutoIndexBtn = document.getElementById('triggerAutoIndexBtn');
+        if (triggerAutoIndexBtn) {
+            triggerAutoIndexBtn.addEventListener('click', () => this.triggerAutoIndex());
+            console.log('triggerAutoIndexBtn event listener bound successfully');
+        } else {
+            console.warn('triggerAutoIndexBtn not found in DOM');
+        }
+        
         document.getElementById('testAutoIndexBtn')?.addEventListener('click', () => this.testAutoIndex());
         document.getElementById('runAutoIndexBtn')?.addEventListener('click', () => this.runAutoIndex());
         document.getElementById('resetAutoIndexBtn')?.addEventListener('click', () => this.resetAutoIndex());
@@ -116,6 +124,14 @@ export const AutoIndexManagerMixin = {
         this.updateAutoIndexStatus();
         
         console.log(`Auto-index batch size set to ${batchSize}`);
+    },
+    
+    /**
+     * Trigger auto-index operation (alias for runAutoIndex)
+     */
+    async triggerAutoIndex() {
+        console.log('triggerAutoIndex called');
+        return await this.runAutoIndex();
     },
     
     /**

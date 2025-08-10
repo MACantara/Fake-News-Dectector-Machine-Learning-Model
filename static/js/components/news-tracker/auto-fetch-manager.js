@@ -235,6 +235,12 @@ export const AutoFetchManagerMixin = {
      * Test auto-fetch manually
      */
     async testAutoFetch() {
+        // Check if fetch is already in progress
+        if (this.isFetchInProgress) {
+            this.showWarning('Article fetch is already in progress, please wait...');
+            return;
+        }
+        
         if (this.trackedWebsites.length === 0) {
             this.showError('Add websites to track before testing auto-fetch');
             return;

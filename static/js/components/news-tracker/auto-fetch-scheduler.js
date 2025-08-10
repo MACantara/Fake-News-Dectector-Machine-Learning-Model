@@ -159,6 +159,14 @@ export class AutoFetchScheduler {
      * Execute auto-fetch operation
      */
     async executeAutoFetch() {
+        // Check if fetch is already in progress
+        if (this.app.isFetchInProgress) {
+            console.log('Auto-fetch skipped: Fetch operation already in progress');
+            // Schedule next run without executing
+            this.scheduleNextRun();
+            return;
+        }
+        
         const startTime = Date.now();
         
         try {
@@ -171,7 +179,7 @@ export class AutoFetchScheduler {
             // Get initial article count
             const initialCount = this.app.articleQueue ? this.app.articleQueue.length : 0;
             
-            // Execute the fetch
+            // Execute the fetch (fetchAllArticles will handle its own locking)
             await this.app.fetchAllArticles();
             
             // Calculate new articles found
@@ -187,10 +195,7 @@ export class AutoFetchScheduler {
             
             console.log(`Auto-fetch completed: ${newArticles} new articles found in ${this.stats.lastRunDuration}ms`);
             
-            // Run auto-indexing if enabled and articles found
-            if (this.app.autoIndexEnabled && newArticles > 0) {
-                await this.executeAutoIndexing();
-            }
+            // Note: Auto-indexing is handled within fetchAllArticles
             
         } catch (error) {
             console.error('Auto-fetch execution failed:', error);

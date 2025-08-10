@@ -154,11 +154,19 @@ def submit_url_classifier_feedback():
             })
         else:
             # Handle single feedback
-            url = data.get('url', '').strip()
+            url = data.get('url', '').strip() if isinstance(data.get('url', ''), str) else str(data.get('url', ''))
             predicted_label = data.get('predicted_label')
-            actual_label = data.get('actual_label', '').strip()
+            actual_label = data.get('actual_label', '')
             user_confidence = data.get('user_confidence', 1.0)
-            user_comment = data.get('comment', '').strip()
+            user_comment = data.get('comment', '').strip() if isinstance(data.get('comment', ''), str) else str(data.get('comment', ''))
+            
+            # Handle actual_label which might be boolean or string
+            if isinstance(actual_label, bool):
+                actual_label_str = 'true' if actual_label else 'false'
+            elif isinstance(actual_label, str):
+                actual_label_str = actual_label.strip().lower()
+            else:
+                actual_label_str = str(actual_label).lower()
             
             # Validate required fields
             if not url:
@@ -173,14 +181,14 @@ def submit_url_classifier_feedback():
                     'error': 'predicted_label is required'
                 }), 400
             
-            if actual_label.lower() not in ['news', 'non-news', 'true', 'false', '1', '0']:
+            if actual_label_str not in ['news', 'non-news', 'true', 'false', '1', '0']:
                 return jsonify({
                     'success': False,
                     'error': 'actual_label must be "news", "non-news", "true", "false", "1", or "0"'
                 }), 400
             
             # Convert actual_label to boolean
-            if actual_label.lower() in ['news', 'true', '1']:
+            if actual_label_str in ['news', 'true', '1']:
                 actual_bool = True
             else:
                 actual_bool = False

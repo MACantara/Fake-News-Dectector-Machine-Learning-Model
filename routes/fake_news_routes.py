@@ -20,12 +20,17 @@ political_detector = None
 philippine_search_index = None
 
 
-def init_fake_news_detector(detector, political_det=None, search_index=None):
+def init_fake_news_detector(detector, political_det=None, search_index=None, url_classifier=None):
     """Initialize the fake news detector and dependencies"""
     global fake_news_detector, political_detector, philippine_search_index
     fake_news_detector = detector
     political_detector = political_det
     philippine_search_index = search_index
+    
+    # Set the URL classifier reference for retraining
+    if url_classifier:
+        detector.url_classifier = url_classifier
+        print("✅ URL classifier connected to fake news detector")
 
 
 @fake_news_bp.route('/predict', methods=['POST'])

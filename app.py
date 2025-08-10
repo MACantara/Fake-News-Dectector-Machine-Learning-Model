@@ -206,8 +206,8 @@ def initialize_models():
 # Initialize module routes
 philippine_search_index = init_philippine_search_index()
 init_political_detector(political_detector)
-init_fake_news_detector(detector, political_detector, philippine_search_index)
 url_classifier = init_url_classifier()
+init_fake_news_detector(detector, political_detector, philippine_search_index, url_classifier)
 init_news_crawler(url_classifier)  # Initialize news crawler with URL classifier
 
 # Register the blueprints

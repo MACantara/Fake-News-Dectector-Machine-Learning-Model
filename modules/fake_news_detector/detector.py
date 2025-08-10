@@ -56,6 +56,11 @@ class FakeNewsDetector:
         self.load_feedback_data()
         self.load_pattern_cache()
     
+    def set_url_classifier(self, url_classifier):
+        """Set the URL classifier reference for retraining functionality"""
+        self.url_classifier = url_classifier
+        print("✅ URL classifier connected to fake news detector")
+    
     def load_feedback_data(self):
         """Load existing feedback data"""
         self.feedback_data = load_feedback_data(self.feedback_file)
@@ -191,6 +196,12 @@ class FakeNewsDetector:
             # Check if URL classifier is available
             if not self.url_classifier:
                 print("❌ URL classifier not available - cannot perform retraining")
+                print("💡 The URL classifier needs to be initialized first. Please check the app initialization.")
+                return False
+            
+            # Check if URL classifier has the required methods
+            if not hasattr(self.url_classifier, 'add_feedback') or not hasattr(self.url_classifier, 'retrain_model'):
+                print("❌ URL classifier doesn't have required methods for retraining")
                 return False
             
             # Prepare training data from pattern cache (news article URLs)

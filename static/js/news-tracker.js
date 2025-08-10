@@ -120,7 +120,12 @@ class NewsTracker {
             
             // Update items per page to show at least the batch size number of articles
             // This ensures users can see all selectable articles for their chosen batch size
-            this.itemsPerPage = Math.max(size * 2, 10); // Show at least double the batch size, minimum 10
+            // For large batch sizes (100+), show the batch size + 20 extra for efficiency
+            if (size >= 100) {
+                this.itemsPerPage = size + 20; // For 100 articles, show 120 per page
+            } else {
+                this.itemsPerPage = Math.max(size * 2, 10); // Show at least double the batch size, minimum 10
+            }
             
             // Update the displayed article count indicator
             const displayedCountElement = document.getElementById('displayedArticleCount');

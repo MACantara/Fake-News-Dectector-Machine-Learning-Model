@@ -456,8 +456,8 @@ def batch_verify_articles():
         if not articles or not isinstance(articles, list):
             return jsonify({'success': False, 'error': 'Articles array is required'})
         
-        if len(articles) > 20:  # Max 20 articles per batch
-            return jsonify({'success': False, 'error': 'Maximum 20 articles allowed per batch'})
+        if len(articles) > 100:  # Max 100 articles per batch
+            return jsonify({'success': False, 'error': 'Maximum 100 articles allowed per batch'})
         
         user_session = session.get('session_id', 'default')
         
@@ -973,9 +973,9 @@ def send_url_classifier_feedback(url, article_data, user_verification):
             # Get current model stats
             stats = url_classifier.get_model_stats()
             
-            # Check if retraining should be triggered (every 10 feedback entries)
+            # Check if retraining should be triggered (every 100 feedback entries)
             feedback_count = stats.get('total_feedback', 0)
-            if feedback_count > 0 and feedback_count % 10 == 0:
+            if feedback_count > 0 and feedback_count % 100 == 0:
                 print(f"Triggering URL classifier retraining with {feedback_count} feedback entries...")
         else:
             pass

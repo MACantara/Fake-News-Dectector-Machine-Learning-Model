@@ -263,28 +263,79 @@ def fetch_articles():
                     VALUES (?, ?, ?, ?)
                 ''', (website_id, 0, False, str(e)))
         
-        # Save articles to database
+        # Save articles to database using batch insert
         new_articles = []
-        for article in all_articles:
+        if all_articles:
             try:
-                cursor.execute('''
-                    INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    article['url'], article['title'], article['description'],
-                    article['content'], article['site_name'], article['website_id'],
-                    user_session, article.get('confidence', 0.0), 
-                    article.get('is_news_prediction', True), article.get('probability_news', 0.0)
-                ))
+                logging.info(f"🔄 Performing batch insert for {len(all_articles)} fetched articles")
+                print(f"🔄 DEBUG: Performing batch insert for {len(all_articles)} fetched articles")
                 
-                new_articles.append({
-                    'id': cursor.lastrowid,
-                    **article
-                })
+                # Prepare batch insert data
+                batch_insert_data = []
+                valid_articles = []
                 
-            except sqlite3.IntegrityError:
-                # Article already exists
-                pass
+                for article in all_articles:
+                    try:
+                        insert_data = (
+                            article['url'], article['title'], article['description'],
+                            article['content'], article['site_name'], article['website_id'],
+                            user_session, article.get('confidence', 0.0), 
+                            article.get('is_news_prediction', True), article.get('probability_news', 0.0)
+                        )
+                        batch_insert_data.append(insert_data)
+                        valid_articles.append(article)
+                    except KeyError as e:
+                        logging.warning(f"⚠️ Skipping article with missing field: {e}")
+                
+                if batch_insert_data:
+                    # Use INSERT OR IGNORE for batch insert to handle duplicates
+                    cursor.executemany('''
+                        INSERT OR IGNORE INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', batch_insert_data)
+                    
+                    # Get the newly inserted articles (excluding duplicates)
+                    for article in valid_articles:
+                        cursor.execute('''
+                            SELECT id FROM article_queue 
+                            WHERE url = ? AND user_session = ?
+                        ''', (article['url'], user_session))
+                        
+                        result = cursor.fetchone()
+                        if result:
+                            new_articles.append({
+                                'id': result[0],
+                                **article
+                            })
+                    
+                    logging.info(f"✅ Batch insert completed: {len(new_articles)} new articles added (duplicates ignored)")
+                    print(f"✅ DEBUG: Batch insert completed: {len(new_articles)} new articles added (duplicates ignored)")
+                
+            except Exception as e:
+                logging.error(f"❌ Batch insert failed, falling back to individual inserts: {str(e)}")
+                print(f"❌ DEBUG: Batch insert failed, falling back to individual inserts: {str(e)}")
+                
+                # Fallback to individual inserts
+                for article in all_articles:
+                    try:
+                        cursor.execute('''
+                            INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            article['url'], article['title'], article['description'],
+                            article['content'], article['site_name'], article['website_id'],
+                            user_session, article.get('confidence', 0.0), 
+                            article.get('is_news_prediction', True), article.get('probability_news', 0.0)
+                        ))
+                        
+                        new_articles.append({
+                            'id': cursor.lastrowid,
+                            **article
+                        })
+                        
+                    except sqlite3.IntegrityError:
+                        # Article already exists
+                        pass
         
         conn.commit()
         conn.close()
@@ -383,6 +434,11 @@ def batch_verify_articles():
         logging.info(f"🔍 Processing batch verification for {len(articles)} articles")
         print(f"🔍 DEBUG: Processing batch verification for {len(articles)} articles")
         
+        # Prepare batch data for database operations
+        valid_articles = []
+        article_data_cache = {}
+        
+        # First pass: validate articles and fetch existing data
         for i, article in enumerate(articles):
             try:
                 article_id = article.get('articleId')
@@ -419,47 +475,97 @@ def batch_verify_articles():
                     })
                     continue
                 
-                # Update article verification
-                cursor.execute('''
-                    UPDATE article_queue 
-                    SET verified = TRUE, is_news = ?, verified_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND user_session = ?
-                ''', (is_news, article_id, user_session))
-                
-                # Send feedback to URL classifier for model improvement
-                send_url_classifier_feedback(
-                    url=url or article_data[0],
-                    article_data=article_data,
-                    user_verification=is_news
-                )
-                
-                # Collect news articles for batch Philippine indexing
-                if is_news:
-                    final_url = url or article_data[0]
-                    news_articles_for_indexing.append(final_url)
-                    logging.info(f"✅ Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
-                    print(f"✅ DEBUG: Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
-                else:
-                    logging.info(f"⏭️ Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
-                    print(f"⏭️ DEBUG: Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
-                
-                results.append({
+                # Cache article data and add to valid articles for batch processing
+                article_data_cache[article_id] = article_data
+                valid_articles.append({
                     'articleId': article_id,
-                    'success': True,
-                    'message': f'Article marked as {"news" if is_news else "not news"}',
-                    'url_classifier_feedback_sent': True,
-                    'philippine_indexing_queued': is_news
+                    'isNews': is_news,
+                    'url': url,
+                    'article_data': article_data
                 })
                 
             except Exception as e:
-                logging.error(f"❌ Error verifying article {i+1} (ID: {article.get('articleId')}): {str(e)}")
+                logging.error(f"❌ Error validating article {i+1} (ID: {article.get('articleId')}): {str(e)}")
                 results.append({
                     'articleId': article.get('articleId'),
                     'success': False,
                     'error': str(e)
                 })
         
-        conn.commit()
+        # Batch update database for all valid articles
+        if valid_articles:
+            try:
+                logging.info(f"🔄 Performing batch database update for {len(valid_articles)} valid articles")
+                print(f"🔄 DEBUG: Performing batch database update for {len(valid_articles)} valid articles")
+                
+                # Prepare batch update data
+                batch_update_data = []
+                for article in valid_articles:
+                    batch_update_data.append((
+                        article['isNews'],  # is_news
+                        article['articleId'],  # id
+                        user_session  # user_session
+                    ))
+                
+                # Execute batch update
+                cursor.executemany('''
+                    UPDATE article_queue 
+                    SET verified = TRUE, is_news = ?, verified_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_session = ?
+                ''', batch_update_data)
+                
+                logging.info(f"✅ Batch database update completed for {len(valid_articles)} articles")
+                print(f"✅ DEBUG: Batch database update completed for {len(valid_articles)} articles")
+                
+                # Process each valid article for feedback and indexing collection
+                for i, article in enumerate(valid_articles):
+                    article_id = article['articleId']
+                    is_news = article['isNews']
+                    url = article['url']
+                    article_data = article['article_data']
+                    
+                    # Send feedback to URL classifier for model improvement
+                    send_url_classifier_feedback(
+                        url=url or article_data[0],
+                        article_data=article_data,
+                        user_verification=is_news
+                    )
+                    
+                    # Collect news articles for batch Philippine indexing
+                    if is_news:
+                        final_url = url or article_data[0]
+                        news_articles_for_indexing.append(final_url)
+                        logging.info(f"✅ Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
+                        print(f"✅ DEBUG: Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
+                    else:
+                        logging.info(f"⏭️ Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
+                        print(f"⏭️ DEBUG: Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
+                    
+                    results.append({
+                        'articleId': article_id,
+                        'success': True,
+                        'message': f'Article marked as {"news" if is_news else "not news"}',
+                        'url_classifier_feedback_sent': True,
+                        'philippine_indexing_queued': is_news
+                    })
+                
+                conn.commit()
+                logging.info(f"✅ Batch verification database transaction committed")
+                print(f"✅ DEBUG: Batch verification database transaction committed")
+                
+            except Exception as e:
+                conn.rollback()
+                logging.error(f"❌ Batch database update failed, rolling back: {str(e)}")
+                print(f"❌ DEBUG: Batch database update failed, rolling back: {str(e)}")
+                
+                # Add error results for all valid articles
+                for article in valid_articles:
+                    results.append({
+                        'articleId': article['articleId'],
+                        'success': False,
+                        'error': f'Database batch update failed: {str(e)}'
+                    })
+        
         conn.close()
         
         # Log summary before indexing
@@ -1059,20 +1165,44 @@ def start_auto_fetch():
                         # Fetch articles using crawler
                         articles = fetch_articles_from_crawler(url, name, website_id)
                         
-                        # Save new articles
-                        for article in articles:
+                        # Save new articles using batch insert
+                        if articles:
                             try:
-                                cursor.execute('''
-                                    INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
+                                # Prepare batch insert data
+                                batch_insert_data = []
+                                for article in articles:
+                                    batch_insert_data.append((
+                                        article['url'], article['title'], article['description'],
+                                        article['content'], article['site_name'], article['website_id'], 'default',
+                                        article.get('confidence', 0.0), article.get('is_news_prediction', True), 
+                                        article.get('probability_news', 0.0)
+                                    ))
+                                
+                                # Execute batch insert with duplicate handling
+                                cursor.executemany('''
+                                    INSERT OR IGNORE INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', (
-                                    article['url'], article['title'], article['description'],
-                                    article['content'], article['site_name'], article['website_id'], 'default',
-                                    article.get('confidence', 0.0), article.get('is_news_prediction', True), 
-                                    article.get('probability_news', 0.0)
-                                ))
-                            except sqlite3.IntegrityError:
-                                pass  # Article already exists
+                                ''', batch_insert_data)
+                                
+                                logging.info(f"✅ Auto-fetch batch insert completed for {len(articles)} articles from {url}")
+                                
+                            except Exception as e:
+                                logging.error(f"❌ Auto-fetch batch insert failed for {url}, falling back to individual inserts: {str(e)}")
+                                
+                                # Fallback to individual inserts
+                                for article in articles:
+                                    try:
+                                        cursor.execute('''
+                                            INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        ''', (
+                                            article['url'], article['title'], article['description'],
+                                            article['content'], article['site_name'], article['website_id'], 'default',
+                                            article.get('confidence', 0.0), article.get('is_news_prediction', True), 
+                                            article.get('probability_news', 0.0)
+                                        ))
+                                    except sqlite3.IntegrityError:
+                                        pass  # Article already exists
                         
                         # Update last fetch time
                         cursor.execute('''

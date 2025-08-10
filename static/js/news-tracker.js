@@ -148,6 +148,9 @@ class NewsTrackerApp extends NewsTrackerBase {
             // Load tracked websites and articles
             await this.loadTrackedWebsites();
             
+            // Initialize batch size display
+            this.initializeBatchSizeDisplay();
+            
             // Update statistics
             this.updateStatistics();
             
@@ -159,6 +162,20 @@ class NewsTrackerApp extends NewsTrackerBase {
         } catch (error) {
             console.error('Error loading initial data:', error);
             this.showError('Failed to load some data. Please refresh the page.');
+        }
+    }
+    
+    /**
+     * Initialize batch size display
+     */
+    initializeBatchSizeDisplay() {
+        const batchSizeSelect = document.getElementById('batchSize');
+        const selectedBatchSizeSpan = document.getElementById('selectedBatchSize');
+        
+        if (batchSizeSelect && selectedBatchSizeSpan) {
+            // Set the initial display to match the selected value
+            selectedBatchSizeSpan.textContent = batchSizeSelect.value;
+            console.log(`Batch size display initialized to: ${batchSizeSelect.value}`);
         }
     }
     

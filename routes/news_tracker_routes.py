@@ -1049,6 +1049,8 @@ def auto_index_high_confidence():
                 
                 # Auto-verify high confidence articles
                 # Handle both newly indexed articles and already indexed ones
+                auto_verified_articles = []  # Track articles for URL classifier feedback
+                
                 try:
                     with db_pool.get_connection() as verify_conn:
                         verify_cursor = verify_conn.cursor()
@@ -1061,7 +1063,20 @@ def auto_index_high_confidence():
                             ]
                             
                             if successfully_indexed_urls:
+                                # Get article data for URL classifier feedback before updating
                                 placeholders = ','.join(['?' for _ in successfully_indexed_urls])
+                                verify_cursor.execute(f'''
+                                    SELECT url, title, confidence, is_news_prediction, probability_news
+                                    FROM article_queue 
+                                    WHERE user_session = ? 
+                                    AND url IN ({placeholders})
+                                    AND confidence >= ?
+                                ''', [user_session] + successfully_indexed_urls + [confidence_threshold])
+                                
+                                articles_for_feedback = verify_cursor.fetchall()
+                                auto_verified_articles.extend(articles_for_feedback)
+                                
+                                # Now update verification status
                                 verify_cursor.execute(f'''
                                     UPDATE article_queue 
                                     SET verified = TRUE, 
@@ -1081,7 +1096,21 @@ def auto_index_high_confidence():
                         ]
                         
                         if failed_urls:
+                            # Get article data for URL classifier feedback before updating
                             placeholders = ','.join(['?' for _ in failed_urls])
+                            verify_cursor.execute(f'''
+                                SELECT url, title, confidence, is_news_prediction, probability_news
+                                FROM article_queue 
+                                WHERE user_session = ? 
+                                AND url IN ({placeholders})
+                                AND confidence >= ?
+                                AND (verified = FALSE OR is_news = FALSE)
+                            ''', [user_session] + failed_urls + [confidence_threshold])
+                            
+                            failed_articles_for_feedback = verify_cursor.fetchall()
+                            auto_verified_articles.extend(failed_articles_for_feedback)
+                            
+                            # Now update verification status
                             verify_cursor.execute(f'''
                                 UPDATE article_queue 
                                 SET verified = TRUE, 
@@ -1098,6 +1127,27 @@ def auto_index_high_confidence():
                         
                 except Exception as verify_error:
                     print(f"⚠️ Failed to auto-verify articles: {str(verify_error)}")
+                
+                # Send feedback to URL classifier for auto-verified articles
+                if auto_verified_articles:
+                    try:
+                        feedback_count = 0
+                        for article_data in auto_verified_articles:
+                            try:
+                                send_url_classifier_feedback(
+                                    url=article_data[0],  # url
+                                    article_data=article_data,  # (url, title, confidence, is_news_prediction, probability_news)
+                                    user_verification=True  # Auto-verified as news (high confidence)
+                                )
+                                feedback_count += 1
+                            except Exception as feedback_error:
+                                print(f"⚠️ Failed to send URL classifier feedback for {article_data[0]}: {str(feedback_error)}")
+                        
+                        if feedback_count > 0:
+                            print(f"📊 Sent {feedback_count} auto-verification feedback entries to URL classifier")
+                            
+                    except Exception as batch_feedback_error:
+                        print(f"⚠️ Failed to send batch URL classifier feedback: {str(batch_feedback_error)}")
                 
                 print(f"✅ Auto-indexing batch {batches_processed}: {batch_indexed}/{len(batch)} articles indexed")
                 

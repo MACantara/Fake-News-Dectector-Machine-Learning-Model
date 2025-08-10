@@ -23,6 +23,10 @@ class NewsTrackerApp extends NewsTrackerBase {
         this.globalEventsInitialized = false;
         this.isRealTimePaused = false;
         this.visibilityDebounceTimer = null;
+        this.lastVisibilityChange = 0;
+        
+        // Configuration flag to disable visibility change handling if problematic
+        this.disableVisibilityHandling = localStorage.getItem('newsTracker.disableVisibilityHandling') === 'true';
         
         this.initMixins();
     }
@@ -108,23 +112,44 @@ class NewsTrackerApp extends NewsTrackerBase {
         this.globalEventsInitialized = true;
         this.visibilityDebounceTimer = null;
         this.isRealTimePaused = false;
+        this.lastVisibilityChange = 0;
         
-        // Page visibility change (pause/resume real-time features) with debouncing
-        document.addEventListener('visibilitychange', () => {
-            // Clear existing debounce timer
-            if (this.visibilityDebounceTimer) {
-                clearTimeout(this.visibilityDebounceTimer);
-            }
-            
-            // Debounce visibility changes to prevent rapid toggling
-            this.visibilityDebounceTimer = setTimeout(() => {
-                if (document.hidden && !this.isRealTimePaused) {
-                    this.pauseRealTimeFeatures();
-                } else if (!document.hidden && this.isRealTimePaused) {
-                    this.resumeRealTimeFeatures();
+        // Page visibility change (pause/resume real-time features) with improved debouncing
+        if (!this.disableVisibilityHandling) {
+            document.addEventListener('visibilitychange', () => {
+                const now = Date.now();
+                const timeSinceLastChange = now - this.lastVisibilityChange;
+                
+                // Clear existing debounce timer
+                if (this.visibilityDebounceTimer) {
+                    clearTimeout(this.visibilityDebounceTimer);
                 }
-            }, 500); // 500ms debounce
-        });
+                
+                // Log visibility change for debugging
+                console.log(`Visibility change: document.hidden=${document.hidden}, timeSinceLastChange=${timeSinceLastChange}ms`);
+                
+                // Ignore rapid visibility changes (less than 1 second apart)
+                if (timeSinceLastChange < 1000) {
+                    console.log('Ignoring rapid visibility change');
+                    return;
+                }
+                
+                this.lastVisibilityChange = now;
+                
+                // Debounce visibility changes to prevent rapid toggling
+                this.visibilityDebounceTimer = setTimeout(() => {
+                    if (document.hidden && !this.isRealTimePaused) {
+                        console.log('Page hidden - pausing real-time features');
+                        this.pauseRealTimeFeatures();
+                    } else if (!document.hidden && this.isRealTimePaused) {
+                        console.log('Page visible - resuming real-time features');
+                        this.resumeRealTimeFeatures();
+                    }
+                }, 1000); // Increased debounce to 1 second
+            });
+        } else {
+            console.log('Visibility change handling disabled by user preference');
+        }
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -364,17 +389,50 @@ class NewsTrackerApp extends NewsTrackerBase {
         console.log('Debug mode enabled');
         console.log('Current status:', this.getStatus());
         
-        // Add debug info to page
+        // Add debug controls to page
         const debugInfo = document.getElementById('debugInfo');
         if (debugInfo) {
             debugInfo.style.display = 'block';
             debugInfo.innerHTML = `
                 <div class="bg-gray-100 p-4 rounded-lg">
                     <h4 class="font-bold mb-2">Debug Information</h4>
-                    <pre class="text-xs">${JSON.stringify(this.getStatus(), null, 2)}</pre>
+                    <pre class="text-xs mb-3">${JSON.stringify(this.getStatus(), null, 2)}</pre>
+                    <div class="space-x-2">
+                        <button onclick="newsTracker.toggleVisibilityHandling()" class="px-2 py-1 text-xs bg-blue-500 text-white rounded">
+                            ${this.disableVisibilityHandling ? 'Enable' : 'Disable'} Visibility Handling
+                        </button>
+                        <button onclick="newsTracker.forceResume()" class="px-2 py-1 text-xs bg-green-500 text-white rounded">
+                            Force Resume
+                        </button>
+                        <button onclick="newsTracker.getStatus()" class="px-2 py-1 text-xs bg-purple-500 text-white rounded">
+                            Log Status
+                        </button>
+                    </div>
                 </div>
             `;
         }
+    }
+    
+    /**
+     * Toggle visibility change handling
+     */
+    toggleVisibilityHandling() {
+        this.disableVisibilityHandling = !this.disableVisibilityHandling;
+        localStorage.setItem('newsTracker.disableVisibilityHandling', this.disableVisibilityHandling.toString());
+        
+        const action = this.disableVisibilityHandling ? 'disabled' : 'enabled';
+        console.log(`Visibility change handling ${action}`);
+        this.showSuccess(`Visibility change handling ${action}. Refresh page to apply.`);
+    }
+    
+    /**
+     * Force resume real-time features
+     */
+    forceResume() {
+        console.log('Force resuming real-time features');
+        this.isRealTimePaused = false;
+        this.startRealTimeFeatures();
+        this.showSuccess('Real-time features force resumed');
     }
     
     /**

@@ -15,32 +15,6 @@
         <i class="bi bi-link absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
     </div>
     
-    <!-- Model Retraining Option -->
-    <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg transition-all duration-300 ease hover:bg-yellow-100 hover:border-yellow-300">
-        <div class="flex items-start space-x-3">
-            <input 
-                type="checkbox" 
-                id="retrainModelCheckbox" 
-                class="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:shadow-sm focus:shadow-blue-100"
-                aria-label="Enable model retraining option"
-            />
-            <div class="flex-1">
-                <label for="retrainModelCheckbox" class="block text-sm font-medium text-gray-800 cursor-pointer checked:text-amber-700 checked:font-semibold">
-                    <i class="bi bi-cpu mr-1"></i>
-                    Trigger Model Retraining (Optional)
-                </label>
-                <p class="text-xs text-gray-600 mt-1">
-                    Check this box to trigger model retraining after analysis. This will use accumulated feedback data to improve model accuracy. 
-                    <strong>Note:</strong> Retraining may take several minutes and will temporarily affect system performance.
-                </p>
-                <div class="mt-2 text-xs text-yellow-700">
-                    <i class="bi bi-exclamation-triangle mr-1"></i>
-                    <strong>Advanced Feature:</strong> Only enable if you want to contribute to model improvement through retraining.
-                </div>
-            </div>
-        </div>
-    </div>
-    
     <p class="text-sm text-gray-600 mt-2">
         <i class="bi bi-info-circle mr-1"></i>
         Enter a news article URL to extract and analyze its content

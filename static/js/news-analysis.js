@@ -46,7 +46,7 @@ class NewsAnalyzer {
             'textInput', 'urlInput', 'websiteInput', 'newsText', 'articleUrl', 'websiteUrl',
             'crawlOnlyBtn', 'crawlAnalyzeBtn', 'analyzeFoundArticlesBtn',
             'analyzeBtn', 'loading', 'results', 'websiteResults',
-            'error', 'modelStatus', 'textCount', 'retrainModelCheckbox',
+            'error', 'modelStatus', 'textCount',
             'fakeNewsResults', 'politicalResults', 'extractedContent',
             'fakeNewsPredictionCard', 'fakeNewsPredictionText', 'fakeNewsConfidenceText',
             'politicalPredictionCard', 'politicalPredictionText', 'politicalConfidenceText',
@@ -457,12 +457,6 @@ class NewsAnalyzer {
             data.text = this.elements.newsText.value.trim();
         } else if (this.state.currentInputType === Config.inputTypes.URL) {
             data.url = this.elements.articleUrl.value.trim();
-            
-            // Add retraining flag if checkbox is checked
-            if (this.elements.retrainModelCheckbox && this.elements.retrainModelCheckbox.checked) {
-                data.trigger_retraining = true;
-                console.log('Model retraining requested for URL analysis');
-            }
         }
         
         return data;
@@ -994,28 +988,6 @@ class NewsAnalyzer {
         console.log('Raw response data:', data);
         console.log('Actual data for processing:', actualData);
         
-        // Check if retraining was triggered and show appropriate message
-        if (actualData.retraining_triggered) {
-            const retrainInfo = actualData.retraining_triggered;
-            let message = '';
-            let messageType = 'success';
-            
-            if (retrainInfo.status === 'initiated') {
-                message = `🔄 Model retraining initiated! This may take several minutes. Training will use ${retrainInfo.feedback_count || 'available'} feedback entries.`;
-                messageType = 'success';
-            } else if (retrainInfo.status === 'skipped') {
-                message = `⏭️ Model retraining skipped: ${retrainInfo.message}`;
-                messageType = 'warning';
-            } else if (retrainInfo.status === 'error') {
-                message = `❌ Model retraining failed: ${retrainInfo.message}`;
-                messageType = 'error';
-            }
-            
-            if (message) {
-                this.showFeedbackMessage(message, messageType === 'warning' ? 'success' : messageType);
-            }
-        }
-        
         // Store results for export functionality
         Utils.storage.set('lastAnalysisResults', {
             ...actualData,
@@ -1064,11 +1036,6 @@ class NewsAnalyzer {
         // Show results section
         Utils.dom.show(this.elements.results);
         Utils.animations.fadeIn(this.elements.results);
-        
-        // Reset the retraining checkbox after analysis
-        if (this.elements.retrainModelCheckbox) {
-            this.elements.retrainModelCheckbox.checked = false;
-        }
     }
 
     // Get current input text

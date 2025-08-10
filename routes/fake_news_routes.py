@@ -5,7 +5,6 @@ Handles fake news detection, feedback submission, and model retraining
 
 import sys
 import os
-import threading
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Blueprint, request, jsonify
@@ -151,56 +150,6 @@ def predict():
                 result['political_classification'] = {
                     'error': 'Political classification model not available'
                 }
-            
-            # Handle retraining trigger if requested
-            trigger_retraining = data.get('trigger_retraining', False)
-            if trigger_retraining:
-                try:
-                    print(f"🔄 Automatic model retraining requested for news article URL")
-                    
-                    # For news articles, always attempt retraining to learn new patterns
-                    # This helps the model recognize new content structures and patterns
-                    print(f"📊 Initiating automatic retraining to learn new news article patterns")
-                    
-                    # Start retraining in a background thread to avoid blocking the response
-                    def background_retrain():
-                        try:
-                            print("🚀 Starting background model retraining for news pattern recognition...")
-                            
-                            # Create training samples from the current article for pattern learning
-                            # Format as expected by retrain_from_new_pattern: list of dicts with 'text' and 'label'
-                            training_data = [{
-                                'text': combined_text,
-                                'label': 1,  # Label as real news (1) for pattern recognition
-                                'source': 'news_article_pattern',
-                                'url': url,
-                                'title': article_data.get('title', ''),
-                                'training_type': 'pattern_recognition'
-                            }]
-                            
-                            # Retrain with focus on recognizing new news patterns
-                            fake_news_detector.retrain_from_new_pattern(training_data)
-                            print("✅ Model retraining completed - new news patterns learned")
-                        except Exception as retrain_error:
-                            print(f"❌ Model retraining failed: {str(retrain_error)}")
-                    
-                    retraining_thread = threading.Thread(target=background_retrain)
-                    retraining_thread.daemon = True
-                    retraining_thread.start()
-                    
-                    result['retraining_triggered'] = {
-                        'status': 'initiated',
-                        'training_type': 'news_pattern_recognition',
-                        'message': 'Model retraining started to learn new news article patterns. This helps improve detection of legitimate news content.'
-                    }
-                    print("✅ Pattern recognition retraining thread started successfully")
-                        
-                except Exception as retrain_error:
-                    print(f"⚠️ Error initiating pattern recognition retraining: {str(retrain_error)}")
-                    result['retraining_triggered'] = {
-                        'status': 'error',
-                        'message': f'Failed to initiate pattern recognition retraining: {str(retrain_error)}'
-                    }
             
             return jsonify({
                 'success': True,

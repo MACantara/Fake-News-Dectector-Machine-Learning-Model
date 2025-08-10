@@ -18,6 +18,12 @@ export const ArticleQueueManagerMixin = {
         document.getElementById('batchMarkNewsBtn').addEventListener('click', () => this.batchVerifyArticles(true));
         document.getElementById('batchMarkNotNewsBtn').addEventListener('click', () => this.batchVerifyArticles(false));
         
+        // Batch size dropdown
+        const batchSizeSelect = document.getElementById('batchSize');
+        if (batchSizeSelect) {
+            batchSizeSelect.addEventListener('change', (e) => this.updateBatchSize(parseInt(e.target.value)));
+        }
+        
         // Error/Success dismiss buttons
         document.getElementById('dismissErrorBtn')?.addEventListener('click', () => this.hideError());
         document.getElementById('dismissSuccessBtn')?.addEventListener('click', () => this.hideSuccess());
@@ -81,7 +87,7 @@ export const ArticleQueueManagerMixin = {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                    confidence_threshold: this.autoIndexThreshold,
+                                    confidence_threshold: this.autoIndexThreshold / 100, // Convert percentage to decimal
                                     batch_size: this.autoIndexBatchSize
                                 })
                             });
@@ -309,7 +315,10 @@ export const ArticleQueueManagerMixin = {
      * Select all articles
      */
     selectAllArticles() {
-        const maxSelections = 5; // Batch limit
+        // Get the current batch size from the dropdown
+        const batchSizeSelect = document.getElementById('batchSize');
+        const maxSelections = batchSizeSelect ? parseInt(batchSizeSelect.value) : 10;
+        
         const availableArticles = document.querySelectorAll('[data-batch-selectable="true"]:not([data-batch-selected="true"])');
         
         let selectedCount = 0;
@@ -351,9 +360,12 @@ export const ArticleQueueManagerMixin = {
         const shouldSelect = forceSelect !== null ? forceSelect : !isCurrentlySelected;
         
         if (shouldSelect && !isCurrentlySelected) {
-            // Check selection limit
-            if (this.selectedArticles.size >= 5) {
-                this.showError('Maximum 5 articles can be selected at once');
+            // Check selection limit using dynamic batch size
+            const batchSizeSelect = document.getElementById('batchSize');
+            const maxSelections = batchSizeSelect ? parseInt(batchSizeSelect.value) : 10;
+            
+            if (this.selectedArticles.size >= maxSelections) {
+                this.showError(`Maximum ${maxSelections} articles can be selected at once`);
                 return;
             }
             
@@ -619,5 +631,24 @@ export const ArticleQueueManagerMixin = {
                 </div>
             `;
         }
+    },
+    
+    /**
+     * Update batch size for article selection
+     */
+    updateBatchSize(batchSize) {
+        // Update the displayed batch size in the button
+        const selectedBatchSizeSpan = document.getElementById('selectedBatchSize');
+        if (selectedBatchSizeSpan) {
+            selectedBatchSizeSpan.textContent = batchSize.toString();
+        }
+        
+        // Clear current selection when batch size changes
+        this.clearBatchSelection();
+        
+        // Store the batch size for future use
+        this.currentBatchSize = batchSize;
+        
+        console.log(`Batch size updated to: ${batchSize}`);
     }
 };

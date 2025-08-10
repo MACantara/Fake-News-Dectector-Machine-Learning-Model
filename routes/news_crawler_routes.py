@@ -34,7 +34,6 @@ def crawl_website():
     try:
         data = request.get_json()
         website_url = data.get('website_url', '').strip()
-        max_articles = int(data.get('max_articles', 10))
         enable_filtering = data.get('enable_filtering', True)  # New parameter for URL filtering
         confidence_threshold = float(data.get('confidence_threshold', 0.6))  # Filtering threshold
         
@@ -102,10 +101,8 @@ def crawl_website():
                     'probability_not_news': 0.0
                 })
         
-        # Apply max_articles limit to normalized articles
-        if max_articles and len(normalized_articles) > max_articles:
-            normalized_articles = normalized_articles[:max_articles]
-            print(f"📋 Limited to top {max_articles} articles")
+        # No article limit - return all articles found
+        # All normalized articles will be returned without limits
         
         # Prepare comprehensive response
         response_data = {
@@ -140,7 +137,6 @@ def analyze_website():
     try:
         data = request.get_json()
         website_url = data.get('website_url', '').strip()
-        max_articles = int(data.get('max_articles', 5))
         analysis_type = data.get('analysis_type', 'both')
         enable_filtering = data.get('enable_filtering', True)  # New parameter for URL filtering
         confidence_threshold = float(data.get('confidence_threshold', 0.6))  # Filtering threshold
@@ -153,7 +149,7 @@ def analyze_website():
             website_url = 'https://' + website_url
         
         print(f"🔍 Starting website analysis for: {website_url}")
-        print(f"📊 Analysis settings: max_articles={max_articles}, type={analysis_type}, filtering={'enabled' if enable_filtering else 'disabled'}")
+        print(f"📊 Analysis settings: type={analysis_type}, filtering={'enabled' if enable_filtering else 'disabled'}")
         
         # Configure the crawler's filtering settings
         news_crawler.set_filtering_mode(enable_filtering, confidence_threshold)
@@ -208,17 +204,15 @@ def analyze_website():
             
             articles_to_analyze.append(article_data)
         
-        # Apply max_articles limit with intelligent sorting
-        if max_articles and len(articles_to_analyze) > max_articles:
-            # Sort by classification confidence (highest first) if available
-            if enable_filtering:
-                articles_to_analyze.sort(
-                    key=lambda x: x.get('classification_confidence', 0.0), 
-                    reverse=True
-                )
+        # No article limit - analyze all articles found with intelligent sorting
+        # Sort by classification confidence (highest first) if available
+        if enable_filtering:
+            articles_to_analyze.sort(
+                key=lambda x: x.get('classification_confidence', 0.0), 
+                reverse=True
+            )
             
-            articles_to_analyze = articles_to_analyze[:max_articles]
-            print(f"📋 Limited analysis to top {max_articles} articles (sorted by confidence)")
+        print(f"📋 Analyzing all {len(articles_to_analyze)} articles found (sorted by confidence)")
         
         print(f"🚀 Analyzing {len(articles_to_analyze)} articles using batch processing...")
         

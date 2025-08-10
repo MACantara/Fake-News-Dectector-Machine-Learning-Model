@@ -44,7 +44,7 @@ class NewsAnalyzer {
         const elementIds = [
             'textBtn', 'urlBtn', 'websiteBtn', 'fakeNewsBtn', 'politicalBtn', 'bothBtn',
             'textInput', 'urlInput', 'websiteInput', 'newsText', 'articleUrl', 'websiteUrl',
-            'maxArticles', 'crawlOnlyBtn', 'crawlAnalyzeBtn', 'analyzeFoundArticlesBtn',
+            'crawlOnlyBtn', 'crawlAnalyzeBtn', 'analyzeFoundArticlesBtn',
             'analyzeBtn', 'loading', 'results', 'websiteResults',
             'error', 'modelStatus', 'textCount', 'retrainModelCheckbox',
             'fakeNewsResults', 'politicalResults', 'extractedContent',
@@ -476,7 +476,6 @@ class NewsAnalyzer {
             return;
         }
 
-        const maxArticles = parseInt(this.elements.maxArticles?.value || '20');
         const crawlingMode = this.state.currentCrawlingMode || Config.crawlingModes.PREVIEW;
 
         this.hideResults();
@@ -489,9 +488,9 @@ class NewsAnalyzer {
 
         try {
             if (crawlingMode === Config.crawlingModes.PREVIEW) {
-                await this.crawlWebsitePreview(websiteUrl, maxArticles, startTime);
+                await this.crawlWebsitePreview(websiteUrl, startTime);
             } else {
-                await this.crawlAndAnalyzeWebsite(websiteUrl, maxArticles, startTime);
+                await this.crawlAndAnalyzeWebsite(websiteUrl, startTime);
             }
         } catch (error) {
             console.error('Website crawling error:', error);
@@ -504,10 +503,9 @@ class NewsAnalyzer {
     }
 
     // Crawl website for preview (just show links)
-    async crawlWebsitePreview(websiteUrl, maxArticles, startTime) {
+    async crawlWebsitePreview(websiteUrl, startTime) {
         const response = await Utils.http.post(Config.endpoints.crawlWebsite, {
-            website_url: websiteUrl,
-            max_articles: maxArticles
+            website_url: websiteUrl
         });
 
         if (!response.success) {
@@ -528,10 +526,9 @@ class NewsAnalyzer {
     }
 
     // Crawl and analyze website
-    async crawlAndAnalyzeWebsite(websiteUrl, maxArticles, startTime) {
+    async crawlAndAnalyzeWebsite(websiteUrl, startTime) {
         const response = await Utils.http.post(Config.endpoints.analyzeWebsite, {
             website_url: websiteUrl,
-            max_articles: maxArticles,
             analysis_type: this.state.currentAnalysisType
         });
 

@@ -779,7 +779,7 @@ class PhilippineNewsSearchIndex:
             print(f"Error getting article {article_id}: {e}")
             return None
     
-    def crawl_and_index_website(self, website_url, max_articles=20, force_reindex=False):
+    def crawl_and_index_website(self, website_url, force_reindex=False):
         """Crawl a news website and index all found articles"""
         try:
             print(f"Starting website crawl and index: {website_url}")
@@ -810,11 +810,8 @@ class PhilippineNewsSearchIndex:
                     'results': []
                 }
             
-            # Apply max_articles limit for indexing
+            # Index all articles found without any limits
             articles_to_index = crawl_result['articles']
-            if max_articles and len(articles_to_index) > max_articles:
-                articles_to_index = articles_to_index[:max_articles]
-                print(f"📋 Limited indexing to top {max_articles} articles")
             
             print(f"Found {len(articles_to_index)} articles to index")
             

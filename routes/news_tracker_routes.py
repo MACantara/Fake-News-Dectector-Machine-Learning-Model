@@ -570,7 +570,6 @@ def fetch_articles_from_crawler(url, site_name, website_id):
         # Prepare crawler parameters (same as HTTP endpoint)
         crawler_params = {
             'website_url': url,
-            'max_articles': 15,  # Get more articles than before
             'enable_filtering': True,  # Use intelligent filtering
             'confidence_threshold': 0.6  # Only get likely news articles
         }
@@ -624,9 +623,6 @@ def fetch_articles_from_crawler(url, site_name, website_id):
                     'probability_not_news': 0.0
                 })
         
-        # Apply max_articles limit to normalized articles
-        if crawler_params['max_articles'] and len(normalized_articles) > crawler_params['max_articles']:
-            normalized_articles = normalized_articles[:crawler_params['max_articles']]
         
         # Build crawler result in same format as HTTP endpoint
         crawler_result = {
@@ -694,7 +690,6 @@ def fetch_articles_from_crawler_http(url, site_name, website_id):
         # Prepare request to crawler endpoint
         crawler_data = {
             'website_url': url,
-            'max_articles': 15,
             'enable_filtering': True,
             'confidence_threshold': 0.6
         }

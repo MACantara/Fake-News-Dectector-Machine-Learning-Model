@@ -254,7 +254,6 @@ def crawl_and_index_website():
     try:
         data = request.get_json()
         website_url = data.get('website_url', '').strip()
-        max_articles = int(data.get('max_articles', 20))
         force_reindex = data.get('force_reindex', False)
         
         if not website_url:
@@ -271,7 +270,6 @@ def crawl_and_index_website():
         # Perform crawling and indexing
         result = philippine_search_index.crawl_and_index_website(
             website_url, 
-            max_articles, 
             force_reindex
         )
         

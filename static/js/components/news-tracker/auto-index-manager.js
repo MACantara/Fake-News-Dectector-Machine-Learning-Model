@@ -71,6 +71,18 @@ export const AutoIndexManagerMixin = {
             batchSizeInput.value = autoIndexBatchSize.toString();
         }
         
+        // Set initial visibility of auto-index settings
+        const autoIndexSettings = document.getElementById('autoIndexSettings');
+        if (autoIndexSettings) {
+            autoIndexSettings.style.display = autoIndexEnabled ? 'block' : 'none';
+        }
+        
+        // Set initial visibility of auto-index stats
+        const autoIndexStatsEl = document.getElementById('autoIndexStats');
+        if (autoIndexStatsEl) {
+            autoIndexStatsEl.style.display = autoIndexEnabled ? 'block' : 'none';
+        }
+        
         this.updateAutoIndexStatus();
         this.updateAutoIndexStatsDisplay();
         this.updateHighConfidenceQueue();
@@ -90,6 +102,18 @@ export const AutoIndexManagerMixin = {
         const toggle = document.getElementById('autoIndexToggle');
         if (toggle) {
             this.updateToggleAppearance(toggle, enabled);
+        }
+        
+        // Show/hide auto-index settings
+        const autoIndexSettings = document.getElementById('autoIndexSettings');
+        if (autoIndexSettings) {
+            autoIndexSettings.style.display = enabled ? 'block' : 'none';
+        }
+        
+        // Show/hide auto-index stats
+        const autoIndexStatsEl = document.getElementById('autoIndexStats');
+        if (autoIndexStatsEl) {
+            autoIndexStatsEl.style.display = enabled ? 'block' : 'none';
         }
         
         if (enabled) {
@@ -145,7 +169,7 @@ export const AutoIndexManagerMixin = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    confidence_threshold: this.autoIndexThreshold,
+                    confidence_threshold: this.autoIndexThreshold / 100, // Convert percentage to decimal
                     batch_size: this.autoIndexBatchSize
                 })
             });

@@ -380,13 +380,21 @@ def batch_verify_articles():
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
         
-        for article in articles:
+        logging.info(f"🔍 Processing batch verification for {len(articles)} articles")
+        print(f"🔍 DEBUG: Processing batch verification for {len(articles)} articles")
+        
+        for i, article in enumerate(articles):
             try:
                 article_id = article.get('articleId')
                 is_news = article.get('isNews')
                 url = article.get('url')
                 
+                logging.info(f"📝 Article {i+1}/{len(articles)}: ID={article_id}, isNews={is_news}, URL={url}")
+                print(f"📝 DEBUG: Article {i+1}/{len(articles)}: ID={article_id}, isNews={is_news}, URL={url}")
+                
                 if not article_id or is_news is None:
+                    logging.warning(f"⚠️ Article {i+1} missing data: articleId={article_id}, isNews={is_news}")
+                    print(f"⚠️ DEBUG: Article {i+1} missing data: articleId={article_id}, isNews={is_news}")
                     results.append({
                         'articleId': article_id,
                         'success': False,
@@ -427,7 +435,13 @@ def batch_verify_articles():
                 
                 # Collect news articles for batch Philippine indexing
                 if is_news:
-                    news_articles_for_indexing.append(url or article_data[0])
+                    final_url = url or article_data[0]
+                    news_articles_for_indexing.append(final_url)
+                    logging.info(f"✅ Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
+                    print(f"✅ DEBUG: Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
+                else:
+                    logging.info(f"⏭️ Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
+                    print(f"⏭️ DEBUG: Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
                 
                 results.append({
                     'articleId': article_id,
@@ -438,7 +452,7 @@ def batch_verify_articles():
                 })
                 
             except Exception as e:
-                logging.error(f"Error verifying article {article.get('articleId')}: {str(e)}")
+                logging.error(f"❌ Error verifying article {i+1} (ID: {article.get('articleId')}): {str(e)}")
                 results.append({
                     'articleId': article.get('articleId'),
                     'success': False,
@@ -448,11 +462,28 @@ def batch_verify_articles():
         conn.commit()
         conn.close()
         
+        # Log summary before indexing
+        total_articles = len(articles)
+        news_articles_count = len(news_articles_for_indexing)
+        non_news_count = total_articles - news_articles_count
+        
+        logging.info(f"📊 Batch verification summary:")
+        logging.info(f"   Total articles processed: {total_articles}")
+        logging.info(f"   Articles marked as NEWS: {news_articles_count}")
+        logging.info(f"   Articles marked as NOT NEWS: {non_news_count}")
+        logging.info(f"   Articles queued for Philippine indexing: {len(news_articles_for_indexing)}")
+        
         # Batch index news articles into Philippine news system using optimized batch method
         philippine_indexing_results = []
         if news_articles_for_indexing:
-            logging.info(f"🚀 Batch indexing {len(news_articles_for_indexing)} verified news articles into Philippine system")
+            logging.info(f"🚀 Starting batch indexing of {len(news_articles_for_indexing)} verified news articles into Philippine system")
+            print(f"🚀 DEBUG: Starting batch indexing of {len(news_articles_for_indexing)} verified news articles into Philippine system")
             philippine_indexing_results = batch_index_philippine_news_articles(news_articles_for_indexing)
+            logging.info(f"✅ Batch Philippine indexing completed with {len(philippine_indexing_results)} results")
+            print(f"✅ DEBUG: Batch Philippine indexing completed with {len(philippine_indexing_results)} results")
+        else:
+            logging.info("ℹ️ No news articles to index into Philippine system")
+            print("ℹ️ DEBUG: No news articles to index into Philippine system")
         
         # Calculate summary statistics (enhanced to match philippine_news_search_routes pattern)
         successful_verifications = len([r for r in results if r['success']])
@@ -828,6 +859,31 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         if not urls or not isinstance(urls, list):
             logging.warning("⚠️ No URLs provided for batch Philippine news indexing")
             return []
+        
+        logging.info(f"🔍 Starting batch Philippine indexing for {len(urls)} URLs")
+        print(f"🔍 DEBUG: Starting batch Philippine indexing for {len(urls)} URLs")
+        
+        # Check for duplicate URLs
+        unique_urls = list(set(urls))
+        if len(unique_urls) != len(urls):
+            duplicate_count = len(urls) - len(unique_urls)
+            logging.warning(f"⚠️ Found {duplicate_count} duplicate URLs in batch - using {len(unique_urls)} unique URLs")
+            print(f"⚠️ DEBUG: Found {duplicate_count} duplicate URLs in batch - using {len(unique_urls)} unique URLs")
+            for i, url in enumerate(urls):
+                logging.info(f"   Original URL {i+1}: {url}")
+                print(f"   DEBUG: Original URL {i+1}: {url}")
+            logging.info("   Unique URLs:")
+            print("   DEBUG: Unique URLs:")
+            for i, url in enumerate(unique_urls):
+                logging.info(f"   Unique URL {i+1}: {url}")
+                print(f"   DEBUG: Unique URL {i+1}: {url}")
+        else:
+            for i, url in enumerate(urls):
+                logging.info(f"   URL {i+1}: {url}")
+                print(f"   DEBUG: URL {i+1}: {url}")
+        
+        # Use unique URLs to avoid processing duplicates
+        urls_to_process = unique_urls
             
         # Get the Philippine search index instance
         philippine_search_index = get_philippine_search_index()
@@ -839,12 +895,17 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         # Process URLs in batch similar to philippine_news_search_routes.py
         def process_batch():
             results = []
-            for url in urls:
+            for i, url in enumerate(urls_to_process):
                 try:
+                    logging.info(f"🔄 Processing URL {i+1}/{len(urls_to_process)}: {url}")
+                    print(f"🔄 DEBUG: Processing URL {i+1}/{len(urls_to_process)}: {url}")
+                    
                     # Validate URL format
                     from urllib.parse import urlparse
                     parsed_url = urlparse(url.strip())
                     if not parsed_url.scheme or not parsed_url.netloc:
+                        logging.warning(f"❌ Invalid URL format for URL {i+1}: {url}")
+                        print(f"❌ DEBUG: Invalid URL format for URL {i+1}: {url}")
                         results.append({
                             'url': url,
                             'status': 'error',
@@ -855,6 +916,8 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                     
                     # Index the article using direct method call (same as batch-index-philippine-articles)
                     result = philippine_search_index.index_article(url.strip(), force_reindex)
+                    logging.info(f"✅ URL {i+1} indexing result: {result['status']} - {result.get('message', 'No message')}")
+                    print(f"✅ DEBUG: URL {i+1} indexing result: {result['status']} - {result.get('message', 'No message')}")
                     
                     # Convert result to consistent format
                     results.append({
@@ -867,6 +930,7 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                     })
                     
                 except Exception as e:
+                    logging.error(f"❌ Exception processing URL {i+1} ({url}): {str(e)}")
                     results.append({
                         'url': url,
                         'status': 'error',
@@ -889,10 +953,28 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         already_indexed_count = len([r for r in batch_results if r['status'] == 'already_indexed'])
         
         logging.info(f"✅ Batch Philippine indexing completed in {duration_ms:.1f}ms:")
+        logging.info(f"   📊 Original URLs: {len(urls)}")
+        logging.info(f"   📊 Unique URLs processed: {len(urls_to_process)}")
+        logging.info(f"   📊 Results returned: {len(batch_results)}")
         logging.info(f"   📊 Successfully indexed: {success_count}")
         logging.info(f"   ℹ️ Already indexed: {already_indexed_count}")
         logging.info(f"   ⏭️ Skipped (not relevant): {skipped_count}")
         logging.info(f"   ❌ Errors: {error_count}")
+        
+        print(f"✅ DEBUG: Batch Philippine indexing completed in {duration_ms:.1f}ms:")
+        print(f"   📊 DEBUG: Original URLs: {len(urls)}")
+        print(f"   📊 DEBUG: Unique URLs processed: {len(urls_to_process)}")
+        print(f"   📊 DEBUG: Results returned: {len(batch_results)}")
+        print(f"   📊 DEBUG: Successfully indexed: {success_count}")
+        print(f"   ℹ️ DEBUG: Already indexed: {already_indexed_count}")
+        print(f"   ⏭️ DEBUG: Skipped (not relevant): {skipped_count}")
+        print(f"   ❌ DEBUG: Errors: {error_count}")
+        
+        # Log each result for debugging
+        for i, result in enumerate(batch_results):
+            status_emoji = {"success": "✅", "already_indexed": "ℹ️", "skipped": "⏭️", "error": "❌"}.get(result['status'], "❓")
+            logging.info(f"   {status_emoji} URL {i+1}: {result['status']} - {result['url']}")
+            print(f"   DEBUG: {status_emoji} URL {i+1}: {result['status']} - {result['url']}")
         
         return batch_results
         

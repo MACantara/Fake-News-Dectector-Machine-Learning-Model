@@ -171,11 +171,22 @@ class NewsTrackerApp extends NewsTrackerBase {
     initializeBatchSizeDisplay() {
         const batchSizeSelect = document.getElementById('batchSize');
         const selectedBatchSizeSpan = document.getElementById('selectedBatchSize');
+        const displayedArticleCountSpan = document.getElementById('displayedArticleCount');
         
         if (batchSizeSelect && selectedBatchSizeSpan) {
             // Set the initial display to match the selected value
-            selectedBatchSizeSpan.textContent = batchSizeSelect.value;
-            console.log(`Batch size display initialized to: ${batchSizeSelect.value}`);
+            const batchSize = parseInt(batchSizeSelect.value);
+            selectedBatchSizeSpan.textContent = batchSize.toString();
+            
+            // Sync the items per page with the batch size
+            this.itemsPerPage = batchSize;
+            
+            // Update displayed article count
+            if (displayedArticleCountSpan) {
+                displayedArticleCountSpan.textContent = batchSize.toString();
+            }
+            
+            console.log(`Batch size display initialized to: ${batchSize}, items per page: ${this.itemsPerPage}`);
         }
     }
     

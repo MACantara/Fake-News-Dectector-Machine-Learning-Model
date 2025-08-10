@@ -30,8 +30,13 @@
                 <select id="batchSize" class="p-2 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="5">5 articles</option>
                     <option value="7">7 articles</option>
-                    <option value="10">10 articles</option>
+                    <option value="10" selected>10 articles</option>
+                    <option value="15">15 articles</option>
+                    <option value="20">20 articles</option>
                 </select>
+                <span class="text-xs text-blue-600 italic">
+                    (Shows <span id="displayedArticleCount">20</span> articles per page)
+                </span>
             </div>
         </div>
         
@@ -39,7 +44,7 @@
             <div class="flex items-center space-x-4">
                 <button id="selectAllBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                     <i class="bi bi-check-square"></i>
-                    Select Next <span id="selectedBatchSize">5</span>
+                    Select Next <span id="selectedBatchSize">10</span>
                 </button>
                 
                 <button id="clearSelectionBtn" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors">
@@ -49,6 +54,10 @@
                 
                 <span id="selectionCount" class="text-sm text-blue-700 font-medium">
                     0 articles selected
+                </span>
+                
+                <span id="availableForSelection" class="text-xs text-gray-600 italic">
+                    (0 unverified articles visible)
                 </span>
             </div>
             
@@ -80,6 +89,7 @@
                 <div class="flex-1">
                     <p class="text-sm font-medium text-blue-800 mb-1">How to select articles:</p>
                     <div class="text-xs text-blue-700 space-y-1">
+                        <p>• Page automatically shows 2x your selected batch size for better selection options</p>
                         <p>• Look for unverified articles with a <span class="inline-flex items-center px-2 py-0.5 bg-white border border-gray-300 rounded-full text-xs"><i class="bi bi-plus-circle mr-1"></i>Click to select</span> button</p>
                         <p>• Click anywhere on the article card to select/deselect it</p>
                         <p>• Selected articles will have a blue background and checkmark</p>

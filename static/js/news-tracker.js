@@ -8,7 +8,7 @@ class NewsTracker {
         this.trackedWebsites = [];
         this.articleQueue = [];
         this.currentPage = 1;
-        this.itemsPerPage = 10;
+        this.itemsPerPage = 20; // Default to 20 (double the default batch size of 10)
         this.autoFetchInterval = null;
         this.autoFetchEnabled = false;
         this.autoFetchIntervalMinutes = 30; // Default 30 minutes
@@ -33,6 +33,9 @@ class NewsTracker {
         // Initialize selection interface
         this.updateSelectionCount();
         this.updateBatchActionButtons();
+        
+        // Initialize displayed article count indicator
+        this.updateDisplayedArticleCount();
         
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
@@ -112,8 +115,24 @@ class NewsTracker {
         
         // Batch verification controls
         document.getElementById('batchSize').addEventListener('change', (e) => {
-            const size = e.target.value;
+            const size = parseInt(e.target.value);
             document.getElementById('selectedBatchSize').textContent = size;
+            
+            // Update items per page to show at least the batch size number of articles
+            // This ensures users can see all selectable articles for their chosen batch size
+            this.itemsPerPage = Math.max(size * 2, 10); // Show at least double the batch size, minimum 10
+            
+            // Update the displayed article count indicator
+            const displayedCountElement = document.getElementById('displayedArticleCount');
+            if (displayedCountElement) {
+                displayedCountElement.textContent = this.itemsPerPage;
+            }
+            
+            // Reset to first page and re-render to show the updated number of articles
+            this.currentPage = 1;
+            this.renderArticleQueue();
+            
+            // Clear any existing selections since the view has changed
             this.clearBatchSelection();
         });
         document.getElementById('selectAllBtn').addEventListener('click', () => this.selectBatchArticles());
@@ -553,6 +572,9 @@ class NewsTracker {
         // Initialize selection count
         this.updateSelectionCount();
         this.updateBatchActionButtons();
+        
+        // Update displayed article count
+        this.updateDisplayedArticleCount();
     }
     
     filterArticlesByType(filter) {
@@ -1271,7 +1293,7 @@ class NewsTracker {
     selectBatchArticles() {
         const batchSize = parseInt(document.getElementById('batchSize').value);
         
-        // Get currently visible unverified articles from the DOM
+        // Get currently visible unverified articles from the DOM (on current page)
         const unverifiedElements = Array.from(document.querySelectorAll('[data-article-id]')).filter(element => {
             const articleId = element.dataset.articleId;
             const article = this.articleQueue.find(a => a.id == articleId);
@@ -1279,12 +1301,9 @@ class NewsTracker {
         });
         
         if (unverifiedElements.length === 0) {
-            this.showError('No unverified articles available for selection');
+            this.showError('No unverified articles available for selection on this page');
             return;
         }
-        
-        // Show hint about filtering if needed
-        this.updateSelectionDisplay();
         
         // Clear any existing selections
         this.clearBatchSelection();
@@ -1299,7 +1318,13 @@ class NewsTracker {
         this.updateSelectionCount();
         this.updateBatchActionButtons();
         
-        this.showInfo(`Selected ${elementsToSelect.length} articles for batch verification`);
+        // Show informative message about selection
+        const selectedCount = elementsToSelect.length;
+        if (selectedCount < batchSize) {
+            this.showInfo(`Selected ${selectedCount} of ${batchSize} requested articles (${selectedCount} available on current page)`);
+        } else {
+            this.showInfo(`Selected ${selectedCount} articles for batch verification`);
+        }
     }
     
     clearBatchSelection() {
@@ -1428,6 +1453,13 @@ class NewsTracker {
                 alertDiv.remove();
             }
         }, 5000);
+    }
+    
+    updateDisplayedArticleCount() {
+        const displayedCountElement = document.getElementById('displayedArticleCount');
+        if (displayedCountElement) {
+            displayedCountElement.textContent = this.itemsPerPage;
+        }
     }
 }
 

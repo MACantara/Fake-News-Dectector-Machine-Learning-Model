@@ -456,8 +456,8 @@ def batch_verify_articles():
         if not articles or not isinstance(articles, list):
             return jsonify({'success': False, 'error': 'Articles array is required'})
         
-        if len(articles) > 10:  # Max 10 articles per batch
-            return jsonify({'success': False, 'error': 'Maximum 10 articles allowed per batch'})
+        if len(articles) > 20:  # Max 20 articles per batch
+            return jsonify({'success': False, 'error': 'Maximum 20 articles allowed per batch'})
         
         user_session = session.get('session_id', 'default')
         

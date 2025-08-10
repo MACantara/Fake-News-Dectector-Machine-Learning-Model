@@ -23,6 +23,8 @@ from urllib.parse import urlparse
 import time
 import threading
 import uuid
+import numpy as np
+from sklearn.metrics import precision_score, recall_score, f1_score, matthews_corrcoef, roc_auc_score, confusion_matrix
 from modules.url_news_classifier import URLNewsClassifier
 from routes.url_classifier_routes import get_url_classifier
 from routes.philippine_news_search_routes import get_philippine_search_index
@@ -673,6 +675,218 @@ def batch_verify_articles():
     except Exception as e:
         return jsonify({'success': False, 'error': 'Internal server error'})
 
+def calculate_comprehensive_metrics(user_session='default'):
+    """Calculate comprehensive prediction evaluation metrics"""
+    try:
+        with db_pool.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get all verified articles with predictions
+            cursor.execute('''
+                SELECT 
+                    is_news_prediction,
+                    is_news as actual_result,
+                    confidence,
+                    probability_news,
+                    verified_at
+                FROM article_queue 
+                WHERE verified = TRUE 
+                AND user_session = ?
+                AND is_news_prediction IS NOT NULL
+                AND is_news IS NOT NULL
+            ''', (user_session,))
+            
+            results = cursor.fetchall()
+            
+            if len(results) < 2:
+                return {
+                    'status': 'insufficient_data',
+                    'message': 'Need at least 2 verified articles for meaningful metrics',
+                    'total_verified': len(results)
+                }
+            
+            # Prepare data for metrics calculation
+            predictions = [bool(row[0]) for row in results]  # Predicted labels
+            actuals = [bool(row[1]) for row in results]      # Actual labels
+            confidences = [float(row[2]) if row[2] is not None else 0.5 for row in results]
+            probabilities = [float(row[3]) if row[3] is not None else 0.5 for row in results]
+            
+            # Convert boolean to int for sklearn
+            y_true = [1 if actual else 0 for actual in actuals]
+            y_pred = [1 if pred else 0 for pred in predictions]
+            y_prob = probabilities
+            
+            # Calculate confusion matrix
+            tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+            
+            # Calculate basic metrics
+            accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
+            precision = precision_score(y_true, y_pred, zero_division=0)
+            recall = recall_score(y_true, y_pred, zero_division=0)
+            f1 = f1_score(y_true, y_pred, zero_division=0)
+            
+            # Calculate advanced metrics
+            try:
+                mcc = matthews_corrcoef(y_true, y_pred)
+            except:
+                mcc = 0
+            
+            try:
+                auc_roc = roc_auc_score(y_true, y_prob)
+            except:
+                auc_roc = 0.5
+            
+            # Calculate rates
+            tpr = recall  # True Positive Rate (Sensitivity)
+            tnr = tn / (tn + fp) if (tn + fp) > 0 else 0  # True Negative Rate (Specificity)
+            fpr = fp / (fp + tn) if (fp + tn) > 0 else 0  # False Positive Rate
+            fnr = fn / (fn + tp) if (fn + tp) > 0 else 0  # False Negative Rate
+            
+            # Calculate prediction calibration (how well confidence matches accuracy)
+            confidence_bins = np.linspace(0, 1, 11)  # 10 bins
+            bin_accuracies = []
+            bin_confidences = []
+            bin_counts = []
+            
+            for i in range(len(confidence_bins) - 1):
+                lower, upper = confidence_bins[i], confidence_bins[i + 1]
+                mask = [(lower <= conf < upper) for conf in confidences]
+                
+                if any(mask):
+                    bin_predictions = [y_pred[j] for j, m in enumerate(mask) if m]
+                    bin_actuals = [y_true[j] for j, m in enumerate(mask) if m]
+                    bin_confs = [confidences[j] for j, m in enumerate(mask) if m]
+                    
+                    bin_accuracy = sum([p == a for p, a in zip(bin_predictions, bin_actuals)]) / len(bin_predictions)
+                    bin_avg_conf = sum(bin_confs) / len(bin_confs)
+                    
+                    bin_accuracies.append(bin_accuracy)
+                    bin_confidences.append(bin_avg_conf)
+                    bin_counts.append(len(bin_predictions))
+                else:
+                    bin_accuracies.append(0)
+                    bin_confidences.append((lower + upper) / 2)
+                    bin_counts.append(0)
+            
+            # Calculate Expected Calibration Error (ECE)
+            total_samples = len(results)
+            ece = sum([
+                (count / total_samples) * abs(acc - conf) 
+                for acc, conf, count in zip(bin_accuracies, bin_confidences, bin_counts)
+                if count > 0
+            ]) if total_samples > 0 else 0
+            
+            # Calculate prediction consistency over time
+            if len(results) >= 10:
+                # Group by week and calculate weekly accuracy
+                weekly_accuracies = []
+                current_week_results = []
+                current_week = None
+                
+                for i, row in enumerate(results):
+                    verified_at = row[4]
+                    if verified_at:
+                        week = datetime.fromisoformat(verified_at).isocalendar()[1]
+                        
+                        if current_week is None:
+                            current_week = week
+                        
+                        if week == current_week:
+                            current_week_results.append((y_pred[i], y_true[i]))
+                        else:
+                            if current_week_results:
+                                week_accuracy = sum([p == a for p, a in current_week_results]) / len(current_week_results)
+                                weekly_accuracies.append(week_accuracy)
+                            current_week_results = [(y_pred[i], y_true[i])]
+                            current_week = week
+                
+                # Add last week
+                if current_week_results:
+                    week_accuracy = sum([p == a for p, a in current_week_results]) / len(current_week_results)
+                    weekly_accuracies.append(week_accuracy)
+                
+                consistency_variance = np.var(weekly_accuracies) if len(weekly_accuracies) > 1 else 0
+            else:
+                weekly_accuracies = []
+                consistency_variance = 0
+            
+            return {
+                'status': 'success',
+                'total_verified_articles': len(results),
+                'confusion_matrix': {
+                    'true_positives': int(tp),
+                    'true_negatives': int(tn),
+                    'false_positives': int(fp),
+                    'false_negatives': int(fn)
+                },
+                'basic_metrics': {
+                    'accuracy': round(accuracy, 4),
+                    'precision': round(precision, 4),
+                    'recall': round(recall, 4),
+                    'f1_score': round(f1, 4)
+                },
+                'advanced_metrics': {
+                    'matthews_correlation_coefficient': round(mcc, 4),
+                    'auc_roc': round(auc_roc, 4),
+                    'true_positive_rate': round(tpr, 4),
+                    'true_negative_rate': round(tnr, 4),
+                    'false_positive_rate': round(fpr, 4),
+                    'false_negative_rate': round(fnr, 4)
+                },
+                'calibration_metrics': {
+                    'expected_calibration_error': round(ece, 4),
+                    'calibration_bins': [
+                        {
+                            'confidence_range': f"{confidence_bins[i]:.1f}-{confidence_bins[i+1]:.1f}",
+                            'avg_confidence': round(bin_confidences[i], 3),
+                            'accuracy': round(bin_accuracies[i], 3),
+                            'count': bin_counts[i]
+                        }
+                        for i in range(len(bin_accuracies))
+                        if bin_counts[i] > 0
+                    ]
+                },
+                'temporal_consistency': {
+                    'weekly_accuracies': [round(acc, 3) for acc in weekly_accuracies],
+                    'consistency_variance': round(consistency_variance, 4),
+                    'is_consistent': consistency_variance < 0.05  # Low variance indicates consistency
+                },
+                'prediction_quality': {
+                    'high_confidence_correct': sum([
+                        1 for i, (pred, actual, conf) in enumerate(zip(y_pred, y_true, confidences))
+                        if conf > 0.8 and pred == actual
+                    ]),
+                    'high_confidence_total': sum([1 for conf in confidences if conf > 0.8]),
+                    'low_confidence_correct': sum([
+                        1 for i, (pred, actual, conf) in enumerate(zip(y_pred, y_true, confidences))
+                        if conf < 0.6 and pred == actual
+                    ]),
+                    'low_confidence_total': sum([1 for conf in confidences if conf < 0.6])
+                }
+            }
+    
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'Error calculating metrics: {str(e)}'
+        }
+
+@news_tracker_bp.route('/api/news-tracker/prediction-metrics')
+def get_prediction_metrics():
+    """Get comprehensive prediction evaluation metrics"""
+    try:
+        user_session = session.get('session_id', 'default')
+        metrics = calculate_comprehensive_metrics(user_session)
+        
+        return jsonify({
+            'success': True,
+            'metrics': metrics,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
 @news_tracker_bp.route('/api/news-tracker/get-data')
 def get_tracker_data():
     """Get all tracker data for the frontend with optimized queries"""
@@ -737,6 +951,9 @@ def get_tracker_data():
                 
                 articles.append(article)
         
+        # Calculate basic prediction metrics for inclusion in response
+        basic_metrics = calculate_comprehensive_metrics(user_session)
+        
         return jsonify({
             'success': True,
             'websites': websites,
@@ -745,7 +962,8 @@ def get_tracker_data():
                 'total_websites': len(websites),
                 'total_articles': len(articles),
                 'verified_articles': sum(1 for a in articles if a['verified'])
-            }
+            },
+            'prediction_metrics': basic_metrics if basic_metrics.get('status') == 'success' else None
         })
         
     except Exception as e:

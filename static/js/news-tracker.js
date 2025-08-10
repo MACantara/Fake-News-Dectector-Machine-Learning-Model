@@ -19,6 +19,7 @@ class NewsTracker {
             nextRun: null
         };
         this.selectedArticles = new Set(); // Track selected articles
+        this.predictionMetrics = null; // Store comprehensive prediction metrics
         
         this.init();
     }
@@ -562,6 +563,7 @@ class NewsTracker {
                                         ${(article.confidence * 100).toFixed(0)}% conf.
                                     </span>
                                 ` : ''}
+                                ${this.renderPredictionQualityIndicator(article)}
                             </div>
                             <span class="px-2 py-1 text-xs rounded-full ${this.getStatusBadgeClass(article)}">
                                 ${this.getStatusText(article)}
@@ -744,6 +746,15 @@ class NewsTracker {
                 this.renderArticleQueue();
                 this.updateCounts();
                 this.updateStatistics();
+                
+                // Load prediction metrics if available
+                if (data.prediction_metrics) {
+                    this.predictionMetrics = data.prediction_metrics;
+                    this.displayPredictionMetrics();
+                } else {
+                    // Fetch metrics separately if not included
+                    this.fetchPredictionMetrics();
+                }
                 
             } else {
                 console.error('Failed to load data:', data.error);
@@ -1423,6 +1434,9 @@ class NewsTracker {
                 this.renderArticleQueue();
                 this.updateCounts();
                 
+                // Refresh prediction metrics after successful verification
+                this.fetchPredictionMetrics();
+                
             } else {
                 this.showError(data.error || 'Failed to perform batch verification');
             }
@@ -1465,6 +1479,358 @@ class NewsTracker {
         if (displayedCountElement) {
             displayedCountElement.textContent = this.itemsPerPage;
         }
+    }
+    
+    async fetchPredictionMetrics() {
+        try {
+            const response = await fetch('/api/news-tracker/prediction-metrics');
+            const data = await response.json();
+            
+            if (data.success && data.metrics.status === 'success') {
+                this.predictionMetrics = data.metrics;
+                this.displayPredictionMetrics();
+            } else if (data.metrics && data.metrics.status === 'insufficient_data') {
+                this.displayInsufficientDataMessage(data.metrics.total_verified);
+            }
+        } catch (error) {
+            console.error('Error fetching prediction metrics:', error);
+        }
+    }
+    
+    displayPredictionMetrics() {
+        if (!this.predictionMetrics) return;
+        
+        const metrics = this.predictionMetrics;
+        
+        // Update existing accuracy display with comprehensive metrics
+        this.updateMetricsDisplay(metrics);
+        
+        // Create or update advanced metrics dashboard
+        this.createAdvancedMetricsDashboard(metrics);
+    }
+    
+    updateMetricsDisplay(metrics) {
+        // Update basic stats with enhanced information
+        const basicMetrics = metrics.basic_metrics;
+        const confusionMatrix = metrics.confusion_matrix;
+        
+        // Add metrics info to existing statistics
+        const accuracyElements = document.querySelectorAll('[data-metric="accuracy"]');
+        accuracyElements.forEach(el => {
+            el.textContent = `${Math.round(basicMetrics.accuracy * 100)}%`;
+            el.title = `Precision: ${Math.round(basicMetrics.precision * 100)}%, Recall: ${Math.round(basicMetrics.recall * 100)}%, F1: ${Math.round(basicMetrics.f1_score * 100)}%`;
+        });
+        
+        // Update confusion matrix display if it exists
+        this.updateConfusionMatrixDisplay(confusionMatrix);
+    }
+    
+    createAdvancedMetricsDashboard(metrics) {
+        let metricsContainer = document.getElementById('advancedMetricsContainer');
+        
+        if (!metricsContainer) {
+            // Create metrics container if it doesn't exist
+            const statisticsSection = document.querySelector('.bg-white.rounded-lg.shadow-md.p-6.mb-8');
+            if (statisticsSection) {
+                metricsContainer = document.createElement('div');
+                metricsContainer.id = 'advancedMetricsContainer';
+                metricsContainer.className = 'bg-white rounded-lg shadow-md p-6 mb-8';
+                statisticsSection.parentNode.insertBefore(metricsContainer, statisticsSection.nextSibling);
+            } else {
+                return; // Can't find a place to add it
+            }
+        }
+        
+        const html = `
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">
+                <i class="bi bi-graph-up-arrow"></i>
+                Advanced Prediction Metrics
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                <!-- Basic Metrics -->
+                <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                    <h4 class="font-semibold text-blue-800 mb-3">
+                        <i class="bi bi-bullseye mr-1"></i>
+                        Classification Metrics
+                    </h4>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-blue-700">Accuracy:</span>
+                            <span class="font-semibold text-blue-800">${Math.round(metrics.basic_metrics.accuracy * 100)}%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-blue-700">Precision:</span>
+                            <span class="font-semibold text-blue-800">${Math.round(metrics.basic_metrics.precision * 100)}%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-blue-700">Recall:</span>
+                            <span class="font-semibold text-blue-800">${Math.round(metrics.basic_metrics.recall * 100)}%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-blue-700">F1-Score:</span>
+                            <span class="font-semibold text-blue-800">${Math.round(metrics.basic_metrics.f1_score * 100)}%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Advanced Metrics -->
+                <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
+                    <h4 class="font-semibold text-green-800 mb-3">
+                        <i class="bi bi-speedometer2 mr-1"></i>
+                        Advanced Metrics
+                    </h4>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-green-700">MCC:</span>
+                            <span class="font-semibold text-green-800">${metrics.advanced_metrics.matthews_correlation_coefficient.toFixed(3)}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-green-700">AUC-ROC:</span>
+                            <span class="font-semibold text-green-800">${metrics.advanced_metrics.auc_roc.toFixed(3)}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-green-700">Sensitivity:</span>
+                            <span class="font-semibold text-green-800">${Math.round(metrics.advanced_metrics.true_positive_rate * 100)}%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-green-700">Specificity:</span>
+                            <span class="font-semibold text-green-800">${Math.round(metrics.advanced_metrics.true_negative_rate * 100)}%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Calibration Quality -->
+                <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
+                    <h4 class="font-semibold text-purple-800 mb-3">
+                        <i class="bi bi-sliders mr-1"></i>
+                        Prediction Quality
+                    </h4>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-purple-700">Calibration Error:</span>
+                            <span class="font-semibold text-purple-800">${(metrics.calibration_metrics.expected_calibration_error * 100).toFixed(1)}%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-purple-700">High Conf. Acc.:</span>
+                            <span class="font-semibold text-purple-800">${this.calculateHighConfidenceAccuracy(metrics)}%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-purple-700">Consistency:</span>
+                            <span class="font-semibold text-purple-800">${metrics.temporal_consistency.is_consistent ? 'Good' : 'Variable'}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-purple-700">Total Verified:</span>
+                            <span class="font-semibold text-purple-800">${metrics.total_verified_articles}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Confusion Matrix -->
+            <div class="mb-6">
+                <h4 class="font-semibold text-gray-800 mb-3">
+                    <i class="bi bi-grid-3x3-gap mr-1"></i>
+                    Confusion Matrix
+                </h4>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    ${this.renderConfusionMatrix(metrics.confusion_matrix)}
+                </div>
+            </div>
+            
+            <!-- Calibration Chart -->
+            ${metrics.calibration_metrics.calibration_bins.length > 0 ? this.renderCalibrationChart(metrics.calibration_metrics) : ''}
+            
+            <!-- Temporal Consistency -->
+            ${metrics.temporal_consistency.weekly_accuracies.length > 0 ? this.renderTemporalConsistency(metrics.temporal_consistency) : ''}
+        `;
+        
+        metricsContainer.innerHTML = html;
+    }
+    
+    calculateHighConfidenceAccuracy(metrics) {
+        const quality = metrics.prediction_quality;
+        if (quality.high_confidence_total === 0) return 'N/A';
+        return Math.round((quality.high_confidence_correct / quality.high_confidence_total) * 100);
+    }
+    
+    renderConfusionMatrix(cm) {
+        return `
+            <div class="grid grid-cols-2 gap-2 max-w-md mx-auto">
+                <div class="text-center">
+                    <div class="text-xs text-gray-600 mb-1">Predicted</div>
+                    <div class="grid grid-cols-3 gap-1 text-xs">
+                        <div></div>
+                        <div class="font-medium">News</div>
+                        <div class="font-medium">Not News</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-1">
+                    <div class="flex items-center">
+                        <div class="transform -rotate-90 text-xs text-gray-600">Actual</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1">
+                        <div class="bg-green-100 border border-green-300 p-2 text-center text-sm font-medium">
+                            <div class="text-green-800">TP</div>
+                            <div class="text-green-600">${cm.true_positives}</div>
+                        </div>
+                        <div class="bg-red-100 border border-red-300 p-2 text-center text-sm font-medium">
+                            <div class="text-red-800">FN</div>
+                            <div class="text-red-600">${cm.false_negatives}</div>
+                        </div>
+                        <div class="bg-red-100 border border-red-300 p-2 text-center text-sm font-medium">
+                            <div class="text-red-800">FP</div>
+                            <div class="text-red-600">${cm.false_positives}</div>
+                        </div>
+                        <div class="bg-green-100 border border-green-300 p-2 text-center text-sm font-medium">
+                            <div class="text-green-800">TN</div>
+                            <div class="text-green-600">${cm.true_negatives}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3 text-xs text-gray-600 text-center">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <span class="font-medium">False Positive Rate:</span> 
+                        ${Math.round((cm.false_positives / (cm.false_positives + cm.true_negatives)) * 100)}%
+                    </div>
+                    <div>
+                        <span class="font-medium">False Negative Rate:</span> 
+                        ${Math.round((cm.false_negatives / (cm.false_negatives + cm.true_positives)) * 100)}%
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    renderCalibrationChart(calibration) {
+        const bins = calibration.calibration_bins.filter(bin => bin.count > 0);
+        if (bins.length === 0) return '';
+        
+        return `
+            <div class="mb-6">
+                <h4 class="font-semibold text-gray-800 mb-3">
+                    <i class="bi bi-bar-chart mr-1"></i>
+                    Model Calibration
+                </h4>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="grid grid-cols-${Math.min(bins.length, 5)} gap-2">
+                        ${bins.map(bin => `
+                            <div class="text-center">
+                                <div class="bg-blue-200 h-16 relative rounded">
+                                    <div class="bg-blue-500 absolute bottom-0 w-full rounded" 
+                                         style="height: ${bin.accuracy * 100}%"></div>
+                                </div>
+                                <div class="text-xs mt-1">
+                                    <div class="font-medium">${bin.confidence_range}</div>
+                                    <div class="text-gray-600">${Math.round(bin.accuracy * 100)}% (${bin.count})</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="mt-3 text-xs text-gray-600 text-center">
+                        <div>Expected Calibration Error: ${(calibration.expected_calibration_error * 100).toFixed(1)}%</div>
+                        <div class="text-gray-500">Lower is better - indicates how well confidence matches actual accuracy</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    renderTemporalConsistency(temporal) {
+        if (temporal.weekly_accuracies.length === 0) return '';
+        
+        return `
+            <div class="mb-6">
+                <h4 class="font-semibold text-gray-800 mb-3">
+                    <i class="bi bi-graph-up mr-1"></i>
+                    Temporal Consistency
+                </h4>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex items-end space-x-2 h-24 mb-3">
+                        ${temporal.weekly_accuracies.map((acc, i) => `
+                            <div class="flex-1 flex flex-col items-center">
+                                <div class="bg-purple-500 w-full rounded-t" style="height: ${acc * 100}%"></div>
+                                <div class="text-xs mt-1">W${i + 1}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="text-xs text-gray-600 text-center">
+                        <div>Consistency Variance: ${temporal.consistency_variance.toFixed(4)}</div>
+                        <div class="text-gray-500">
+                            Model is ${temporal.is_consistent ? 'consistent' : 'variable'} over time
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    displayInsufficientDataMessage(totalVerified) {
+        const metricsContainer = document.getElementById('advancedMetricsContainer');
+        if (metricsContainer) {
+            metricsContainer.innerHTML = `
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                    <i class="bi bi-info-circle text-yellow-600 text-2xl mb-2"></i>
+                    <h4 class="font-semibold text-yellow-800 mb-2">Insufficient Data for Metrics</h4>
+                    <p class="text-yellow-700 text-sm">
+                        Need at least 2 verified articles for meaningful prediction metrics. 
+                        Currently have ${totalVerified} verified article${totalVerified === 1 ? '' : 's'}.
+                    </p>
+                </div>
+            `;
+        }
+    }
+    
+    updateConfusionMatrixDisplay(confusionMatrix) {
+        // Update any existing confusion matrix displays
+        const cmElements = document.querySelectorAll('[data-confusion-matrix]');
+        cmElements.forEach(el => {
+            el.innerHTML = this.renderConfusionMatrix(confusionMatrix);
+        });
+    }
+    
+    renderPredictionQualityIndicator(article) {
+        if (!article.confidence && !article.probability_news) return '';
+        
+        const confidence = article.confidence || 0.5;
+        const probability = article.probability_news || 0.5;
+        const prediction = article.is_news_prediction;
+        
+        // Determine quality level based on confidence and probability
+        let qualityClass = '';
+        let qualityIcon = '';
+        let qualityText = '';
+        
+        if (confidence >= 0.8) {
+            qualityClass = 'text-green-600';
+            qualityIcon = 'bi-check-circle-fill';
+            qualityText = 'High';
+        } else if (confidence >= 0.6) {
+            qualityClass = 'text-yellow-600';
+            qualityIcon = 'bi-exclamation-triangle-fill';
+            qualityText = 'Med';
+        } else {
+            qualityClass = 'text-red-600';
+            qualityIcon = 'bi-question-circle-fill';
+            qualityText = 'Low';
+        }
+        
+        // Add prediction direction indicator
+        const predictionIcon = prediction ? 'bi-newspaper' : 'bi-x-circle';
+        const predictionText = prediction ? 'News' : 'Not News';
+        
+        return `
+            <span class="mr-3 ${qualityClass}" title="Prediction Quality: ${qualityText}, Confidence: ${(confidence * 100).toFixed(1)}%, Probability: ${(probability * 100).toFixed(1)}%">
+                <i class="${qualityIcon} mr-1"></i>
+                <span class="text-xs">${qualityText}</span>
+            </span>
+            <span class="mr-3 text-gray-600" title="Model Prediction: ${predictionText}">
+                <i class="${predictionIcon} mr-1"></i>
+                <span class="text-xs">${predictionText}</span>
+            </span>
+        `;
     }
 }
 

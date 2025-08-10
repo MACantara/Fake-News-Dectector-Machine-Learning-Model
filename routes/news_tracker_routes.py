@@ -1029,7 +1029,9 @@ def auto_index_high_confidence():
         indexing_results = []
         
         # Split articles into batches
-        for i in range(0, min(len(high_confidence_articles), batch_size * 3), batch_size):
+        # Process all available high confidence articles, not just 3 batches
+        max_articles_to_process = min(len(high_confidence_articles), 1000)  # Process up to 1000 articles max for safety
+        for i in range(0, max_articles_to_process, batch_size):
             batch = high_confidence_articles[i:i + batch_size]
             batch_urls = [article[0] for article in batch]  # Extract URLs
             

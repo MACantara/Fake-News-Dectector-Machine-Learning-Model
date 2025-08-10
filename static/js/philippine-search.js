@@ -6,7 +6,10 @@ class PhilippineNewsSearch {
             isLoading: false,
             currentQuery: '',
             results: [],
-            totalResults: 0
+            totalResults: 0,
+            currentPage: 1,
+            perPage: 20,
+            pagination: null
         };
 
         // DOM elements cache
@@ -28,7 +31,7 @@ class PhilippineNewsSearch {
     // Cache DOM elements for performance
     cacheElements() {
         const elementIds = [
-            'searchQuery', 'searchCategory', 'searchSource', 'searchLimit',
+            'searchQuery', 'searchCategory', 'searchSource', 'searchPerPage',
             'performSearchBtn', 'viewAnalyticsBtn', 'addToIndexBtn', 'addArticleModal',
             'indexArticleUrl', 'submitIndexBtn', 'cancelIndexBtn',
             'loading', 'searchResults', 'analyticsResults', 'error', 'modelStatus',
@@ -91,6 +94,17 @@ class PhilippineNewsSearch {
                 }
             }
         });
+
+        // Add event listener for per page changes
+        if (this.elements.searchPerPage) {
+            this.elements.searchPerPage.addEventListener('change', () => {
+                this.state.perPage = parseInt(this.elements.searchPerPage.value);
+                this.state.currentPage = 1; // Reset to first page when changing per page
+                if (this.state.currentQuery) {
+                    this.performPhilippineSearch(1); // Re-search with new per page value
+                }
+            });
+        }
     }
 
     // Check model status
@@ -144,7 +158,7 @@ class PhilippineNewsSearch {
     }
 
     // Perform Philippine news search
-    async performPhilippineSearch() {
+    async performPhilippineSearch(page = 1) {
         const query = this.elements.searchQuery?.value?.trim();
         if (!query || query.length < 3) {
             this.showError('Please enter at least 3 characters to search.');
@@ -154,21 +168,30 @@ class PhilippineNewsSearch {
         this.hideAllSections();
         this.state.isLoading = true;
         this.state.currentQuery = query;
+        this.state.currentPage = page;
         Utils.dom.show(this.elements.loading);
 
         try {
+            // Get per_page from UI or use current state
+            const perPage = this.elements.searchPerPage ? 
+                parseInt(this.elements.searchPerPage.value) : this.state.perPage;
+            
+            this.state.perPage = perPage;
+            
             const searchData = {
                 query: query,
                 category: this.elements.searchCategory?.value || '',
                 source: this.elements.searchSource?.value || '',
-                limit: parseInt(this.elements.searchLimit?.value || '20')
+                page: page,
+                per_page: perPage
             };
 
             const response = await Utils.http.post(Config.endpoints.searchPhilippineNews, searchData);
 
             if (response.success) {
                 this.state.results = response.data.results || [];
-                this.state.totalResults = response.data.total_count || 0;
+                this.state.pagination = response.data.pagination || null;
+                this.state.totalResults = this.state.pagination?.total_results || 0;
                 this.displaySearchResults(response.data);
             } else {
                 this.showError(response.error || 'Search failed');
@@ -186,10 +209,11 @@ class PhilippineNewsSearch {
     displaySearchResults(data) {
         if (!this.elements.searchResults) return;
 
-        // Update search summary
-        if (this.elements.searchSummaryText) {
+        // Update search summary with pagination info
+        if (this.elements.searchSummaryText && data.pagination) {
+            const pagination = data.pagination;
             this.elements.searchSummaryText.textContent = 
-                `Found ${data.total_count} articles for "${data.query}"`;
+                `Showing ${pagination.showing_from}-${pagination.showing_to} of ${pagination.total_results} articles for "${data.query}"`;
         }
         if (this.elements.searchResponseTime) {
             this.elements.searchResponseTime.textContent = `${data.response_time.toFixed(0)}ms`;
@@ -204,6 +228,9 @@ class PhilippineNewsSearch {
             data.results.forEach(article => {
                 this.createSearchResultCard(article);
             });
+            
+            // Add pagination controls
+            this.createPaginationControls(data.pagination);
         } else {
             this.elements.searchResultsGrid.innerHTML = `
                 <div class="text-center py-8 text-gray-500">
@@ -272,6 +299,104 @@ class PhilippineNewsSearch {
         `;
 
         this.elements.searchResultsGrid.insertAdjacentHTML('beforeend', cardHtml);
+    }
+
+    // Create pagination controls
+    createPaginationControls(pagination) {
+        if (!pagination || pagination.total_pages <= 1) return;
+        
+        const paginationContainer = document.createElement('div');
+        paginationContainer.className = 'mt-8 flex justify-center items-center space-x-2';
+        paginationContainer.id = 'paginationControls';
+        
+        let paginationHtml = `
+            <div class="flex items-center space-x-2">
+                <!-- Previous button -->
+                <button 
+                    onclick="philippineSearch.performPhilippineSearch(${pagination.prev_page})"
+                    ${!pagination.has_prev ? 'disabled' : ''}
+                    class="px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="bi bi-chevron-left"></i> Previous
+                </button>
+                
+                <!-- Page numbers -->
+                <div class="flex space-x-1">
+        `;
+        
+        // Calculate page range to show
+        const currentPage = pagination.page;
+        const totalPages = pagination.total_pages;
+        const maxVisible = 7; // Maximum visible page numbers
+        
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+        
+        // Adjust start if we're near the end
+        if (endPage - startPage < maxVisible - 1) {
+            startPage = Math.max(1, endPage - maxVisible + 1);
+        }
+        
+        // First page + ellipsis if needed
+        if (startPage > 1) {
+            paginationHtml += `
+                <button onclick="philippineSearch.performPhilippineSearch(1)" 
+                        class="px-3 py-2 text-sm bg-white border rounded-md hover:bg-gray-50">1</button>
+            `;
+            if (startPage > 2) {
+                paginationHtml += `<span class="px-2 text-gray-500">...</span>`;
+            }
+        }
+        
+        // Page numbers in range
+        for (let i = startPage; i <= endPage; i++) {
+            const isActive = i === currentPage;
+            paginationHtml += `
+                <button onclick="philippineSearch.performPhilippineSearch(${i})"
+                        class="px-3 py-2 text-sm ${isActive ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'} border rounded-md">
+                    ${i}
+                </button>
+            `;
+        }
+        
+        // Last page + ellipsis if needed
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                paginationHtml += `<span class="px-2 text-gray-500">...</span>`;
+            }
+            paginationHtml += `
+                <button onclick="philippineSearch.performPhilippineSearch(${totalPages})" 
+                        class="px-3 py-2 text-sm bg-white border rounded-md hover:bg-gray-50">${totalPages}</button>
+            `;
+        }
+        
+        paginationHtml += `
+                </div>
+                
+                <!-- Next button -->
+                <button 
+                    onclick="philippineSearch.performPhilippineSearch(${pagination.next_page})"
+                    ${!pagination.has_next ? 'disabled' : ''}
+                    class="px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+            
+            <!-- Page info -->
+            <div class="mt-4 text-center text-sm text-gray-600">
+                Showing ${pagination.showing_from}-${pagination.showing_to} of ${pagination.total_results} results
+            </div>
+        `;
+        
+        paginationContainer.innerHTML = paginationHtml;
+        
+        // Remove existing pagination if any
+        const existingPagination = document.getElementById('paginationControls');
+        if (existingPagination) {
+            existingPagination.remove();
+        }
+        
+        // Add pagination after search results
+        this.elements.searchResultsGrid.appendChild(paginationContainer);
     }
 
     // View search result details

@@ -627,12 +627,13 @@ class PhilippineNewsSearchIndex:
         except Exception as e:
             print(f"Error updating indexing task {task_id}: {e}")
     
-    def search_articles(self, query, limit=20, category=None, date_range=None, source=None):
-        """Search Philippine news articles with advanced filtering"""
+    def search_articles(self, query, limit=20, offset=0, category=None, date_range=None, source=None):
+        """Search Philippine news articles with advanced filtering and pagination"""
         start_time = time.time()
         
         try:
             results = []
+            total_count = 0
             
             if self.search_index:
                 # Use Whoosh for full-text search
@@ -666,13 +667,24 @@ class PhilippineNewsSearchIndex:
                 else:
                     final_query = None
                 
-                # Execute search
+                # Execute search with pagination
                 if final_query:
-                    search_results = searcher.search(final_query, limit=limit)
+                    # Get total count first (without limit)
+                    all_results = searcher.search(final_query, limit=None)
+                    total_count = len(all_results)
                     
-                    for result in search_results:
+                    # Get paginated results using Whoosh's built-in pagination
+                    search_results = searcher.search(final_query, limit=limit + offset)
+                    
+                    # Apply offset manually by slicing since Whoosh doesn't have native offset
+                    paginated_results = search_results[offset:offset + limit] if offset < len(search_results) else []
+                    
+                    for result in paginated_results:
                         # Safely access the id field with fallback
                         article_id = result.get('id')
+                        if article_id is None:
+                            # Skip articles without id - this can happen if the index is inconsistent
+                            continue
                             
                         results.append({
                             'id': article_id,
@@ -690,10 +702,31 @@ class PhilippineNewsSearchIndex:
                 searcher.close()
             
             # Fallback to SQL search if Whoosh fails or no results
-            if not results:
+            if not results and total_count == 0:
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
                 
+                # First, get total count for pagination
+                count_sql_parts = ['SELECT COUNT(*) FROM philippine_articles WHERE 1=1']
+                count_params = []
+                
+                if query:
+                    count_sql_parts.append('AND (title LIKE ? OR content LIKE ? OR summary LIKE ?)')
+                    search_term = f'%{query}%'
+                    count_params.extend([search_term, search_term, search_term])
+                
+                if category:
+                    count_sql_parts.append('AND category = ?')
+                    count_params.append(category)
+                
+                if source:
+                    count_sql_parts.append('AND source_domain LIKE ?')
+                    count_params.append(f'%{source}%')
+                
+                cursor.execute(' '.join(count_sql_parts), count_params)
+                total_count = cursor.fetchone()[0]
+                
+                # Then get paginated results
                 sql_parts = ['SELECT * FROM philippine_articles WHERE 1=1']
                 params = []
                 
@@ -711,8 +744,8 @@ class PhilippineNewsSearchIndex:
                     params.append(f'%{source}%')
                 
                 sql_parts.append('ORDER BY philippine_relevance_score DESC, indexed_date DESC')
-                sql_parts.append('LIMIT ?')
-                params.append(limit)
+                sql_parts.append('LIMIT ? OFFSET ?')
+                params.extend([limit, offset])
                 
                 cursor.execute(' '.join(sql_parts), params)
                 rows = cursor.fetchall()
@@ -732,13 +765,14 @@ class PhilippineNewsSearchIndex:
             return {
                 'results': results,
                 'count': len(results),
+                'total_count': total_count,  # Total count across all pages
                 'query': query,
                 'response_time': response_time
             }
             
         except Exception as e:
             print(f"Search error: {e}")
-            return {'results': [], 'count': 0, 'error': str(e)}
+            return {'results': [], 'count': 0, 'total_count': 0, 'error': str(e)}
     
     def find_similar_content(self, content_text, limit=10, minimum_similarity=0.1):
         """Find similar articles based on content similarity using TF-IDF and keyword matching"""

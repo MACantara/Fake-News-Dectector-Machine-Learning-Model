@@ -83,7 +83,7 @@ def index_philippine_article():
 
 @philippine_news_bp.route('/search-philippine-news', methods=['GET', 'POST'])
 def search_philippine_news():
-    """Search Philippine news articles with performance optimizations"""
+    """Search Philippine news articles with pagination and performance optimizations"""
     try:
         start_time = time.time()
         
@@ -92,20 +92,26 @@ def search_philippine_news():
             query = data.get('query', '').strip()
             category = data.get('category')
             source = data.get('source')
-            limit = min(int(data.get('limit', 20)), 100)  # Max 100 results
+            page = max(int(data.get('page', 1)), 1)  # Page number (1-based)
+            per_page = min(max(int(data.get('per_page', 20)), 1), 100)  # Results per page (1-100)
         else:
             query = request.args.get('q', '').strip()
             category = request.args.get('category')
             source = request.args.get('source')
-            limit = min(int(request.args.get('limit', 20)), 100)
+            page = max(int(request.args.get('page', 1)), 1)
+            per_page = min(max(int(request.args.get('per_page', 20)), 1), 100)
         
         if not query:
             return jsonify({'error': 'Search query is required'}), 400
         
-        # Perform optimized search
+        # Calculate offset for pagination
+        offset = (page - 1) * per_page
+        
+        # Perform optimized search with pagination
         search_results = philippine_search_index.search_articles(
             query=query,
-            limit=limit,
+            limit=per_page,
+            offset=offset,
             category=category,
             source=source
         )
@@ -113,21 +119,37 @@ def search_philippine_news():
         end_time = time.time()
         total_response_time = round((end_time - start_time) * 1000, 2)
         
+        # Calculate pagination metadata
+        total_results = search_results.get('total_count', search_results['count'])
+        total_pages = max(1, (total_results + per_page - 1) // per_page)  # Ceiling division
+        has_next = page < total_pages
+        has_prev = page > 1
+        
         return jsonify({
             'query': query,
             'results': search_results['results'],
-            'total_count': search_results['count'],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total_results': total_results,
+                'total_pages': total_pages,
+                'has_next': has_next,
+                'has_prev': has_prev,
+                'next_page': page + 1 if has_next else None,
+                'prev_page': page - 1 if has_prev else None,
+                'showing_from': offset + 1 if total_results > 0 else 0,
+                'showing_to': min(offset + len(search_results['results']), total_results)
+            },
             'response_time': total_response_time,  # Total route processing time in ms
             'search_engine_time': round(search_results.get('response_time', 0) * 1000, 2),  # Search engine time in ms
             'filters': {
                 'category': category,
-                'source': source,
-                'limit': limit
+                'source': source
             },
             'performance_stats': {
                 'total_response_time_ms': total_response_time,
                 'search_engine_time_ms': round(search_results.get('response_time', 0) * 1000, 2),
-                'search_optimization': 'Connection pooling and indexed queries'
+                'search_optimization': 'Connection pooling, indexed queries, and pagination'
             }
         })
         

@@ -148,7 +148,7 @@ def save_pattern_cache(pattern_cache, pattern_cache_file='datasets/news_pattern_
         print(f"Error saving pattern cache: {str(e)}")
 
 
-def get_feedback_stats(feedback_data, retrain_threshold=10):
+def get_feedback_stats(feedback_data, retrain_threshold=100):
     """Get statistics about user feedback"""
     if not feedback_data:
         return {

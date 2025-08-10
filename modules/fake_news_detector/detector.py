@@ -43,7 +43,7 @@ class FakeNewsDetector:
         self.accuracy = None
         self.feedback_file = 'user_feedback.json'
         self.feedback_data = []
-        self.retrain_threshold = 10  # Retrain after collecting 10 feedback samples
+        self.retrain_threshold = 100  # Retrain after collecting 100 feedback samples
         
         # Pattern learning cache for news articles
         self.pattern_cache = []

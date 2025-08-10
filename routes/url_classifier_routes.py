@@ -201,7 +201,7 @@ def submit_url_classifier_feedback():
                 'message': 'Feedback submitted successfully',
                 'feedback_entry': feedback_entry,
                 'model_stats': model_stats,
-                'retraining_triggered': len(url_classifier.feedback_data) % 10 == 0 and len(url_classifier.feedback_data) >= 10
+                'retraining_triggered': len(url_classifier.feedback_data) % 100 == 0 and len(url_classifier.feedback_data) >= 100
             })
         
     except Exception as e:
@@ -238,7 +238,7 @@ def retrain_url_classifier():
         
         feedback_count = len(url_classifier.feedback_data)
         
-        if not force_retrain and feedback_count < 10:
+        if not force_retrain and feedback_count < 100:
             return jsonify({
                 'success': False,
                 'error': f'Need at least 10 feedback entries for retraining, have {feedback_count}'

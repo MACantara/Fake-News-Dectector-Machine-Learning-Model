@@ -184,7 +184,7 @@ class URLNewsClassifier:
         )
         
         # Trigger retraining if enough feedback collected
-        if len(self.feedback_data) % 10 == 0 and len(self.feedback_data) >= 10:
+        if len(self.feedback_data) % 100 == 0 and len(self.feedback_data) >= 100:
             self.retrain_model()
         
         return feedback_entry
@@ -239,7 +239,7 @@ class URLNewsClassifier:
         self.save_feedback()
         
         # Check if retraining is needed
-        if len(self.feedback_data) >= 10 and len(self.feedback_data) % 10 == 0:
+        if len(self.feedback_data) >= 100 and len(self.feedback_data) % 100 == 0:
             self.retrain_model()
         
         return {
@@ -250,7 +250,7 @@ class URLNewsClassifier:
     
     def retrain_model(self):
         """Retrain the model with accumulated feedback"""
-        if len(self.feedback_data) < 10:
+        if len(self.feedback_data) < 100:
             print(f"Need at least 10 feedback samples, have {len(self.feedback_data)}")
             return None
         

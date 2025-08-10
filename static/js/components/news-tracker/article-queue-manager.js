@@ -136,26 +136,20 @@ export const ArticleQueueManagerMixin = {
         }
         
         try {
-            const response = await fetch('/api/news-tracker/clear-queue', {
-                method: 'POST'
-            });
+            // Clear the local queue data (no backend endpoint needed)
+            this.articleQueue = [];
+            this.selectedArticles.clear();
+            this.renderArticleQueue();
+            this.updateCounts();
+            this.updateSelectionCount();
+            this.updateBatchActionButtons();
+            this.updateDisplayedArticleCount();
             
-            const data = await response.json();
+            this.showSuccess('Article queue cleared successfully');
             
-            if (data.success) {
-                this.articleQueue = [];
-                this.selectedArticles.clear();
-                this.renderArticleQueue();
-                this.updateCounts();
-                this.updateSelectionCount();
-                this.updateBatchActionButtons();
-                this.showSuccess('Article queue cleared');
-            } else {
-                this.showError(data.error || 'Failed to clear queue');
-            }
         } catch (error) {
             console.error('Error clearing queue:', error);
-            this.showError('Network error. Please try again.');
+            this.showError('Failed to clear queue. Please try again.');
         }
     },
     

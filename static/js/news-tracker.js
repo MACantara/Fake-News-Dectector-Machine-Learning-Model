@@ -325,10 +325,11 @@ class NewsTrackerApp extends NewsTrackerBase {
      */
     async refreshTrackedWebsites() {
         try {
-            const response = await fetch('/api/news-tracker/websites');
+            const response = await fetch('/api/news-tracker/get-data');
             if (!response.ok) throw new Error('Failed to fetch websites');
             
-            const websites = await response.json();
+            const data = await response.json();
+            const websites = data.websites || [];
             
             // Update tracked websites if data changed
             const currentIds = this.trackedWebsites.map(w => w.id).sort();

@@ -984,7 +984,7 @@ def auto_index_high_confidence():
     """Auto-index high confidence articles in batches"""
     try:
         data = request.get_json()
-        confidence_threshold = float(data.get('confidence_threshold', 0.99))
+        confidence_threshold = float(data.get('confidence_threshold', 0.95))
         batch_size = int(data.get('batch_size', 100))
         user_session = session.get('session_id', 'default')
         
@@ -1045,6 +1045,58 @@ def auto_index_high_confidence():
                 
                 indexing_results.extend(batch_results)
                 
+                # Auto-verify high confidence articles
+                # Handle both newly indexed articles and already indexed ones
+                try:
+                    with db_pool.get_connection() as verify_conn:
+                        verify_cursor = verify_conn.cursor()
+                        
+                        # First, update articles that were successfully indexed in this batch
+                        if batch_indexed > 0:
+                            successfully_indexed_urls = [
+                                batch_urls[i] for i, result in enumerate(batch_results) 
+                                if result.get('success', False)
+                            ]
+                            
+                            if successfully_indexed_urls:
+                                placeholders = ','.join(['?' for _ in successfully_indexed_urls])
+                                verify_cursor.execute(f'''
+                                    UPDATE article_queue 
+                                    SET verified = TRUE, 
+                                        is_news = TRUE,
+                                        verified_at = CURRENT_TIMESTAMP
+                                    WHERE user_session = ? 
+                                    AND url IN ({placeholders})
+                                    AND confidence >= ?
+                                ''', [user_session] + successfully_indexed_urls + [confidence_threshold])
+                                print(f"✅ Auto-verified {len(successfully_indexed_urls)} newly indexed high confidence articles")
+                        
+                        # Second, check for articles that failed indexing but might already be indexed
+                        # and just need verification status updated
+                        failed_urls = [
+                            batch_urls[i] for i, result in enumerate(batch_results) 
+                            if not result.get('success', False) and result.get('message', '').find('already exists') != -1
+                        ]
+                        
+                        if failed_urls:
+                            placeholders = ','.join(['?' for _ in failed_urls])
+                            verify_cursor.execute(f'''
+                                UPDATE article_queue 
+                                SET verified = TRUE, 
+                                    is_news = TRUE,
+                                    verified_at = CURRENT_TIMESTAMP
+                                WHERE user_session = ? 
+                                AND url IN ({placeholders})
+                                AND confidence >= ?
+                                AND (verified = FALSE OR is_news = FALSE)
+                            ''', [user_session] + failed_urls + [confidence_threshold])
+                            print(f"✅ Auto-verified {len(failed_urls)} already indexed high confidence articles")
+                        
+                        verify_conn.commit()
+                        
+                except Exception as verify_error:
+                    print(f"⚠️ Failed to auto-verify articles: {str(verify_error)}")
+                
                 print(f"✅ Auto-indexing batch {batches_processed}: {batch_indexed}/{len(batch)} articles indexed")
                 
             except Exception as e:
@@ -1057,7 +1109,7 @@ def auto_index_high_confidence():
         
         return jsonify({
             'success': True,
-            'message': f'Auto-indexing completed: {total_indexed} articles indexed from {total_processed} high confidence articles',
+            'message': f'Auto-indexing completed: {total_indexed} articles indexed and auto-verified from {total_processed} high confidence articles',
             'articles_processed': total_processed,
             'articles_indexed': total_indexed,
             'batches_processed': batches_processed,

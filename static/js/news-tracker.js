@@ -24,7 +24,7 @@ class NewsTracker {
         
         // Auto-indexing settings
         this.autoIndexEnabled = false;
-        this.autoIndexThreshold = 0.99; // 99% confidence threshold
+        this.autoIndexThreshold = 0.95; // 95% confidence threshold
         this.autoIndexBatchSize = 100;
         this.autoIndexStats = {
             totalIndexed: 0,
@@ -1582,7 +1582,7 @@ class NewsTracker {
         
         // Also enable auto-indexing with optimal settings
         this.autoIndexEnabled = true;
-        this.autoIndexThreshold = 0.99; // 99% confidence
+        this.autoIndexThreshold = 0.95; // 95% confidence
         this.autoIndexBatchSize = 100;
         
         const autoIndexToggle = document.getElementById('autoIndexToggle');
@@ -1603,7 +1603,7 @@ class NewsTracker {
         
         // Save auto-indexing settings
         localStorage.setItem('newsTracker.autoIndexEnabled', 'true');
-        localStorage.setItem('newsTracker.autoIndexThreshold', '0.99');
+        localStorage.setItem('newsTracker.autoIndexThreshold', '0.95');
         localStorage.setItem('newsTracker.autoIndexBatchSize', '100');
         
         // Start auto-fetch
@@ -1612,7 +1612,7 @@ class NewsTracker {
         this.updateAutoFetchStats();
         this.updateAutoIndexStatsDisplay();
         
-        this.showSuccess('Auto-fetch and auto-indexing have been set up with optimal settings (30 min interval, 99% confidence threshold)');
+        this.showSuccess('Auto-fetch and auto-indexing have been set up with optimal settings (30 min interval, 95% confidence threshold)');
     }
     
     resetAutoFetchSettings() {
@@ -1649,7 +1649,7 @@ class NewsTracker {
         
         // Reset auto-indexing settings too
         this.autoIndexEnabled = false;
-        this.autoIndexThreshold = 0.99;
+        this.autoIndexThreshold = 0.95;
         this.autoIndexBatchSize = 100;
         this.autoIndexStats = {
             totalIndexed: 0,

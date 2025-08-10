@@ -20,13 +20,13 @@
     
     <!-- Batch Verification Controls -->
     <div id="batchControls" class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex flex-wrap items-center justify-between mb-3 gap-4">
             <h4 class="text-lg font-semibold text-blue-800">
                 <i class="bi bi-check2-square"></i>
                 Batch Article Verification
             </h4>
-            <div class="flex items-center space-x-2">
-                <label for="batchSize" class="text-sm text-blue-700">Max articles:</label>
+            <div class="flex flex-wrap items-center gap-2">
+                <label for="batchSize" class="text-sm text-blue-700 whitespace-nowrap">Max articles:</label>
                 <select id="batchSize" class="p-2 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="5">5 articles</option>
                     <option value="7">7 articles</option>
@@ -35,40 +35,40 @@
                     <option value="20">20 articles</option>
                     <option value="100">100 articles</option>
                 </select>
-                <span class="text-xs text-blue-600 italic">
-                    (Shows <span id="displayedArticleCount">20</span> articles per page)
+                <span class="text-xs text-blue-600 italic break-words">
+                    (Shows <span id="displayedArticleCount">10</span> articles per page)
                 </span>
             </div>
         </div>
         
         <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center space-x-4">
-                <button id="selectAllBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+            <div class="flex flex-wrap items-center gap-4">
+                <button id="selectAllBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap">
                     <i class="bi bi-check-square"></i>
                     Select Next <span id="selectedBatchSize">10</span>
                 </button>
                 
-                <button id="clearSelectionBtn" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors">
+                <button id="clearSelectionBtn" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors whitespace-nowrap">
                     <i class="bi bi-x-square"></i>
                     Clear All
                 </button>
                 
-                <span id="selectionCount" class="text-sm text-blue-700 font-medium">
+                <span id="selectionCount" class="text-sm text-blue-700 font-medium whitespace-nowrap">
                     0 articles selected
                 </span>
                 
-                <span id="availableForSelection" class="text-xs text-gray-600 italic">
+                <span id="availableForSelection" class="text-xs text-gray-600 italic break-words">
                     (0 unverified articles visible)
                 </span>
             </div>
             
-            <div id="batchActions" class="flex items-center space-x-2">
-                <span class="text-sm text-blue-700">Mark selected as:</span>
-                <button id="batchMarkNewsBtn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <div id="batchActions" class="flex flex-wrap items-center gap-2">
+                <span class="text-sm text-blue-700 whitespace-nowrap">Mark selected as:</span>
+                <button id="batchMarkNewsBtn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap" disabled>
                     <i class="bi bi-newspaper"></i>
                     News
                 </button>
-                <button id="batchMarkNotNewsBtn" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                <button id="batchMarkNotNewsBtn" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap" disabled>
                     <i class="bi bi-x-circle"></i>
                     Not News
                 </button>

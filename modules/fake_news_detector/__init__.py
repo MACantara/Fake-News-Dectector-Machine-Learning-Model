@@ -10,9 +10,7 @@ from .utils import (
     check_lfs_files,
     get_feedback_stats,
     load_feedback_data,
-    save_feedback_data,
-    load_pattern_cache,
-    save_pattern_cache
+    save_feedback_data
 )
 
 __all__ = [
@@ -22,7 +20,5 @@ __all__ = [
     'check_lfs_files',
     'get_feedback_stats',
     'load_feedback_data',
-    'save_feedback_data',
-    'load_pattern_cache',
-    'save_pattern_cache'
+    'save_feedback_data'
 ]

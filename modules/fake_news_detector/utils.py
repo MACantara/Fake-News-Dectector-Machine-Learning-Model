@@ -126,28 +126,6 @@ def save_feedback_data(feedback_data, feedback_file='user_feedback.json'):
         print(f"Error saving feedback data: {str(e)}")
 
 
-def load_pattern_cache(pattern_cache_file='datasets/news_pattern_cache.json'):
-    """Load pattern cache for news articles"""
-    try:
-        if os.path.exists(pattern_cache_file):
-            with open(pattern_cache_file, 'r', encoding='utf-8') as f:
-                pattern_cache = json.load(f)
-            print(f"Loaded {len(pattern_cache)} cached news patterns")
-            return pattern_cache
-    except Exception as e:
-        print(f"Error loading pattern cache: {str(e)}")
-    return []
-
-
-def save_pattern_cache(pattern_cache, pattern_cache_file='datasets/news_pattern_cache.json'):
-    """Save pattern cache to file"""
-    try:
-        with open(pattern_cache_file, 'w', encoding='utf-8') as f:
-            json.dump(pattern_cache, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error saving pattern cache: {str(e)}")
-
-
 def get_feedback_stats(feedback_data, retrain_threshold=100):
     """Get statistics about user feedback"""
     if not feedback_data:
@@ -168,50 +146,3 @@ def get_feedback_stats(feedback_data, retrain_threshold=100):
         'retrain_threshold': retrain_threshold,
         'needs_retraining': pending_count >= retrain_threshold
     }
-
-
-def add_pattern_to_cache(pattern_cache, text, label, metadata=None, stemmer=None, stop_words=None):
-    """Add a new pattern to the cache"""
-    pattern_entry = {
-        'timestamp': datetime.now().isoformat(),
-        'text': text,
-        'label': label,
-        'processed_text': preprocess_text(text, stemmer, stop_words),
-        'metadata': metadata or {}
-    }
-    
-    pattern_cache.append(pattern_entry)
-    
-    print(f"Pattern added to cache. Total cached patterns: {len(pattern_cache)}")
-    
-    return pattern_entry
-
-
-def get_pattern_cache_stats(pattern_cache, pattern_cache_threshold=5):
-    """Get statistics about the pattern cache"""
-    if not pattern_cache:
-        return {
-            'total_patterns': 0,
-            'cache_threshold': pattern_cache_threshold,
-            'needs_retraining': False
-        }
-    
-    return {
-        'total_patterns': len(pattern_cache),
-        'cache_threshold': pattern_cache_threshold,
-        'needs_retraining': len(pattern_cache) >= pattern_cache_threshold,
-        'oldest_pattern': pattern_cache[0]['timestamp'] if pattern_cache else None,
-        'newest_pattern': pattern_cache[-1]['timestamp'] if pattern_cache else None
-    }
-
-
-def clear_used_patterns(pattern_cache):
-    """Clear patterns that have been used for training"""
-    original_count = len(pattern_cache)
-    remaining_patterns = [p for p in pattern_cache if not p.get('used_for_training', False)]
-    cleared_count = original_count - len(remaining_patterns)
-    
-    if cleared_count > 0:
-        print(f"🧹 Cleared {cleared_count} used patterns from cache")
-    
-    return remaining_patterns, cleared_count

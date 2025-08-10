@@ -24,12 +24,7 @@ from .utils import (
     verify_lfs_file,
     load_feedback_data,
     save_feedback_data,
-    load_pattern_cache,
-    save_pattern_cache,
-    get_feedback_stats,
-    add_pattern_to_cache,
-    get_pattern_cache_stats,
-    clear_used_patterns
+    get_feedback_stats
 )
 
 
@@ -45,16 +40,10 @@ class FakeNewsDetector:
         self.feedback_data = []
         self.retrain_threshold = 100  # Retrain after collecting 100 feedback samples
         
-        # Pattern learning cache for news articles
-        self.pattern_cache = []
-        self.pattern_cache_file = 'datasets/news_pattern_cache.json'
-        self.pattern_cache_threshold = 5  # Number of patterns before considering full retraining
-        
         # Reference to URL classifier for retraining
         self.url_classifier = None
         
         self.load_feedback_data()
-        self.load_pattern_cache()
     
     def set_url_classifier(self, url_classifier):
         """Set the URL classifier reference for retraining functionality"""
@@ -69,129 +58,10 @@ class FakeNewsDetector:
         """Save feedback data to file"""
         save_feedback_data(self.feedback_data, self.feedback_file)
     
-    def load_pattern_cache(self):
-        """Load pattern cache for news articles"""
-        self.pattern_cache = load_pattern_cache(self.pattern_cache_file)
-    
-    def save_pattern_cache(self):
-        """Save pattern cache to file"""
-        save_pattern_cache(self.pattern_cache, self.pattern_cache_file)
-    
-    def add_pattern_to_cache(self, text, label, metadata=None):
-        """Add a new pattern to the cache"""
-        pattern_entry = add_pattern_to_cache(
-            self.pattern_cache, text, label, metadata, 
-            self.stemmer, self.stop_words
-        )
-        self.save_pattern_cache()
-        
-        # Check if we should suggest full retraining
-        if len(self.pattern_cache) >= self.pattern_cache_threshold:
-            print(f"Pattern cache threshold reached ({self.pattern_cache_threshold}). Consider full model retraining for optimal performance.")
-    
-    def get_pattern_cache_stats(self):
-        """Get statistics about the pattern cache"""
-        return get_pattern_cache_stats(self.pattern_cache, self.pattern_cache_threshold)
-    
-    def retrain_with_cached_patterns(self):
-        """Perform full model retraining using cached patterns"""
-        try:
-            if not self.pattern_cache:
-                print("No cached patterns available for retraining")
-                return False
-            
-            print(f"🚀 Starting full model retraining with {len(self.pattern_cache)} cached patterns...")
-            
-            # Load original dataset
-            try:
-                df = self.load_and_prepare_data('datasets/WELFake_Dataset.csv')
-                print(f"✅ Loaded original dataset: {len(df)} samples")
-            except Exception as e:
-                print(f"❌ Could not load original dataset: {e}")
-                print("🔄 Attempting retraining with cached patterns only...")
-                df = None
-            
-            # Prepare cached pattern data
-            cached_texts = []
-            cached_labels = []
-            
-            for pattern in self.pattern_cache:
-                text = pattern.get('text', '')
-                if text:
-                    cached_texts.append(text)
-                    cached_labels.append(pattern.get('label', 1))
-            
-            if not cached_texts:
-                print("❌ No valid text data in cached patterns")
-                return False
-            
-            # Create DataFrame for cached patterns
-            cached_df = pd.DataFrame({
-                'processed_text': [self.preprocess_text(text) for text in cached_texts],
-                'label': cached_labels
-            })
-            
-            print(f"✅ Prepared cached patterns: {len(cached_df)} samples")
-            
-            # Combine with original dataset if available
-            if df is not None:
-                # Combine original data with cached patterns
-                combined_df = pd.concat([df[['processed_text', 'label']], cached_df], ignore_index=True)
-                print(f"✅ Combined dataset: {len(combined_df)} total samples")
-            else:
-                # Use only cached patterns
-                combined_df = cached_df
-                print(f"⚠️ Using cached patterns only: {len(combined_df)} samples")
-            
-            # Store current model performance for comparison
-            old_accuracy = getattr(self, 'accuracy', None)
-            
-            # Retrain the model
-            print("🔄 Training new model with combined dataset...")
-            new_accuracy = self.train_best_model(combined_df)
-            
-            if new_accuracy:
-                print(f"✅ Model retraining completed!")
-                print(f"📊 New model accuracy: {new_accuracy:.4f}")
-                if old_accuracy:
-                    improvement = new_accuracy - old_accuracy
-                    print(f"📈 Accuracy change: {improvement:+.4f}")
-                
-                # Mark cached patterns as used for training
-                for pattern in self.pattern_cache:
-                    pattern['used_for_training'] = True
-                    pattern['training_date'] = datetime.now().isoformat()
-                
-                self.save_pattern_cache()
-                
-                # Clear the cache after successful training
-                self.clear_used_patterns()
-                
-                print("✅ Pattern cache updated and cleaned")
-                return True
-            else:
-                print("❌ Model retraining failed")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Error during cached pattern retraining: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return False
-    
-    def clear_used_patterns(self):
-        """Clear patterns that have been used for training"""
-        self.pattern_cache, cleared_count = clear_used_patterns(self.pattern_cache)
-        
-        if cleared_count > 0:
-            self.save_pattern_cache()
-        
-        return cleared_count
-    
     def retrain_url_classifier_with_patterns(self):
-        """Retrain URL classifier using both pattern cache and URL classifier feedback data"""
+        """Retrain URL classifier using URL classifier feedback data"""
         try:
-            print("🚀 Starting URL classifier retraining with cached patterns and feedback data...")
+            print("🚀 Starting URL classifier retraining with feedback data...")
             
             # Check if URL classifier is available
             if not self.url_classifier:
@@ -203,19 +73,6 @@ class FakeNewsDetector:
             if not hasattr(self.url_classifier, 'add_feedback') or not hasattr(self.url_classifier, 'retrain_model'):
                 print("❌ URL classifier doesn't have required methods for retraining")
                 return False
-            
-            # Prepare training data from pattern cache (news article URLs)
-            url_patterns = []
-            url_labels = []
-            
-            print(f"📊 Processing {len(self.pattern_cache)} cached news patterns...")
-            for pattern in self.pattern_cache:
-                url = pattern.get('metadata', {}).get('url', '')
-                if url and url.startswith(('http://', 'https://')):
-                    url_patterns.append(url)
-                    url_labels.append(True)  # These are confirmed news article URLs
-            
-            print(f"✅ Extracted {len(url_patterns)} URLs from news pattern cache")
             
             # Load URL classifier feedback data
             feedback_urls = []
@@ -237,19 +94,15 @@ class FakeNewsDetector:
             except Exception as e:
                 print(f"⚠️ Could not load URL classifier feedback: {e}")
             
-            # Combine both data sources
-            all_urls = url_patterns + feedback_urls
-            all_labels = url_labels + feedback_labels
-            
-            if len(all_urls) < 5:
-                print(f"❌ Insufficient training data for URL classifier: {len(all_urls)} URLs (minimum 5 required)")
+            if len(feedback_urls) < 5:
+                print(f"❌ Insufficient training data for URL classifier: {len(feedback_urls)} URLs (minimum 5 required)")
                 return False
             
-            print(f"🔄 Training URL classifier with {len(all_urls)} URLs...")
-            print(f"   📰 News URLs: {sum(all_labels)} | 🚫 Non-news URLs: {len(all_labels) - sum(all_labels)}")
+            print(f"🔄 Training URL classifier with {len(feedback_urls)} URLs...")
+            print(f"   📰 News URLs: {sum(feedback_labels)} | 🚫 Non-news URLs: {len(feedback_labels) - sum(feedback_labels)}")
             
             # Add some negative examples (non-news URLs) if we have mostly positive examples
-            positive_ratio = sum(all_labels) / len(all_labels) if all_labels else 0
+            positive_ratio = sum(feedback_labels) / len(feedback_labels) if feedback_labels else 0
             if positive_ratio > 0.8:  # If more than 80% are news URLs
                 print("⚖️ Adding negative examples to balance the dataset...")
                 # Add some common non-news URL patterns
@@ -262,19 +115,19 @@ class FakeNewsDetector:
                     'https://example.com/register',
                     'https://example.com/search?q=test'
                 ]
-                all_urls.extend(non_news_urls)
-                all_labels.extend([False] * len(non_news_urls))
+                feedback_urls.extend(non_news_urls)
+                feedback_labels.extend([False] * len(non_news_urls))
                 print(f"✅ Added {len(non_news_urls)} negative examples")
             
             # Create training data for URL classifier
             training_data = []
-            for url, label in zip(all_urls, all_labels):
+            for url, label in zip(feedback_urls, feedback_labels):
                 training_data.append({
                     'url': url,
                     'actual_label': label,
                     'predicted_label': label,  # Initial assumption
                     'user_confidence': 1.0,
-                    'source': 'pattern_cache_retraining'
+                    'source': 'feedback_retraining'
                 })
             
             # Store current model stats for comparison
@@ -301,14 +154,6 @@ class FakeNewsDetector:
                 if 'accuracy' in new_stats:
                     print(f"   Model accuracy: {new_stats.get('accuracy', 'N/A')}")
             
-            # Mark pattern cache entries as used for URL classifier training
-            for pattern in self.pattern_cache:
-                pattern['used_for_url_training'] = True
-                pattern['url_training_date'] = datetime.now().isoformat()
-            
-            self.save_pattern_cache()
-            print("✅ Pattern cache updated with URL training metadata")
-            
             return True
             
         except Exception as e:
@@ -316,7 +161,7 @@ class FakeNewsDetector:
             import traceback
             traceback.print_exc()
             return False
-    
+
     def add_feedback(self, text, predicted_label, actual_label, confidence, user_comment=None):
         """Add user feedback for model improvement"""
         feedback_entry = {
@@ -497,31 +342,10 @@ class FakeNewsDetector:
             else:
                 print("✅ Patterns cached - model not currently available for immediate training")
             
-            # Provide guidance on next steps and trigger automatic retraining if needed
-            cache_stats = self.get_pattern_cache_stats()
-            print(f"📊 Pattern cache status: {cache_stats['total_patterns']}/{cache_stats['cache_threshold']} patterns")
-            
-            if cache_stats['needs_retraining']:
-                print("🎯 Pattern cache threshold exceeded - starting automatic URL classifier retraining...")
-                try:
-                    # Trigger automatic URL classifier retraining with cached patterns and feedback data
-                    self.retrain_url_classifier_with_patterns()
-                    print("✅ Automatic URL classifier retraining completed successfully")
-                except Exception as retrain_error:
-                    print(f"❌ URL classifier retraining failed: {retrain_error}")
-                    print("🔄 Patterns remain cached for manual retraining")
-            else:
-                remaining = cache_stats['cache_threshold'] - cache_stats['total_patterns']
-                print(f"📈 {remaining} more patterns needed to trigger automatic URL classifier retraining")
-            
-            print("✅ Pattern learning completed successfully")
+            print("✅ Feedback data stored successfully")
             
         except Exception as e:
-            print(f"Error during pattern learning: {str(e)}")
-            print(f"Training data type: {type(training_data)}")
-            if isinstance(training_data, list) and len(training_data) > 0:
-                print(f"First item type: {type(training_data[0])}")
-                print(f"First item keys: {list(training_data[0].keys()) if isinstance(training_data[0], dict) else 'Not a dict'}")
+            print(f"Error during feedback processing: {str(e)}")
             import traceback
             traceback.print_exc()
     

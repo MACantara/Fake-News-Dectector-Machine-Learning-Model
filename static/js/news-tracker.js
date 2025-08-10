@@ -18,6 +18,12 @@ import { AutoIndexManagerMixin } from './components/news-tracker/auto-index-mana
 class NewsTrackerApp extends NewsTrackerBase {
     constructor() {
         super();
+        
+        // Initialize flags for event handling
+        this.globalEventsInitialized = false;
+        this.isRealTimePaused = false;
+        this.visibilityDebounceTimer = null;
+        
         this.initMixins();
     }
     
@@ -94,13 +100,30 @@ class NewsTrackerApp extends NewsTrackerBase {
      * Bind global application events
      */
     bindGlobalEvents() {
-        // Page visibility change (pause/resume real-time features)
+        // Prevent multiple event listeners
+        if (this.globalEventsInitialized) {
+            return;
+        }
+        
+        this.globalEventsInitialized = true;
+        this.visibilityDebounceTimer = null;
+        this.isRealTimePaused = false;
+        
+        // Page visibility change (pause/resume real-time features) with debouncing
         document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                this.pauseRealTimeFeatures();
-            } else {
-                this.resumeRealTimeFeatures();
+            // Clear existing debounce timer
+            if (this.visibilityDebounceTimer) {
+                clearTimeout(this.visibilityDebounceTimer);
             }
+            
+            // Debounce visibility changes to prevent rapid toggling
+            this.visibilityDebounceTimer = setTimeout(() => {
+                if (document.hidden && !this.isRealTimePaused) {
+                    this.pauseRealTimeFeatures();
+                } else if (!document.hidden && this.isRealTimePaused) {
+                    this.resumeRealTimeFeatures();
+                }
+            }, 500); // 500ms debounce
         });
         
         // Keyboard shortcuts
@@ -184,7 +207,12 @@ class NewsTrackerApp extends NewsTrackerBase {
      * Pause real-time features (when page is hidden)
      */
     pauseRealTimeFeatures() {
+        if (this.isRealTimePaused) {
+            return; // Already paused
+        }
+        
         console.log('Pausing real-time features');
+        this.isRealTimePaused = true;
         this.stopPeriodicRefresh();
         this.stopAutoFetch();
         this.stopStatisticsAutoRefresh();
@@ -194,7 +222,12 @@ class NewsTrackerApp extends NewsTrackerBase {
      * Resume real-time features (when page becomes visible)
      */
     resumeRealTimeFeatures() {
+        if (!this.isRealTimePaused) {
+            return; // Already running
+        }
+        
         console.log('Resuming real-time features');
+        this.isRealTimePaused = false;
         this.startRealTimeFeatures();
     }
     
@@ -294,6 +327,12 @@ class NewsTrackerApp extends NewsTrackerBase {
         this.stopPeriodicRefresh();
         this.stopAutoFetch();
         this.stopStatisticsAutoRefresh();
+        
+        // Clear visibility debounce timer
+        if (this.visibilityDebounceTimer) {
+            clearTimeout(this.visibilityDebounceTimer);
+            this.visibilityDebounceTimer = null;
+        }
         
         console.log('News Tracker cleanup completed');
     }

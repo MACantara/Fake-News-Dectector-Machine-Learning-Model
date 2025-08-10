@@ -20,6 +20,34 @@ from whoosh.query import And, Or, Term, Phrase
 from textblob import TextBlob
 from .utils import extract_advanced_content
 
+# Performance optimization: Connection pooling
+import queue
+from contextlib import contextmanager
+
+class DatabasePool:
+    """Optimized database connection pool for Philippine news search"""
+    def __init__(self, db_path, pool_size=3):
+        self.db_path = db_path
+        self.pool = queue.Queue(maxsize=pool_size)
+        self._init_pool(pool_size)
+    
+    def _init_pool(self, pool_size):
+        for _ in range(pool_size):
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.execute('PRAGMA journal_mode=WAL')
+            conn.execute('PRAGMA synchronous=NORMAL')
+            conn.execute('PRAGMA cache_size=20000')
+            conn.execute('PRAGMA temp_store=MEMORY')
+            self.pool.put(conn)
+    
+    @contextmanager
+    def get_connection(self):
+        conn = self.pool.get()
+        try:
+            yield conn
+        finally:
+            self.pool.put(conn)
+
 
 class PhilippineNewsSearchIndex:
     """
@@ -29,6 +57,9 @@ class PhilippineNewsSearchIndex:
         self.db_path = db_path
         self.index_dir = index_dir
         self.stemmer = PorterStemmer()
+        
+        # Initialize optimized database connection pool
+        self.db_pool = DatabasePool(self.db_path)
         
         # Philippine-specific keywords and entities
         self.philippine_keywords = {
@@ -64,86 +95,96 @@ class PhilippineNewsSearchIndex:
         self.init_search_index()
     
     def init_database(self):
-        """Initialize SQLite database for storing Philippine news articles"""
+        """Initialize SQLite database for storing Philippine news articles with optimizations"""
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Create main articles table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS philippine_articles (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    url TEXT UNIQUE NOT NULL,
-                    title TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    summary TEXT,
-                    author TEXT,
-                    publish_date DATETIME,
-                    source_domain TEXT,
-                    category TEXT,
-                    tags TEXT,
-                    philippine_relevance_score REAL,
-                    location_mentions TEXT,
-                    government_entities TEXT,
-                    language TEXT DEFAULT 'en',
-                    sentiment_score REAL,
-                    content_hash TEXT,
-                    indexed_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    fake_news_prediction REAL,
-                    political_prediction REAL,
-                    view_count INTEGER DEFAULT 0,
-                    search_count INTEGER DEFAULT 0
-                )
-            ''')
-            
-            # Create search queries table for analytics
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS search_queries (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    query TEXT NOT NULL,
-                    results_count INTEGER,
-                    query_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    user_ip TEXT,
-                    response_time REAL
-                )
-            ''')
-            
-            # Create indexing tasks table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS indexing_tasks (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    url TEXT NOT NULL,
-                    status TEXT DEFAULT 'pending',
-                    error_message TEXT,
-                    created_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    completed_date DATETIME
-                )
-            ''')
-            
-            # Create indexes for better performance
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_url ON philippine_articles(url)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_publish_date ON philippine_articles(publish_date)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_source_domain ON philippine_articles(source_domain)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_category ON philippine_articles(category)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_philippine_relevance ON philippine_articles(philippine_relevance_score)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_indexed_date ON philippine_articles(indexed_date)')
-            
-            conn.commit()
-            conn.close()
-            print("✓ Philippine News Database initialized successfully")
-            
+            with self.db_pool.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Create main articles table with optimized schema
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS philippine_articles (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        url TEXT UNIQUE NOT NULL,
+                        title TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        summary TEXT,
+                        author TEXT,
+                        publish_date DATETIME,
+                        source_domain TEXT,
+                        category TEXT,
+                        tags TEXT,
+                        philippine_relevance_score REAL,
+                        location_mentions TEXT,
+                        government_entities TEXT,
+                        language TEXT DEFAULT 'en',
+                        sentiment_score REAL,
+                        content_hash TEXT,
+                        indexed_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        fake_news_prediction REAL,
+                        political_prediction REAL,
+                        view_count INTEGER DEFAULT 0,
+                        search_count INTEGER DEFAULT 0
+                    )
+                ''')
+                
+                # Create search queries table for analytics
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS search_queries (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        query TEXT NOT NULL,
+                        results_count INTEGER,
+                        query_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        user_ip TEXT,
+                        response_time REAL
+                    )
+                ''')
+                
+                # Create indexing tasks table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS indexing_tasks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        url TEXT NOT NULL,
+                        status TEXT DEFAULT 'pending',
+                        error_message TEXT,
+                        created_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        completed_date DATETIME
+                    )
+                ''')
+                
+                # Create comprehensive indexes for maximum performance
+                optimized_indexes = [
+                    'CREATE INDEX IF NOT EXISTS idx_url ON philippine_articles(url)',
+                    'CREATE INDEX IF NOT EXISTS idx_publish_date ON philippine_articles(publish_date)',
+                    'CREATE INDEX IF NOT EXISTS idx_source_domain ON philippine_articles(source_domain)',
+                    'CREATE INDEX IF NOT EXISTS idx_category ON philippine_articles(category)',
+                    'CREATE INDEX IF NOT EXISTS idx_philippine_relevance ON philippine_articles(philippine_relevance_score)',
+                    'CREATE INDEX IF NOT EXISTS idx_indexed_date ON philippine_articles(indexed_date)',
+                    'CREATE INDEX IF NOT EXISTS idx_content_hash ON philippine_articles(content_hash)',
+                    'CREATE INDEX IF NOT EXISTS idx_title_search ON philippine_articles(title)',
+                    'CREATE INDEX IF NOT EXISTS idx_tags ON philippine_articles(tags)',
+                    'CREATE INDEX IF NOT EXISTS idx_query_date ON search_queries(query_date)',
+                    'CREATE INDEX IF NOT EXISTS idx_task_status ON indexing_tasks(status)',
+                    'CREATE INDEX IF NOT EXISTS idx_task_url ON indexing_tasks(url)'
+                ]
+                
+                for index_sql in optimized_indexes:
+                    cursor.execute(index_sql)
+                
+                conn.commit()
+                print("✓ Philippine News Database initialized with performance optimizations")
+                
         except Exception as e:
             print(f"✗ Database initialization error: {e}")
     
     def init_search_index(self):
-        """Initialize Whoosh search index for full-text search"""
+        """Initialize Whoosh search index for full-text search with optimizations"""
         try:
             # Create index directory if it doesn't exist
             if not os.path.exists(self.index_dir):
                 os.makedirs(self.index_dir)
             
-            # Define schema for Philippine news articles
+            # Define optimized schema for Philippine news articles
             schema = Schema(
                 id=ID(stored=True, unique=True),
                 url=ID(stored=True),
@@ -162,13 +203,13 @@ class PhilippineNewsSearchIndex:
                 sentiment_score=NUMERIC(stored=True)
             )
             
-            # Create or open the index
+            # Create or open the index with optimizations
             if index.exists_in(self.index_dir):
                 self.search_index = index.open_dir(self.index_dir)
             else:
                 self.search_index = index.create_in(self.index_dir, schema)
             
-            print("✓ Philippine News Search Index initialized successfully")
+            print("✓ Philippine News Search Index initialized with performance optimizations")
             
         except Exception as e:
             print(f"✗ Search index initialization error: {e}")
@@ -570,20 +611,19 @@ class PhilippineNewsSearchIndex:
             return {'status': 'error', 'message': str(e)}
     
     def update_indexing_task(self, task_id, status, error_message=None):
-        """Update indexing task status"""
+        """Update indexing task status with optimized connection pooling"""
         if not task_id:
             return
         
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE indexing_tasks 
-                SET status = ?, error_message = ?, completed_date = CURRENT_TIMESTAMP 
-                WHERE id = ?
-            ''', (status, error_message, task_id))
-            conn.commit()
-            conn.close()
+            with self.db_pool.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE indexing_tasks 
+                    SET status = ?, error_message = ?, completed_date = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                ''', (status, error_message, task_id))
+                conn.commit()
         except Exception as e:
             print(f"Error updating indexing task {task_id}: {e}")
     

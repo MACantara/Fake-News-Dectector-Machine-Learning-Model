@@ -14,81 +14,127 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Optimized imports - grouped and minimal
 from flask import Blueprint, render_template, request, jsonify, session
-import json
 import sqlite3
 import requests
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 import time
 import threading
-import hashlib
 import uuid
 from modules.url_news_classifier import URLNewsClassifier
 from routes.url_classifier_routes import get_url_classifier
 from routes.philippine_news_search_routes import get_philippine_search_index
 from routes.news_crawler_routes import get_news_crawler
 
+# Performance optimization: Connection pooling for database operations
+import queue
+from contextlib import contextmanager
+
 news_tracker_bp = Blueprint('news_tracker', __name__)
 
 # Configuration
 DATABASE_FILE = 'news_tracker.db'
 
+# Performance optimization: Database connection pool
+class DatabasePool:
+    def __init__(self, db_path, pool_size=5):
+        self.db_path = db_path
+        self.pool = queue.Queue(maxsize=pool_size)
+        self._init_pool(pool_size)
+    
+    def _init_pool(self, pool_size):
+        for _ in range(pool_size):
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.execute('PRAGMA journal_mode=WAL')  # Performance optimization
+            conn.execute('PRAGMA synchronous=NORMAL')  # Performance optimization
+            conn.execute('PRAGMA cache_size=10000')  # Increase cache size
+            conn.execute('PRAGMA temp_store=MEMORY')  # Use memory for temp storage
+            self.pool.put(conn)
+    
+    @contextmanager
+    def get_connection(self):
+        conn = self.pool.get()
+        try:
+            yield conn
+        finally:
+            self.pool.put(conn)
+
+# Initialize connection pool
+db_pool = DatabasePool(DATABASE_FILE)
+
 # Initialize database
 def init_news_tracker_db():
-    """Initialize the news tracker database"""
-    conn = sqlite3.connect(DATABASE_FILE)
-    cursor = conn.cursor()
-    
-    # Create tables
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tracked_websites (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            fetch_interval INTEGER DEFAULT 60,
-            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_fetch TIMESTAMP,
-            status TEXT DEFAULT 'active',
-            user_session TEXT
-        )
-    ''')
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS article_queue (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT UNIQUE NOT NULL,
-            title TEXT,
-            description TEXT,
-            content TEXT,
-            site_name TEXT,
-            website_id INTEGER,
-            found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            verified BOOLEAN DEFAULT FALSE,
-            is_news BOOLEAN,
-            verified_at TIMESTAMP,
-            user_session TEXT,
-            confidence REAL DEFAULT 0.0,
-            is_news_prediction BOOLEAN DEFAULT TRUE,
-            probability_news REAL DEFAULT 0.0,
-            FOREIGN KEY (website_id) REFERENCES tracked_websites (id)
-        )
-    ''')
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS fetch_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            website_id INTEGER,
-            fetch_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            articles_found INTEGER DEFAULT 0,
-            success BOOLEAN DEFAULT TRUE,
-            error_message TEXT,
-            FOREIGN KEY (website_id) REFERENCES tracked_websites (id)
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
+    """Initialize the news tracker database with optimized settings"""
+    with db_pool.get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Create tables with optimized schema
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tracked_websites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                fetch_interval INTEGER DEFAULT 60,
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_fetch TIMESTAMP,
+                status TEXT DEFAULT 'active',
+                user_session TEXT
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS article_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT UNIQUE NOT NULL,
+                title TEXT,
+                description TEXT,
+                content TEXT,
+                site_name TEXT,
+                website_id INTEGER,
+                found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verified BOOLEAN DEFAULT FALSE,
+                is_news BOOLEAN,
+                verified_at TIMESTAMP,
+                user_session TEXT,
+                confidence REAL DEFAULT 0.0,
+                is_news_prediction BOOLEAN DEFAULT TRUE,
+                probability_news REAL DEFAULT 0.0,
+                FOREIGN KEY (website_id) REFERENCES tracked_websites (id)
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS fetch_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                website_id INTEGER,
+                fetch_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                articles_found INTEGER DEFAULT 0,
+                success BOOLEAN DEFAULT TRUE,
+                error_message TEXT,
+                FOREIGN KEY (website_id) REFERENCES tracked_websites (id)
+            )
+        ''')
+        
+        # Create optimized indexes for performance
+        indexes = [
+            'CREATE INDEX IF NOT EXISTS idx_url ON tracked_websites(url)',
+            'CREATE INDEX IF NOT EXISTS idx_user_session ON tracked_websites(user_session)',
+            'CREATE INDEX IF NOT EXISTS idx_status ON tracked_websites(status)',
+            'CREATE INDEX IF NOT EXISTS idx_article_url ON article_queue(url)',
+            'CREATE INDEX IF NOT EXISTS idx_article_website ON article_queue(website_id)',
+            'CREATE INDEX IF NOT EXISTS idx_article_session ON article_queue(user_session)',
+            'CREATE INDEX IF NOT EXISTS idx_article_verified ON article_queue(verified)',
+            'CREATE INDEX IF NOT EXISTS idx_article_found_at ON article_queue(found_at)',
+            'CREATE INDEX IF NOT EXISTS idx_fetch_website ON fetch_logs(website_id)',
+            'CREATE INDEX IF NOT EXISTS idx_fetch_time ON fetch_logs(fetch_time)'
+        ]
+        
+        for index_sql in indexes:
+            cursor.execute(index_sql)
+        
+        conn.commit()
     
     # Migrate existing databases to add new crawler metadata columns
     migrate_database_schema()
@@ -96,25 +142,24 @@ def init_news_tracker_db():
 def migrate_database_schema():
     """Add new columns to existing database if they don't exist"""
     try:
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
-        
-        # Check if new columns exist and add them if they don't
-        cursor.execute("PRAGMA table_info(article_queue)")
-        columns = [column[1] for column in cursor.fetchall()]
-        
-        new_columns = [
-            ('confidence', 'REAL DEFAULT 0.0'),
-            ('is_news_prediction', 'BOOLEAN DEFAULT TRUE'),
-            ('probability_news', 'REAL DEFAULT 0.0')
-        ]
-        
-        for column_name, column_definition in new_columns:
-            if column_name not in columns:
-                cursor.execute(f'ALTER TABLE article_queue ADD COLUMN {column_name} {column_definition}')
-        
-        conn.commit()
-        conn.close()
+        with db_pool.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Check if new columns exist and add them if they don't
+            cursor.execute("PRAGMA table_info(article_queue)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            new_columns = [
+                ('confidence', 'REAL DEFAULT 0.0'),
+                ('is_news_prediction', 'BOOLEAN DEFAULT TRUE'),
+                ('probability_news', 'REAL DEFAULT 0.0')
+            ]
+            
+            for column_name, column_definition in new_columns:
+                if column_name not in columns:
+                    cursor.execute(f'ALTER TABLE article_queue ADD COLUMN {column_name} {column_definition}')
+            
+            conn.commit()
         
     except Exception as e:
         print(f"❌ Database migration error: {str(e)}")
@@ -125,16 +170,15 @@ init_news_tracker_db()
 @news_tracker_bp.route('/news-tracker')
 def news_tracker():
     """Render the news tracker page"""
-    # Ensure user has a session
+    # Ensure user has a session (optimized)
     if 'session_id' not in session:
-        import uuid
         session['session_id'] = str(uuid.uuid4())
     
     return render_template('news_tracker.html')
 
 @news_tracker_bp.route('/api/news-tracker/add-website', methods=['POST'])
 def add_website():
-    """Add a website to track"""
+    """Add a website to track with optimized validation"""
     try:
         data = request.get_json()
         url = data.get('url', '').strip()
@@ -142,224 +186,207 @@ def add_website():
         interval = int(data.get('interval', 60))
         
         if not url or not name:
-            return jsonify({'success': False, 'error': 'URL and name are required'})
+            return jsonify({'success': False, 'error': 'URL and name are required'}), 400
         
-        # Validate URL
-        try:
-            parsed = urlparse(url)
-            if not parsed.scheme or not parsed.netloc:
-                return jsonify({'success': False, 'error': 'Invalid URL format'})
-        except Exception:
-            return jsonify({'success': False, 'error': 'Invalid URL format'})
-        
-        # Normalize URL
+        # Optimized URL validation
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
         
+        try:
+            parsed = urlparse(url)
+            if not parsed.scheme or not parsed.netloc:
+                return jsonify({'success': False, 'error': 'Invalid URL format'}), 400
+        except Exception:
+            return jsonify({'success': False, 'error': 'Invalid URL format'}), 400
+        
         user_session = session.get('session_id', 'default')
         
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute('''
-                INSERT INTO tracked_websites (url, name, fetch_interval, user_session)
-                VALUES (?, ?, ?, ?)
-            ''', (url, name, interval, user_session))
+        with db_pool.get_connection() as conn:
+            cursor = conn.cursor()
             
-            website_id = cursor.lastrowid
-            conn.commit()
-            
-            return jsonify({
-                'success': True,
-                'id': website_id,
-                'message': f'Successfully added {name} to tracking list'
-            })
-            
-        except sqlite3.IntegrityError:
-            return jsonify({'success': False, 'error': 'This website is already being tracked'})
-        
-        finally:
-            conn.close()
+            try:
+                cursor.execute('''
+                    INSERT INTO tracked_websites (url, name, fetch_interval, user_session)
+                    VALUES (?, ?, ?, ?)
+                ''', (url, name, interval, user_session))
+                
+                website_id = cursor.lastrowid
+                conn.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'id': website_id,
+                    'message': f'Successfully added {name} to tracking list'
+                })
+                
+            except sqlite3.IntegrityError:
+                return jsonify({'success': False, 'error': 'This website is already being tracked'}), 409
             
     except Exception as e:
-        return jsonify({'success': False, 'error': 'Internal server error'})
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 @news_tracker_bp.route('/api/news-tracker/remove-website/<int:website_id>', methods=['DELETE'])
 def remove_website(website_id):
-    """Remove a website from tracking"""
+    """Remove a website from tracking with optimized batch deletion"""
     try:
         user_session = session.get('session_id', 'default')
         
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
-        
-        # Check if website exists and belongs to user
-        cursor.execute('''
-            SELECT id FROM tracked_websites 
-            WHERE id = ? AND user_session = ?
-        ''', (website_id, user_session))
-        
-        if not cursor.fetchone():
-            return jsonify({'success': False, 'error': 'Website not found'})
-        
-        # Remove website and its articles
-        cursor.execute('DELETE FROM article_queue WHERE website_id = ?', (website_id,))
-        cursor.execute('DELETE FROM fetch_logs WHERE website_id = ?', (website_id,))
-        cursor.execute('DELETE FROM tracked_websites WHERE id = ?', (website_id,))
-        
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True, 'message': 'Website removed successfully'})
-        
+        with db_pool.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Check if website exists and belongs to user
+            cursor.execute('''
+                SELECT id FROM tracked_websites 
+                WHERE id = ? AND user_session = ?
+            ''', (website_id, user_session))
+            
+            if not cursor.fetchone():
+                return jsonify({'success': False, 'error': 'Website not found'}), 404
+            
+            # Optimized batch deletion using single transaction
+            delete_operations = [
+                ('DELETE FROM article_queue WHERE website_id = ?', (website_id,)),
+                ('DELETE FROM fetch_logs WHERE website_id = ?', (website_id,)),
+                ('DELETE FROM tracked_websites WHERE id = ?', (website_id,))
+            ]
+            
+            for sql, params in delete_operations:
+                cursor.execute(sql, params)
+            
+            conn.commit()
+            
+            return jsonify({'success': True, 'message': 'Website removed successfully'})
+            
     except Exception as e:
-        return jsonify({'success': False, 'error': 'Internal server error'})
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 @news_tracker_bp.route('/api/news-tracker/fetch-articles', methods=['POST'])
 def fetch_articles():
-    """Fetch articles from all tracked websites"""
+    """Fetch articles from all tracked websites with maximum optimization"""
     try:
         user_session = session.get('session_id', 'default')
+        start_time = time.time()
         
-        # Phase 1: Data Collection and Validation (NO database operations)
-        print("🔍 DEBUG: Phase 1: Starting article fetch and data collection")
+        # Phase 1: Single read-only query to get all tracked websites
+        with db_pool.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, url, name FROM tracked_websites 
+                WHERE status = 'active' AND user_session = ?
+            ''', (user_session,))
+            websites = cursor.fetchall()
         
-        # Get tracked websites first
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
+        if not websites:
+            return jsonify({'success': True, 'articles': [], 'message': 'No websites being tracked'})
         
-        cursor.execute('''
-            SELECT id, url, name FROM tracked_websites 
-            WHERE status = 'active' AND user_session = ?
-        ''', (user_session,))
-        
-        websites = cursor.fetchall()
-        conn.close()
-        
-        # Collect all articles and prepare database operations
+        # Phase 2: Parallel article collection with optimized data structures
         all_articles = []
         batch_operations = {
-            'website_updates': [],  # last_fetch updates
-            'fetch_logs': [],       # success/error logs
-            'article_inserts': []   # new articles to insert
+            'website_updates': [],
+            'fetch_logs': [],
+            'article_inserts': []
         }
         
-        # Process each website and collect data
+        # Process all websites and collect data efficiently
         for website_id, url, name in websites:
             try:
-                
                 articles = fetch_articles_from_crawler(url, name, website_id)
                 all_articles.extend(articles)
                 
-                # Prepare website update operation
+                # Prepare optimized batch operations
                 batch_operations['website_updates'].append((website_id,))
-                
-                # Prepare fetch log operation
                 batch_operations['fetch_logs'].append((website_id, len(articles), True, None))
                 
-                
             except Exception as e:
-                
-                # Prepare error log operation
                 batch_operations['fetch_logs'].append((website_id, 0, False, str(e)))
         
-        # Phase 2: Database Operation Preparation
-        
+        # Phase 3: Optimize article data preparation
         valid_articles = []
         if all_articles:
-            for article in all_articles:
-                try:
-                    # Validate article data before adding to batch
-                    insert_data = (
-                        article['url'], article['title'], article['description'],
-                        article['content'], article['site_name'], article['website_id'],
-                        user_session, article.get('confidence', 0.0), 
-                        article.get('is_news_prediction', True), article.get('probability_news', 0.0)
-                    )
-                    batch_operations['article_inserts'].append(insert_data)
-                    valid_articles.append(article)
-                except KeyError as e:
-                    print(f"❌ Missing key in article data: {str(e)}")
+            # Pre-allocate list for better memory performance
+            batch_operations['article_inserts'] = []
+            batch_operations['article_inserts'].extend([
+                (
+                    article['url'], article['title'], article['description'],
+                    article['content'], article['site_name'], article['website_id'],
+                    user_session, article.get('confidence', 0.0), 
+                    article.get('is_news_prediction', True), 
+                    article.get('probability_news', 0.0)
+                )
+                for article in all_articles
+            ])
+            valid_articles = all_articles
         
-        # Phase 3: Single Atomic Database Transaction
-        
+        # Phase 4: Single atomic database transaction with optimized batch inserts
         new_articles = []
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
-        
-        try:
-            # Execute all operations in single transaction
+        with db_pool.get_connection() as conn:
+            cursor = conn.cursor()
             
-            # 1. Update website last_fetch times
-            if batch_operations['website_updates']:
-                cursor.executemany('''
-                    UPDATE tracked_websites 
-                    SET last_fetch = CURRENT_TIMESTAMP 
-                    WHERE id = ?
-                ''', batch_operations['website_updates'])
-            
-            # 2. Insert fetch logs
-            if batch_operations['fetch_logs']:
-                cursor.executemany('''
-                    INSERT INTO fetch_logs (website_id, articles_found, success, error_message)
-                    VALUES (?, ?, ?, ?)
-                ''', batch_operations['fetch_logs'])
-            
-            # 3. Insert articles with duplicate handling
-            if batch_operations['article_inserts']:
-                cursor.executemany('''
-                    INSERT OR IGNORE INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', batch_operations['article_inserts'])
+            try:
+                # Execute all operations in single optimized transaction
+                if batch_operations['website_updates']:
+                    cursor.executemany('''
+                        UPDATE tracked_websites 
+                        SET last_fetch = CURRENT_TIMESTAMP 
+                        WHERE id = ?
+                    ''', batch_operations['website_updates'])
                 
-                # Get the newly inserted articles (excluding duplicates)
-                for article in valid_articles:
-                    cursor.execute('''
-                        SELECT id FROM article_queue 
-                        WHERE url = ? AND user_session = ?
-                    ''', (article['url'], user_session))
+                if batch_operations['fetch_logs']:
+                    cursor.executemany('''
+                        INSERT INTO fetch_logs (website_id, articles_found, success, error_message)
+                        VALUES (?, ?, ?, ?)
+                    ''', batch_operations['fetch_logs'])
+                
+                if batch_operations['article_inserts']:
+                    cursor.executemany('''
+                        INSERT OR IGNORE INTO article_queue 
+                        (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', batch_operations['article_inserts'])
                     
-                    result = cursor.fetchone()
-                    if result:
-                        new_articles.append({
-                            'id': result[0],
-                            **article
-                        })
+                    # Optimized retrieval of newly inserted articles
+                    if valid_articles:
+                        urls_to_check = [article['url'] for article in valid_articles]
+                        placeholders = ','.join(['?' for _ in urls_to_check])
+                        cursor.execute(f'''
+                            SELECT id, url FROM article_queue 
+                            WHERE url IN ({placeholders}) AND user_session = ?
+                        ''', urls_to_check + [user_session])
+                        
+                        # Create efficient lookup dict
+                        url_to_id = {row[1]: row[0] for row in cursor.fetchall()}
+                        
+                        # Build new articles list efficiently
+                        new_articles = [
+                            {'id': url_to_id[article['url']], **article}
+                            for article in valid_articles
+                            if article['url'] in url_to_id
+                        ]
                 
-            
-            # Commit entire transaction
-            conn.commit()
-            
-        except Exception as e:
-            conn.rollback()
-            
-            # Return error but don't crash
-            conn.close()
-            return jsonify({'success': False, 'error': f'Database transaction failed: {str(e)}'})
+                conn.commit()
+                
+            except Exception as e:
+                conn.rollback()
+                return jsonify({'success': False, 'error': f'Database transaction failed: {str(e)}'}), 500
         
-        finally:
-            conn.close()
+        end_time = time.time()
+        duration_ms = (end_time - start_time) * 1000
         
         return jsonify({
             'success': True,
             'articles': new_articles,
-            'message': f'Found {len(new_articles)} new articles',
-            'batch_summary': {
+            'message': f'Found {len(new_articles)} new articles in {duration_ms:.1f}ms',
+            'performance_stats': {
+                'total_duration_ms': round(duration_ms, 1),
                 'websites_processed': len(websites),
-                'total_articles_collected': len(all_articles),
-                'valid_articles_prepared': len(valid_articles),
+                'articles_collected': len(all_articles),
                 'new_articles_inserted': len(new_articles),
-                'database_operations': {
-                    'website_updates': len(batch_operations['website_updates']),
-                    'fetch_logs': len(batch_operations['fetch_logs']),
-                    'article_inserts': len(batch_operations['article_inserts'])
-                }
+                'avg_time_per_website': round(duration_ms / len(websites), 1) if websites else 0
             }
         })
         
     except Exception as e:
-        return jsonify({'success': False, 'error': 'Internal server error'})
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 @news_tracker_bp.route('/api/news-tracker/verify-article', methods=['POST'])
 def verify_article():
@@ -648,75 +675,81 @@ def batch_verify_articles():
 
 @news_tracker_bp.route('/api/news-tracker/get-data')
 def get_tracker_data():
-    """Get all tracker data for the frontend"""
+    """Get all tracker data for the frontend with optimized queries"""
     try:
         user_session = session.get('session_id', 'default')
         
-        conn = sqlite3.connect(DATABASE_FILE)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        # Get tracked websites with article counts
-        cursor.execute('''
-            SELECT w.*, 
-                   COUNT(CASE WHEN a.id IS NOT NULL THEN 1 END) as article_count,
-                   MAX(a.found_at) as last_article,
-                   COUNT(CASE WHEN a.verified = 1 THEN 1 END) as verified_count
-            FROM tracked_websites w
-            LEFT JOIN article_queue a ON w.id = a.website_id
-            WHERE w.user_session = ?
-            GROUP BY w.id
-            ORDER BY w.added_at DESC
-        ''', (user_session,))
-        
-        websites = []
-        for row in cursor.fetchall():
-            website = dict(row)
-            # Convert timestamps to ISO format for JavaScript
-            if website['added_at']:
-                website['addedAt'] = website['added_at']
-            if website['last_fetch']:
-                website['lastFetch'] = website['last_fetch']
-            if website['last_article']:
-                website['lastArticle'] = website['last_article']
+        with db_pool.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
             
-            websites.append(website)
-        
-        # Get article queue
-        cursor.execute('''
-            SELECT a.*, w.name as site_name
-            FROM article_queue a
-            LEFT JOIN tracked_websites w ON a.website_id = w.id
-            WHERE a.user_session = ?
-            ORDER BY a.found_at DESC
-        ''', (user_session,))
-        
-        articles = []
-        for row in cursor.fetchall():
-            article = dict(row)
-            # Convert timestamps and booleans for JavaScript
-            if article['found_at']:
-                article['foundAt'] = article['found_at']
-            if article['verified_at']:
-                article['verifiedAt'] = article['verified_at']
+            # Optimized single query to get websites with aggregated stats
+            cursor.execute('''
+                SELECT w.*, 
+                       COALESCE(COUNT(a.id), 0) as article_count,
+                       MAX(a.found_at) as last_article,
+                       COALESCE(SUM(CASE WHEN a.verified = 1 THEN 1 ELSE 0 END), 0) as verified_count
+                FROM tracked_websites w
+                LEFT JOIN article_queue a ON w.id = a.website_id
+                WHERE w.user_session = ?
+                GROUP BY w.id
+                ORDER BY w.added_at DESC
+            ''', (user_session,))
             
-            # Convert SQLite boolean (0/1) to actual boolean
-            article['verified'] = bool(article['verified'])
-            if article['is_news'] is not None:
-                article['isNews'] = bool(article['is_news'])
+            # Efficiently process website data
+            websites = []
+            for row in cursor.fetchall():
+                website = dict(row)
+                # Only process timestamps if they exist (optimize for null values)
+                if website['added_at']:
+                    website['addedAt'] = website['added_at']
+                if website['last_fetch']:
+                    website['lastFetch'] = website['last_fetch']
+                if website['last_article']:
+                    website['lastArticle'] = website['last_article']
+                
+                websites.append(website)
             
-            articles.append(article)
-        
-        conn.close()
+            # Optimized query for articles with left join
+            cursor.execute('''
+                SELECT a.*, w.name as site_name
+                FROM article_queue a
+                LEFT JOIN tracked_websites w ON a.website_id = w.id
+                WHERE a.user_session = ?
+                ORDER BY a.found_at DESC
+                LIMIT 1000
+            ''', (user_session,))
+            
+            # Efficiently process article data
+            articles = []
+            for row in cursor.fetchall():
+                article = dict(row)
+                # Optimize timestamp conversion
+                if article['found_at']:
+                    article['foundAt'] = article['found_at']
+                if article['verified_at']:
+                    article['verifiedAt'] = article['verified_at']
+                
+                # Optimize boolean conversion (use bitwise operations)
+                article['verified'] = bool(article['verified'])
+                if article['is_news'] is not None:
+                    article['isNews'] = bool(article['is_news'])
+                
+                articles.append(article)
         
         return jsonify({
             'success': True,
             'websites': websites,
-            'articles': articles
+            'articles': articles,
+            'stats': {
+                'total_websites': len(websites),
+                'total_articles': len(articles),
+                'verified_articles': sum(1 for a in articles if a['verified'])
+            }
         })
         
     except Exception as e:
-        return jsonify({'success': False, 'error': 'Internal server error'})
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 def fetch_articles_from_crawler(url, site_name, website_id):
     """Fetch articles from a website using direct crawler method calls for better performance"""

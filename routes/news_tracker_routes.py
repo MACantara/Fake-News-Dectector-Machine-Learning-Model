@@ -339,10 +339,12 @@ def verify_article():
             user_verification=is_news
         )
         
-        # If article is verified as news, index it in Philippine news search system
+        # If article is verified as news, index it in Philippine news search system using batch method
         philippine_indexing_success = False
         if is_news:
-            philippine_indexing_success = index_philippine_news_article(url)
+            # Use batch method for consistency even for single articles
+            batch_results = batch_index_philippine_news_articles([url])
+            philippine_indexing_success = len(batch_results) > 0 and batch_results[0].get('success', False)
         
         return jsonify({
             'success': True,
@@ -446,22 +448,25 @@ def batch_verify_articles():
         conn.commit()
         conn.close()
         
-        # Batch index news articles into Philippine news system
+        # Batch index news articles into Philippine news system using optimized batch method
         philippine_indexing_results = []
         if news_articles_for_indexing:
             logging.info(f"🚀 Batch indexing {len(news_articles_for_indexing)} verified news articles into Philippine system")
-            for url in news_articles_for_indexing:
-                indexing_success = index_philippine_news_article(url)
-                philippine_indexing_results.append({
-                    'url': url,
-                    'success': indexing_success
-                })
+            philippine_indexing_results = batch_index_philippine_news_articles(news_articles_for_indexing)
         
-        # Calculate summary statistics
+        # Calculate summary statistics (enhanced to match philippine_news_search_routes pattern)
         successful_verifications = len([r for r in results if r['success']])
         failed_verifications = len([r for r in results if not r['success']])
         news_count = len([r for r in results if r.get('philippine_indexing_queued')])
-        successful_indexing = len([r for r in philippine_indexing_results if r['success']])
+        
+        # Enhanced Philippine indexing statistics
+        if philippine_indexing_results:
+            successful_indexing = len([r for r in philippine_indexing_results if r['status'] == 'success'])
+            skipped_indexing = len([r for r in philippine_indexing_results if r['status'] == 'skipped'])
+            error_indexing = len([r for r in philippine_indexing_results if r['status'] == 'error'])
+            already_indexed = len([r for r in philippine_indexing_results if r['status'] == 'already_indexed'])
+        else:
+            successful_indexing = skipped_indexing = error_indexing = already_indexed = 0
         
         return jsonify({
             'success': True,
@@ -472,7 +477,13 @@ def batch_verify_articles():
                 'failed_verifications': failed_verifications,
                 'news_articles_found': news_count,
                 'philippine_indexing_attempts': len(philippine_indexing_results),
-                'successful_philippine_indexing': successful_indexing
+                'successful_philippine_indexing': successful_indexing,
+                'philippine_indexing_details': {
+                    'successfully_indexed': successful_indexing,
+                    'already_indexed': already_indexed,
+                    'skipped': skipped_indexing,
+                    'errors': error_indexing
+                }
             },
             'results': results,
             'philippine_indexing_results': philippine_indexing_results
@@ -798,6 +809,96 @@ def send_url_classifier_feedback(url, article_data, user_verification):
     except Exception as e:
         logging.warning(f"⚠️ Error sending URL classifier feedback: {str(e)}")
     # Don't raise exceptions - feedback is optional and shouldn't break verification
+
+def batch_index_philippine_news_articles(urls, force_reindex=False):
+    """
+    Batch index multiple news articles into the Philippine news search system using direct method calls
+    
+    This function uses the same optimized approach as /batch-index-philippine-articles endpoint
+    from philippine_news_search_routes.py for better performance and consistency.
+    
+    Args:
+        urls (list): List of article URLs to index
+        force_reindex (bool): Whether to force reindexing of existing articles
+        
+    Returns:
+        list: List of indexing results with status, message, and metadata for each URL
+    """
+    try:
+        if not urls or not isinstance(urls, list):
+            logging.warning("⚠️ No URLs provided for batch Philippine news indexing")
+            return []
+            
+        # Get the Philippine search index instance
+        philippine_search_index = get_philippine_search_index()
+        
+        if philippine_search_index is None:
+            logging.warning("⚠️ Philippine search index not available for batch indexing")
+            return []
+        
+        # Process URLs in batch similar to philippine_news_search_routes.py
+        def process_batch():
+            results = []
+            for url in urls:
+                try:
+                    # Validate URL format
+                    from urllib.parse import urlparse
+                    parsed_url = urlparse(url.strip())
+                    if not parsed_url.scheme or not parsed_url.netloc:
+                        results.append({
+                            'url': url,
+                            'status': 'error',
+                            'message': 'Invalid URL format',
+                            'success': False
+                        })
+                        continue
+                    
+                    # Index the article using direct method call (same as batch-index-philippine-articles)
+                    result = philippine_search_index.index_article(url.strip(), force_reindex)
+                    
+                    # Convert result to consistent format
+                    results.append({
+                        'url': url,
+                        'status': result['status'],
+                        'message': result.get('message', ''),
+                        'article_id': result.get('article_id'),
+                        'relevance_score': result.get('relevance_score', 0),
+                        'success': result['status'] in ['success', 'already_indexed', 'skipped']
+                    })
+                    
+                except Exception as e:
+                    results.append({
+                        'url': url,
+                        'status': 'error',
+                        'message': str(e),
+                        'success': False
+                    })
+            
+            return results
+        
+        # Process synchronously for reliability (can be made async later)
+        start_time = time.time()
+        batch_results = process_batch()
+        end_time = time.time()
+        duration_ms = (end_time - start_time) * 1000
+        
+        # Calculate summary statistics
+        success_count = len([r for r in batch_results if r['status'] == 'success'])
+        skipped_count = len([r for r in batch_results if r['status'] == 'skipped'])
+        error_count = len([r for r in batch_results if r['status'] == 'error'])
+        already_indexed_count = len([r for r in batch_results if r['status'] == 'already_indexed'])
+        
+        logging.info(f"✅ Batch Philippine indexing completed in {duration_ms:.1f}ms:")
+        logging.info(f"   📊 Successfully indexed: {success_count}")
+        logging.info(f"   ℹ️ Already indexed: {already_indexed_count}")
+        logging.info(f"   ⏭️ Skipped (not relevant): {skipped_count}")
+        logging.info(f"   ❌ Errors: {error_count}")
+        
+        return batch_results
+        
+    except Exception as e:
+        logging.warning(f"⚠️ Error in batch Philippine news indexing: {str(e)}")
+        return []
 
 def index_philippine_news_article(url, force_reindex=False):
     """Index a verified news article into the Philippine news search system using direct method calls"""

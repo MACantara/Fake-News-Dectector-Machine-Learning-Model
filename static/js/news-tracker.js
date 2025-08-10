@@ -787,16 +787,124 @@ class NewsTracker {
     extractRootDomain(url) {
         try {
             const domain = new URL(url).hostname.replace('www.', '');
+            
+            // Handle special domain mappings first
+            const specialDomains = this.getSpecialDomainMappings();
+            if (specialDomains[domain]) {
+                return specialDomains[domain];
+            }
+            
+            // Check if any special domain is a subdomain of this domain
+            for (const [key, value] of Object.entries(specialDomains)) {
+                if (domain.endsWith('.' + key) || domain === key) {
+                    return value;
+                }
+            }
+            
             const parts = domain.split('.');
-            // For domains like news.bbc.com, get bbc.com
-            // For domains like cnn.com, get cnn.com
+            
+            // Handle country code TLDs (ccTLDs) and second-level domains
+            if (this.isCountryCodeTLD(parts)) {
+                return this.extractDomainWithCCTLD(parts);
+            }
+            
+            // Handle standard domains
             if (parts.length >= 2) {
+                // For domains like news.bbc.com, check if subdomain should be preserved
+                if (parts.length >= 3 && this.shouldPreserveSubdomain(parts)) {
+                    return parts.slice(-3).join('.');
+                }
                 return parts.slice(-2).join('.');
             }
+            
             return domain;
         } catch (_) {
             return 'unknown';
         }
+    }
+    
+    getSpecialDomainMappings() {
+        // Map specific domains to their canonical grouping domain
+        return {
+            'mb.com.ph': 'manilabulletin.com.ph',
+            'businessmirror.com.ph': 'businessmirror.com.ph',
+            'news.abs-cbn.com': 'abs-cbn.com',
+            'news.gma.network': 'gmanetwork.com',
+            'cnnphilippines.com': 'cnn.com',
+            'news.yahoo.com': 'yahoo.com',
+            'abscbn.com': 'abs-cbn.com',
+            'gmanews.tv': 'gmanetwork.com',
+            'manilastandard.net': 'manilastandardtoday.com',
+            'tribune.net.ph': 'tribuneonline.org',
+            'bworldonline.com': 'businessworld.com.ph',
+            'pna.gov.ph': 'pna.gov.ph',
+            'philstar.com': 'philstar.com'
+        };
+    }
+    
+    isCountryCodeTLD(parts) {
+        if (parts.length < 3) return false;
+        
+        const ccTLDs = [
+            'com.ph', 'net.ph', 'org.ph', 'gov.ph', 'edu.ph',
+            'co.uk', 'org.uk', 'ac.uk', 'gov.uk',
+            'com.au', 'net.au', 'org.au', 'gov.au', 'edu.au',
+            'co.jp', 'or.jp', 'ne.jp', 'go.jp', 'ac.jp',
+            'com.sg', 'net.sg', 'org.sg', 'gov.sg', 'edu.sg',
+            'com.my', 'net.my', 'org.my', 'gov.my', 'edu.my'
+        ];
+        
+        const lastTwoParts = parts.slice(-2).join('.');
+        return ccTLDs.includes(lastTwoParts);
+    }
+    
+    extractDomainWithCCTLD(parts) {
+        // For ccTLDs, take the domain name + ccTLD
+        // e.g., businessmirror.com.ph -> businessmirror.com.ph
+        // e.g., news.mb.com.ph -> mb.com.ph
+        
+        if (parts.length === 3) {
+            // domain.com.ph
+            return parts.join('.');
+        } else if (parts.length >= 4) {
+            // subdomain.domain.com.ph
+            // Check if subdomain should be preserved
+            const subdomain = parts[0];
+            if (this.shouldPreserveSubdomainForCCTLD(subdomain)) {
+                return parts.slice(-4).join('.');
+            }
+            return parts.slice(-3).join('.');
+        }
+        
+        return parts.join('.');
+    }
+    
+    shouldPreserveSubdomain(parts) {
+        if (parts.length < 3) return false;
+        
+        const subdomain = parts[0];
+        const preserveSubdomains = [
+            'news', 'www', 'm', 'mobile', 'edition', 
+            'international', 'cnn', 'bbc', 'sports'
+        ];
+        
+        // Don't preserve common news subdomains unless it's a major organization
+        if (preserveSubdomains.includes(subdomain)) {
+            const domain = parts.slice(-2).join('.');
+            const majorOrgs = [
+                'abs-cbn.com', 'gmanetwork.com', 'rappler.com',
+                'cnn.com', 'bbc.com', 'reuters.com', 'nytimes.com'
+            ];
+            return majorOrgs.includes(domain);
+        }
+        
+        return false;
+    }
+    
+    shouldPreserveSubdomainForCCTLD(subdomain) {
+        // For ccTLD domains, be more conservative about preserving subdomains
+        const preserveSubdomains = ['news', 'www'];
+        return preserveSubdomains.includes(subdomain);
     }
     
     groupWebsitesByDomain(websites) {
@@ -817,6 +925,13 @@ class NewsTracker {
             
             groups[rootDomain].websites.push(website);
             groups[rootDomain].totalArticles += (website.article_count || website.articleCount || 0);
+        });
+        
+        // Sort websites within each group by article count
+        Object.values(groups).forEach(group => {
+            group.websites.sort((a, b) => 
+                (b.article_count || b.articleCount || 0) - (a.article_count || a.articleCount || 0)
+            );
         });
         
         // Sort groups by total articles (descending) and then by domain name
@@ -840,7 +955,7 @@ class NewsTracker {
             'washingtonpost.com': 'Washington Post',
             'theguardian.com': 'The Guardian',
             'abc.net.au': 'ABC News',
-            'news.yahoo.com': 'Yahoo News',
+            'yahoo.com': 'Yahoo News',
             'foxnews.com': 'Fox News',
             'nbcnews.com': 'NBC News',
             'cbsnews.com': 'CBS News',
@@ -852,10 +967,51 @@ class NewsTracker {
             'time.com': 'Time',
             'newsweek.com': 'Newsweek',
             'huffpost.com': 'HuffPost',
-            'politico.com': 'Politico'
+            'politico.com': 'Politico',
+            
+            // Philippine news organizations
+            'rappler.com': 'Rappler',
+            'abs-cbn.com': 'ABS-CBN',
+            'gmanetwork.com': 'GMA News',
+            'inquirer.net': 'Philippine Daily Inquirer',
+            'philstar.com': 'Philippine Star',
+            'manilabulletin.com.ph': 'Manila Bulletin',
+            'businessworld.com.ph': 'BusinessWorld',
+            'businessmirror.com.ph': 'BusinessMirror',
+            'manilastandard.net': 'Manila Standard',
+            'manilastandardtoday.com': 'Manila Standard Today',
+            'tribune.net.ph': 'Tribune',
+            'tribuneonline.org': 'Tribune',
+            'sunstar.com.ph': 'SunStar',
+            'pna.gov.ph': 'Philippine News Agency',
+            'malaya.com.ph': 'Malaya Business Insight',
+            'remate.ph': 'Remate',
+            'tempo.com.ph': 'Tempo',
+            'journal.com.ph': 'The Journal',
+            'manilatimes.net': 'Manila Times',
+            'journal.ph': 'The Journal Online'
         };
         
-        return domainMap[domain] || this.capitalizeWords(domain.replace('.com', '').replace('.org', '').replace('.net', ''));
+        if (domainMap[domain]) {
+            return domainMap[domain];
+        }
+        
+        // Handle special patterns for Philippine domains
+        if (domain.endsWith('.com.ph') || domain.endsWith('.net.ph') || domain.endsWith('.org.ph')) {
+            const baseName = domain.split('.')[0];
+            return this.capitalizeWords(baseName.replace(/[-_]/g, ' '));
+        }
+        
+        // Generate display name from domain
+        let name = domain
+            .replace('.com', '')
+            .replace('.org', '')
+            .replace('.net', '')
+            .replace('.ph', '')
+            .replace('.co.uk', '')
+            .replace('.com.au', '');
+            
+        return this.capitalizeWords(name.replace(/[-_.]/g, ' '));
     }
     
     capitalizeWords(str) {

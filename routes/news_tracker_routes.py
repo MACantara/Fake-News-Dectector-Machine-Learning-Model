@@ -979,20 +979,115 @@ def get_tracker_data():
         return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 def extract_root_domain(url):
-    """Extract root domain from URL for grouping purposes"""
+    """Extract root domain from URL for grouping purposes with improved ccTLD handling"""
     try:
         from urllib.parse import urlparse
         parsed = urlparse(url)
         hostname = parsed.hostname.replace('www.', '') if parsed.hostname else 'unknown'
         
+        # Handle special domain mappings first
+        special_domains = get_special_domain_mappings()
+        if hostname in special_domains:
+            return special_domains[hostname]
+        
+        # Check if any special domain is a subdomain of this domain
+        for key, value in special_domains.items():
+            if hostname.endswith('.' + key) or hostname == key:
+                return value
+        
         parts = hostname.split('.')
-        # For domains like news.bbc.com, get bbc.com
-        # For domains like cnn.com, get cnn.com
+        
+        # Handle country code TLDs (ccTLDs) and second-level domains
+        if is_country_code_tld(parts):
+            return extract_domain_with_cctld(parts)
+        
+        # Handle standard domains
         if len(parts) >= 2:
+            # For domains like news.bbc.com, check if subdomain should be preserved
+            if len(parts) >= 3 and should_preserve_subdomain(parts):
+                return '.'.join(parts[-3:])
             return '.'.join(parts[-2:])
+        
         return hostname
     except Exception:
         return 'unknown'
+
+def get_special_domain_mappings():
+    """Map specific domains to their canonical grouping domain"""
+    return {
+        'mb.com.ph': 'manilabulletin.com.ph',
+        'businessmirror.com.ph': 'businessmirror.com.ph',
+        'news.abs-cbn.com': 'abs-cbn.com',
+        'news.gma.network': 'gmanetwork.com',
+        'cnnphilippines.com': 'cnn.com',
+        'news.yahoo.com': 'yahoo.com',
+        'abscbn.com': 'abs-cbn.com',
+        'gmanews.tv': 'gmanetwork.com',
+        'manilastandard.net': 'manilastandardtoday.com',
+        'tribune.net.ph': 'tribuneonline.org',
+        'bworldonline.com': 'businessworld.com.ph',
+        'pna.gov.ph': 'pna.gov.ph',
+        'philstar.com': 'philstar.com'
+    }
+
+def is_country_code_tld(parts):
+    """Check if domain uses a country code TLD"""
+    if len(parts) < 3:
+        return False
+    
+    cctlds = [
+        'com.ph', 'net.ph', 'org.ph', 'gov.ph', 'edu.ph',
+        'co.uk', 'org.uk', 'ac.uk', 'gov.uk',
+        'com.au', 'net.au', 'org.au', 'gov.au', 'edu.au',
+        'co.jp', 'or.jp', 'ne.jp', 'go.jp', 'ac.jp',
+        'com.sg', 'net.sg', 'org.sg', 'gov.sg', 'edu.sg',
+        'com.my', 'net.my', 'org.my', 'gov.my', 'edu.my'
+    ]
+    
+    last_two_parts = '.'.join(parts[-2:])
+    return last_two_parts in cctlds
+
+def extract_domain_with_cctld(parts):
+    """Extract domain with country code TLD properly"""
+    if len(parts) == 3:
+        # domain.com.ph
+        return '.'.join(parts)
+    elif len(parts) >= 4:
+        # subdomain.domain.com.ph
+        # Check if subdomain should be preserved
+        subdomain = parts[0]
+        if should_preserve_subdomain_for_cctld(subdomain):
+            return '.'.join(parts[-4:])
+        return '.'.join(parts[-3:])
+    
+    return '.'.join(parts)
+
+def should_preserve_subdomain(parts):
+    """Determine if subdomain should be preserved for standard domains"""
+    if len(parts) < 3:
+        return False
+    
+    subdomain = parts[0]
+    preserve_subdomains = [
+        'news', 'www', 'm', 'mobile', 'edition', 
+        'international', 'cnn', 'bbc', 'sports'
+    ]
+    
+    # Don't preserve common news subdomains unless it's a major organization
+    if subdomain in preserve_subdomains:
+        domain = '.'.join(parts[-2:])
+        major_orgs = [
+            'abs-cbn.com', 'gmanetwork.com', 'rappler.com',
+            'cnn.com', 'bbc.com', 'reuters.com', 'nytimes.com'
+        ]
+        return domain in major_orgs
+    
+    return False
+
+def should_preserve_subdomain_for_cctld(subdomain):
+    """For ccTLD domains, be more conservative about preserving subdomains"""
+    preserve_subdomains = ['news', 'www']
+    return subdomain in preserve_subdomains
 
 def get_domain_display_name(domain):
     """Convert domain to friendly display name"""
@@ -1004,7 +1099,7 @@ def get_domain_display_name(domain):
         'washingtonpost.com': 'Washington Post',
         'theguardian.com': 'The Guardian',
         'abc.net.au': 'ABC News',
-        'news.yahoo.com': 'Yahoo News',
+        'yahoo.com': 'Yahoo News',
         'foxnews.com': 'Fox News',
         'nbcnews.com': 'NBC News',
         'cbsnews.com': 'CBS News',
@@ -1017,21 +1112,41 @@ def get_domain_display_name(domain):
         'newsweek.com': 'Newsweek',
         'huffpost.com': 'HuffPost',
         'politico.com': 'Politico',
+        
+        # Philippine news organizations
         'rappler.com': 'Rappler',
         'abs-cbn.com': 'ABS-CBN',
         'gmanetwork.com': 'GMA News',
         'inquirer.net': 'Philippine Daily Inquirer',
         'philstar.com': 'Philippine Star',
-        'manilabulletin.com': 'Manila Bulletin',
-        'businessworld.com.ph': 'BusinessWorld'
+        'manilabulletin.com.ph': 'Manila Bulletin',
+        'businessworld.com.ph': 'BusinessWorld',
+        'businessmirror.com.ph': 'BusinessMirror',
+        'manilastandard.net': 'Manila Standard',
+        'manilastandardtoday.com': 'Manila Standard Today',
+        'tribune.net.ph': 'Tribune',
+        'tribuneonline.org': 'Tribune',
+        'sunstar.com.ph': 'SunStar',
+        'pna.gov.ph': 'Philippine News Agency',
+        'malaya.com.ph': 'Malaya Business Insight',
+        'remate.ph': 'Remate',
+        'tempo.com.ph': 'Tempo',
+        'journal.com.ph': 'The Journal',
+        'manilatimes.net': 'Manila Times',
+        'journal.ph': 'The Journal Online'
     }
     
     if domain in domain_map:
         return domain_map[domain]
     
+    # Handle special patterns for Philippine domains
+    if domain.endswith('.com.ph') or domain.endswith('.net.ph') or domain.endswith('.org.ph'):
+        base_name = domain.split('.')[0]
+        return ' '.join(word.capitalize() for word in base_name.replace('-', ' ').replace('_', ' ').split())
+    
     # Generate display name from domain
-    name = domain.replace('.com', '').replace('.org', '').replace('.net', '').replace('.ph', '')
-    return ' '.join(word.capitalize() for word in name.split('.'))
+    name = domain.replace('.com', '').replace('.org', '').replace('.net', '').replace('.ph', '').replace('.co.uk', '').replace('.com.au', '')
+    return ' '.join(word.capitalize() for word in name.replace('-', ' ').replace('_', ' ').replace('.', ' ').split())
 
 def group_websites_by_domain(websites):
     """Group websites by their root domain"""
@@ -1057,6 +1172,10 @@ def group_websites_by_domain(websites):
         
         if website.get('status') == 'active':
             group['active_count'] += 1
+    
+    # Sort websites within each group by article count
+    for group in groups.values():
+        group['websites'].sort(key=lambda x: x.get('article_count', 0), reverse=True)
     
     # Sort groups by total articles (descending) then by domain name
     sorted_groups = sorted(groups.values(), key=lambda x: (-x['total_articles'], x['domain']))

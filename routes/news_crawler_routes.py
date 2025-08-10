@@ -23,6 +23,11 @@ def init_news_crawler(url_classifier):
     news_crawler = NewsWebsiteCrawler(url_classifier=url_classifier)
 
 
+def get_news_crawler():
+    """Get the shared news crawler instance for direct method calls"""
+    return news_crawler
+
+
 @news_crawler_bp.route('/crawl-website', methods=['POST'])
 def crawl_website():
     """Crawl a news website for article links with optional URL filtering"""

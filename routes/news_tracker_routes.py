@@ -23,7 +23,6 @@ from urllib.parse import urlparse
 import time
 import threading
 import hashlib
-import logging
 import uuid
 from modules.url_news_classifier import URLNewsClassifier
 from routes.url_classifier_routes import get_url_classifier
@@ -113,13 +112,12 @@ def migrate_database_schema():
         for column_name, column_definition in new_columns:
             if column_name not in columns:
                 cursor.execute(f'ALTER TABLE article_queue ADD COLUMN {column_name} {column_definition}')
-                logging.info(f"✅ Added column {column_name} to article_queue table")
         
         conn.commit()
         conn.close()
         
     except Exception as e:
-        logging.error(f"❌ Database migration error: {str(e)}")
+        print(f"❌ Database migration error: {str(e)}")
 
 # Initialize database on import
 init_news_tracker_db()
@@ -185,7 +183,6 @@ def add_website():
             conn.close()
             
     except Exception as e:
-        logging.error(f"Error adding website: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
 
 @news_tracker_bp.route('/api/news-tracker/remove-website/<int:website_id>', methods=['DELETE'])
@@ -217,7 +214,6 @@ def remove_website(website_id):
         return jsonify({'success': True, 'message': 'Website removed successfully'})
         
     except Exception as e:
-        logging.error(f"Error removing website: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
 
 @news_tracker_bp.route('/api/news-tracker/fetch-articles', methods=['POST'])
@@ -227,7 +223,6 @@ def fetch_articles():
         user_session = session.get('session_id', 'default')
         
         # Phase 1: Data Collection and Validation (NO database operations)
-        logging.info("🔍 Phase 1: Starting article fetch and data collection")
         print("🔍 DEBUG: Phase 1: Starting article fetch and data collection")
         
         # Get tracked websites first
@@ -253,7 +248,6 @@ def fetch_articles():
         # Process each website and collect data
         for website_id, url, name in websites:
             try:
-                logging.info(f"🔄 Fetching articles from {name} ({url})")
                 
                 articles = fetch_articles_from_crawler(url, name, website_id)
                 all_articles.extend(articles)
@@ -264,16 +258,13 @@ def fetch_articles():
                 # Prepare fetch log operation
                 batch_operations['fetch_logs'].append((website_id, len(articles), True, None))
                 
-                logging.info(f"✅ Collected {len(articles)} articles from {name}")
                 
             except Exception as e:
-                logging.error(f"❌ Error fetching from {url}: {str(e)}")
                 
                 # Prepare error log operation
                 batch_operations['fetch_logs'].append((website_id, 0, False, str(e)))
         
         # Phase 2: Database Operation Preparation
-        logging.info(f"� Phase 2: Preparing database operations for {len(all_articles)} total articles")
         
         valid_articles = []
         if all_articles:
@@ -289,10 +280,9 @@ def fetch_articles():
                     batch_operations['article_inserts'].append(insert_data)
                     valid_articles.append(article)
                 except KeyError as e:
-                    logging.warning(f"⚠️ Skipping article with missing field: {e}")
+                    print(f"❌ Missing key in article data: {str(e)}")
         
         # Phase 3: Single Atomic Database Transaction
-        logging.info(f"🚀 Phase 3: Executing atomic database transaction")
         
         new_articles = []
         conn = sqlite3.connect(DATABASE_FILE)
@@ -308,7 +298,6 @@ def fetch_articles():
                     SET last_fetch = CURRENT_TIMESTAMP 
                     WHERE id = ?
                 ''', batch_operations['website_updates'])
-                logging.info(f"✅ Batch updated {len(batch_operations['website_updates'])} website timestamps")
             
             # 2. Insert fetch logs
             if batch_operations['fetch_logs']:
@@ -316,7 +305,6 @@ def fetch_articles():
                     INSERT INTO fetch_logs (website_id, articles_found, success, error_message)
                     VALUES (?, ?, ?, ?)
                 ''', batch_operations['fetch_logs'])
-                logging.info(f"✅ Batch inserted {len(batch_operations['fetch_logs'])} fetch logs")
             
             # 3. Insert articles with duplicate handling
             if batch_operations['article_inserts']:
@@ -339,15 +327,12 @@ def fetch_articles():
                             **article
                         })
                 
-                logging.info(f"✅ Batch inserted articles: {len(batch_operations['article_inserts'])} attempted, {len(new_articles)} new")
             
             # Commit entire transaction
             conn.commit()
-            logging.info(f"🎉 Atomic transaction completed successfully!")
             
         except Exception as e:
             conn.rollback()
-            logging.error(f"❌ Atomic transaction failed, rolling back all operations: {str(e)}")
             
             # Return error but don't crash
             conn.close()
@@ -374,7 +359,6 @@ def fetch_articles():
         })
         
     except Exception as e:
-        logging.error(f"Error in fetch articles: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
 
 @news_tracker_bp.route('/api/news-tracker/verify-article', methods=['POST'])
@@ -433,7 +417,6 @@ def verify_article():
         })
         
     except Exception as e:
-        logging.error(f"Error verifying article: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
 
 @news_tracker_bp.route('/api/news-tracker/batch-verify-articles', methods=['POST'])
@@ -452,7 +435,6 @@ def batch_verify_articles():
         user_session = session.get('session_id', 'default')
         
         # Phase 1: Data Collection and Validation (NO database writes)
-        logging.info(f"🔍 Phase 1: Processing batch verification for {len(articles)} articles")
         
         results = []
         news_articles_for_indexing = []
@@ -476,10 +458,8 @@ def batch_verify_articles():
                 is_news = article.get('isNews')
                 url = article.get('url')
                 
-                logging.info(f"📝 Article {i+1}/{len(articles)}: ID={article_id}, isNews={is_news}, URL={url}")
                 
                 if not article_id or is_news is None:
-                    logging.warning(f"⚠️ Article {i+1} missing data: articleId={article_id}, isNews={is_news}")
                     results.append({
                         'articleId': article_id,
                         'success': False,
@@ -514,7 +494,6 @@ def batch_verify_articles():
                 })
                 
             except Exception as e:
-                logging.error(f"❌ Error validating article {i+1} (ID: {article.get('articleId')}): {str(e)}")
                 results.append({
                     'articleId': article.get('articleId'),
                     'success': False,
@@ -524,7 +503,6 @@ def batch_verify_articles():
         conn.close()
         
         # Phase 2: Prepare All Database Operations (NO database writes yet)
-        logging.info(f"� Phase 2: Preparing batch operations for {len(valid_articles)} valid articles")
         
         for i, article in enumerate(valid_articles):
             article_id = article['articleId']
@@ -551,9 +529,8 @@ def batch_verify_articles():
                 final_url = url or article_data[0]
                 news_articles_for_indexing.append(final_url)
                 batch_operations['philippine_urls'].append(final_url)
-                logging.info(f"✅ Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
             else:
-                logging.info(f"⏭️ Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
+                pass
             
             # Prepare success result
             results.append({
@@ -565,7 +542,6 @@ def batch_verify_articles():
             })
         
         # Phase 3: Single Atomic Database Transaction
-        logging.info(f"🚀 Phase 3: Executing atomic database transaction")
         
         if batch_operations['article_updates']:
             conn = sqlite3.connect(DATABASE_FILE)
@@ -579,15 +555,12 @@ def batch_verify_articles():
                     WHERE id = ? AND user_session = ?
                 ''', batch_operations['article_updates'])
                 
-                logging.info(f"✅ Batch updated {len(batch_operations['article_updates'])} article verifications")
                 
                 # Commit database transaction
                 conn.commit()
-                logging.info(f"🎉 Atomic verification transaction completed successfully!")
                 
             except Exception as e:
                 conn.rollback()
-                logging.error(f"❌ Atomic verification transaction failed, rolling back: {str(e)}")
                 
                 # Update all results to show failure
                 for result in results:
@@ -602,7 +575,6 @@ def batch_verify_articles():
                 conn.close()
         
         # Phase 4: Post-Database Operations (URL Classifier Feedback & Philippine Indexing)
-        logging.info(f"📡 Phase 4: Processing post-database operations")
         
         # Send URL classifier feedback (external system - done after DB success)
         for feedback_item in batch_operations['feedback_data']:
@@ -613,27 +585,19 @@ def batch_verify_articles():
                     user_verification=feedback_item['user_verification']
                 )
             except Exception as e:
-                logging.warning(f"⚠️ URL classifier feedback failed: {str(e)}")
+                print(f"⚠️ Failed to send URL classifier feedback: {str(e)}")
         
         # Log summary statistics
         total_articles = len(articles)
         news_articles_count = len(news_articles_for_indexing)
         non_news_count = total_articles - news_articles_count
         
-        logging.info(f"📊 Batch verification summary:")
-        logging.info(f"   Total articles processed: {total_articles}")
-        logging.info(f"   Articles marked as NEWS: {news_articles_count}")
-        logging.info(f"   Articles marked as NOT NEWS: {non_news_count}")
-        logging.info(f"   Articles queued for Philippine indexing: {len(news_articles_for_indexing)}")
         
         # Batch index news articles into Philippine news system using optimized batch method
         philippine_indexing_results = []
         if news_articles_for_indexing:
-            logging.info(f"🚀 Starting batch indexing of {len(news_articles_for_indexing)} verified news articles into Philippine system")
             philippine_indexing_results = batch_index_philippine_news_articles(news_articles_for_indexing)
-            logging.info(f"✅ Batch Philippine indexing completed with {len(philippine_indexing_results)} results")
         else:
-            logging.info("ℹ️ No news articles to index into Philippine system")
             print("ℹ️ DEBUG: No news articles to index into Philippine system")
         
         # Calculate summary statistics
@@ -680,7 +644,6 @@ def batch_verify_articles():
         })
         
     except Exception as e:
-        logging.error(f"Error in batch verification: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
 
 @news_tracker_bp.route('/api/news-tracker/get-data')
@@ -753,7 +716,6 @@ def get_tracker_data():
         })
         
     except Exception as e:
-        logging.error(f"Error getting tracker data: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
 
 def fetch_articles_from_crawler(url, site_name, website_id):
@@ -765,7 +727,6 @@ def fetch_articles_from_crawler(url, site_name, website_id):
         news_crawler = get_news_crawler()
         
         if news_crawler is None:
-            logging.warning("⚠️ News crawler not available, skipping article fetch")
             return articles
         
         # Prepare crawler parameters (same as HTTP endpoint)
@@ -791,7 +752,6 @@ def fetch_articles_from_crawler(url, site_name, website_id):
         )
         
         if not crawl_result['success']:
-            logging.error(f"❌ Direct crawler failed for {url}: {crawl_result.get('error', 'Unknown error')}")
             return articles
         
         # Normalize article data structure (same as HTTP endpoint)
@@ -866,20 +826,16 @@ def fetch_articles_from_crawler(url, site_name, website_id):
                 if article_data['url']:
                     articles.append(article_data)
             
-            logging.info(f"✅ Direct crawler found {len(articles)} articles from {url} (took {duration_ms:.1f}ms)")
-            logging.info(f"📊 Crawler stats: {crawler_result.get('crawler_stats', {})}")
         else:
-            logging.warning(f"⚠️ Direct crawler returned no articles for {url}")
+            pass
             
     except Exception as e:
-        logging.error(f"❌ Error with direct crawler call for {url}: {str(e)}")
         
         # Fallback to HTTP request if direct method fails
-        logging.info(f"🔄 Falling back to HTTP crawler for {url}")
         try:
             return fetch_articles_from_crawler_http(url, site_name, website_id)
         except Exception as fallback_error:
-            logging.error(f"❌ HTTP fallback also failed for {url}: {str(fallback_error)}")
+            print(f"❌ Fallback error: {str(fallback_error)}")
     
     return articles
 
@@ -926,16 +882,15 @@ def fetch_articles_from_crawler_http(url, site_name, website_id):
                     if article_data['url']:
                         articles.append(article_data)
                 
-                logging.info(f"✅ HTTP fallback crawler found {len(articles)} articles from {url}")
             else:
-                logging.warning(f"⚠️ HTTP fallback crawler returned no articles for {url}")
+                pass
         else:
-            logging.error(f"❌ HTTP fallback crawler request failed for {url}: {response.status_code}")
+            pass
             
     except requests.exceptions.RequestException as e:
-        logging.error(f"❌ Network error with HTTP fallback crawler for {url}: {str(e)}")
+        print(f"❌ HTTP request error: {str(e)}")
     except Exception as e:
-        logging.error(f"❌ Error with HTTP fallback crawler for {url}: {str(e)}")
+        print(f"❌ HTTP error: {str(e)}")
     
     return articles
 
@@ -943,7 +898,6 @@ def send_url_classifier_feedback(url, article_data, user_verification):
     """Send feedback to URL classifier to improve the model using direct method calls"""
     try:
         if not url or article_data is None:
-            logging.warning("⚠️ Incomplete data for URL classifier feedback")
             return
         
         # Extract crawler prediction data
@@ -956,7 +910,6 @@ def send_url_classifier_feedback(url, article_data, user_verification):
         url_classifier = get_url_classifier()
         
         if url_classifier is None:
-            logging.warning("⚠️ URL classifier not available for feedback")
             return
         
         # Prepare feedback data (same format as HTTP endpoint)
@@ -983,21 +936,20 @@ def send_url_classifier_feedback(url, article_data, user_verification):
         duration_ms = (end_time - start_time) * 1000
         
         if success:
-            logging.info(f"✅ URL classifier feedback added successfully for {url} (took {duration_ms:.1f}ms)")
             
             # Get current model stats
             stats = url_classifier.get_model_stats()
-            logging.info(f"📊 Model stats: {stats}")
             
             # Check if retraining should be triggered (every 10 feedback entries)
             feedback_count = stats.get('total_feedback', 0)
             if feedback_count > 0 and feedback_count % 10 == 0:
-                logging.info("🚀 URL classifier retraining recommended (10 new feedback entries)")
+                print(f"Triggering URL classifier retraining with {feedback_count} feedback entries...")
         else:
-            logging.warning(f"⚠️ URL classifier feedback failed for {url}")
+            pass
             
     except Exception as e:
-        logging.warning(f"⚠️ Error sending URL classifier feedback: {str(e)}")
+        print(f"⚠️ URL classifier feedback failed: {str(e)}")
+        
     # Don't raise exceptions - feedback is optional and shouldn't break verification
 
 def batch_index_philippine_news_articles(urls, force_reindex=False):
@@ -1016,30 +968,22 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
     """
     try:
         if not urls or not isinstance(urls, list):
-            logging.warning("⚠️ No URLs provided for batch Philippine news indexing")
             return []
         
-        logging.info(f"🔍 Starting batch Philippine indexing for {len(urls)} URLs")
+        print(f"🚀 Batch Philippine indexing: {len(urls)} URLs")
         
         # Check for duplicate URLs
         unique_urls = list(set(urls))
-        if len(unique_urls) != len(urls):
-            duplicate_count = len(urls) - len(unique_urls)
-            logging.warning(f"⚠️ Found {duplicate_count} duplicate URLs in batch - using {len(unique_urls)} unique URLs")
-        
-        # Use unique URLs to avoid processing duplicates
         urls_to_process = unique_urls
             
         # Get the Philippine search index instance
         philippine_search_index = get_philippine_search_index()
         
         if philippine_search_index is None:
-            logging.warning("⚠️ Philippine search index not available for batch indexing")
+            print("❌ Philippine search index not available")
             return []
         
         # Phase 1: Data Collection and Validation (NO indexing operations yet)
-        logging.info(f"📋 Phase 1: Validating and preparing {len(urls_to_process)} URLs for Philippine indexing")
-        
         valid_urls = []
         batch_operations = {
             'indexing_operations': [],  # URLs ready for indexing
@@ -1049,13 +993,11 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         # Validate all URLs first (no indexing yet)
         for i, url in enumerate(urls_to_process):
             try:
-                logging.info(f"� Validating URL {i+1}/{len(urls_to_process)}: {url}")
                 
                 # Validate URL format
                 from urllib.parse import urlparse
                 parsed_url = urlparse(url.strip())
                 if not parsed_url.scheme or not parsed_url.netloc:
-                    logging.warning(f"❌ Invalid URL format for URL {i+1}: {url}")
                     batch_operations['validation_errors'].append({
                         'url': url,
                         'status': 'error',
@@ -1073,10 +1015,8 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                     'force_reindex': force_reindex
                 })
                 
-                logging.info(f"✅ URL {i+1} validated successfully")
                 
             except Exception as e:
-                logging.error(f"❌ Validation error for URL {i+1} ({url}): {str(e)}")
                 batch_operations['validation_errors'].append({
                     'url': url,
                     'status': 'error',
@@ -1085,7 +1025,6 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                 })
         
         # Phase 2: Batch Philippine News Indexing Operations using new atomic method
-        logging.info(f"🚀 Phase 2: Executing atomic batch Philippine indexing for {len(valid_urls)} valid URLs")
         
         indexing_results = []
         start_time = time.time()
@@ -1097,14 +1036,12 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                 urls_for_batch = [op['url'] for op in batch_operations['indexing_operations']]
                 force_reindex_flag = batch_operations['indexing_operations'][0]['force_reindex'] if batch_operations['indexing_operations'] else False
                 
-                logging.info(f"🔄 Executing atomic batch indexing for {len(urls_for_batch)} URLs")
                 
                 # Use the new batch indexing method with atomic transactions
                 batch_results = philippine_search_index.batch_index_articles(urls_for_batch, force_reindex_flag)
                 
                 # Convert results to consistent format
                 for i, result in enumerate(batch_results):
-                    logging.info(f"✅ URL {i+1} batch indexing result: {result['status']} - {result.get('message', 'No message')}")
                     
                     indexing_results.append({
                         'url': result['url'],
@@ -1117,10 +1054,8 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                         'success': result['status'] in ['success', 'already_indexed', 'skipped']
                     })
                 
-                logging.info(f"✅ Atomic batch Philippine indexing operations completed for {len(indexing_results)} URLs")
                 
             except Exception as e:
-                logging.error(f"❌ Atomic batch Philippine indexing failed: {str(e)}")
                 
                 # Add error results for failed batch
                 for operation in batch_operations['indexing_operations']:
@@ -1135,7 +1070,6 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         duration_ms = (end_time - start_time) * 1000
         
         # Phase 3: Combine Results and Generate Final Statistics
-        logging.info(f"📊 Phase 3: Combining results and generating statistics")
         
         # Combine validation errors and indexing results
         batch_results = []
@@ -1148,35 +1082,30 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
         error_count = len([r for r in batch_results if r['status'] == 'error'])
         already_indexed_count = len([r for r in batch_results if r['status'] == 'already_indexed'])
         
-        logging.info(f"✅ Batch Philippine indexing completed in {duration_ms:.1f}ms:")
-        logging.info(f"   📊 URLs: {len(urls)} → {len(urls_to_process)} unique → {len(batch_results)} results")
-        logging.info(f"   ✅ Success: {success_count}, ℹ️ Already indexed: {already_indexed_count}, ⏭️ Skipped: {skipped_count}, ❌ Errors: {error_count}")
+        print(f"✅ Batch completed in {duration_ms:.0f}ms: {success_count} success, {already_indexed_count} existing, {skipped_count} skipped, {error_count} errors")
         
         return batch_results
         
     except Exception as e:
-        logging.warning(f"⚠️ Error in batch Philippine news indexing: {str(e)}")
+        print(f"❌ Batch Philippine indexing failed: {str(e)}")
         return []
 
 def index_philippine_news_article(url, force_reindex=False):
     """Index a verified news article into the Philippine news search system using direct method calls"""
     try:
         if not url:
-            logging.warning("⚠️ No URL provided for Philippine news indexing")
             return False
             
         # Get the Philippine search index instance
         philippine_search_index = get_philippine_search_index()
         
         if philippine_search_index is None:
-            logging.warning("⚠️ Philippine search index not available for indexing")
             return False
         
         # Validate URL format (same as in philippine_news_search_routes.py)
         from urllib.parse import urlparse
         parsed_url = urlparse(url)
         if not parsed_url.scheme or not parsed_url.netloc:
-            logging.warning(f"⚠️ Invalid URL format for Philippine indexing: {url}")
             return False
         
         # Index the article using direct method call
@@ -1188,21 +1117,15 @@ def index_philippine_news_article(url, force_reindex=False):
         duration_ms = (end_time - start_time) * 1000
         
         if result['status'] == 'success':
-            logging.info(f"✅ Article indexed successfully in Philippine news system: {url} (took {duration_ms:.1f}ms)")
-            logging.info(f"📊 Philippine indexing details: ID={result.get('article_id')}, Score={result.get('relevance_score')}")
             return True
         elif result['status'] == 'already_indexed':
-            logging.info(f"ℹ️ Article already indexed in Philippine news system: {url}")
             return True
         elif result['status'] == 'skipped':
-            logging.info(f"⏭️ Article skipped - not relevant to Philippine news: {url}")
             return True
         else:
-            logging.warning(f"⚠️ Philippine news indexing failed for {url}: {result.get('message', 'Unknown error')}")
             return False
             
     except Exception as e:
-        logging.warning(f"⚠️ Error indexing article into Philippine news system: {str(e)}")
         return False
     # Don't raise exceptions - indexing is optional and shouldn't break verification
 
@@ -1249,7 +1172,6 @@ def start_auto_fetch():
                         })
                         
                     except Exception as e:
-                        logging.error(f"Auto-fetch error for {url}: {str(e)}")
                         
                         # Collect error for batch processing
                         website_batch_data.append({
@@ -1293,7 +1215,7 @@ def start_auto_fetch():
                                     article.get('probability_news', 0.0)
                                 ))
                             except KeyError as ke:
-                                logging.warning(f"Auto-fetch: Skipping article with missing field: {ke}")
+                                print(f"❌ Missing key in article data: {str(ke)}")
                 
                 # Phase 3: Single Atomic Transaction
                 if (batch_operations['website_updates'] or 
@@ -1324,19 +1246,14 @@ def start_auto_fetch():
                         # Commit entire auto-fetch transaction
                         conn.commit()
                         
-                        logging.info(f"✅ Auto-fetch atomic transaction completed:")
-                        logging.info(f"   - {len(batch_operations['website_updates'])} websites updated")
-                        logging.info(f"   - {len(batch_operations['fetch_logs'])} fetch logs added")
-                        logging.info(f"   - {len(batch_operations['article_inserts'])} articles processed")
                         
                     except Exception as e:
                         conn.rollback()
-                        logging.error(f"❌ Auto-fetch atomic transaction failed: {str(e)}")
                 
                 conn.close()
                 
             except Exception as e:
-                logging.error(f"Auto-fetch worker error: {str(e)}")
+                print(f"❌ Auto-fetch error: {str(e)}")
             
             time.sleep(60)  # Check every minute
     

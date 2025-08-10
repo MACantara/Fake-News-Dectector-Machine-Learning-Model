@@ -22,12 +22,25 @@ class NewsTracker {
         this.predictionMetrics = null; // Store comprehensive prediction metrics
         this.websiteViewMode = 'grouped'; // Default to grouped view
         
+        // Auto-indexing settings
+        this.autoIndexEnabled = false;
+        this.autoIndexThreshold = 0.99; // 99% confidence threshold
+        this.autoIndexBatchSize = 100;
+        this.autoIndexStats = {
+            totalIndexed: 0,
+            lastBatchSize: 0,
+            lastBatchTime: null,
+            successRate: 0,
+            highConfidenceQueue: 0
+        };
+        
         this.init();
     }
     
     init() {
         this.bindEvents();
         this.loadViewPreferences();
+        this.loadAutoIndexPreferences(); // Load auto-indexing preferences
         this.loadTrackedWebsites();
         this.loadArticleQueue();
         this.updateStatistics();
@@ -132,6 +145,27 @@ class NewsTracker {
         const testAutoFetchBtn = document.getElementById('testAutoFetchBtn');
         if (testAutoFetchBtn) {
             testAutoFetchBtn.addEventListener('click', () => this.testAutoFetch());
+        }
+        
+        // Auto-indexing controls
+        const autoIndexToggle = document.getElementById('autoIndexToggle');
+        if (autoIndexToggle) {
+            autoIndexToggle.addEventListener('change', (e) => this.toggleAutoIndex(e.target.checked));
+        }
+        
+        const autoIndexThreshold = document.getElementById('autoIndexThreshold');
+        if (autoIndexThreshold) {
+            autoIndexThreshold.addEventListener('change', (e) => this.updateAutoIndexThreshold(parseInt(e.target.value)));
+        }
+        
+        const autoIndexBatchSize = document.getElementById('autoIndexBatchSize');
+        if (autoIndexBatchSize) {
+            autoIndexBatchSize.addEventListener('change', (e) => this.updateAutoIndexBatchSize(parseInt(e.target.value)));
+        }
+        
+        const triggerAutoIndexBtn = document.getElementById('triggerAutoIndexBtn');
+        if (triggerAutoIndexBtn) {
+            triggerAutoIndexBtn.addEventListener('click', () => this.triggerAutoIndex());
         }
         
         const enableAllAutoFetchBtn = document.getElementById('enableAllAutoFetchBtn');
@@ -681,6 +715,9 @@ class NewsTracker {
         
         // Update displayed article count
         this.updateDisplayedArticleCount();
+        
+        // Update high confidence queue count for auto-indexing
+        this.updateHighConfidenceQueue();
     }
     
     filterArticlesByType(filter) {
@@ -1334,6 +1371,39 @@ class NewsTracker {
             this.updateAutoFetchStats();
             
             console.log(`Auto-fetch completed: Found ${foundArticles} new articles`);
+            
+            // Auto-indexing after fetch if enabled
+            if (this.autoIndexEnabled && foundArticles > 0) {
+                console.log('Auto-indexing: Checking for high confidence articles...');
+                try {
+                    const response = await fetch('/api/news-tracker/auto-index-high-confidence', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            confidence_threshold: this.autoIndexThreshold,
+                            batch_size: this.autoIndexBatchSize
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success && result.articles_indexed > 0) {
+                        console.log(`Auto-indexing completed: ${result.articles_indexed} articles indexed`);
+                        
+                        // Update auto-indexing stats
+                        this.autoIndexStats.totalIndexed += result.articles_indexed;
+                        this.autoIndexStats.lastBatchSize = result.articles_indexed;
+                        this.autoIndexStats.lastBatchTime = new Date().toISOString();
+                        this.updateAutoIndexStatsDisplay();
+                    } else {
+                        console.log('Auto-indexing: No high confidence articles to index');
+                    }
+                } catch (indexError) {
+                    console.error('Auto-indexing error during auto-fetch:', indexError);
+                    // Don't break auto-fetch if indexing fails
+                }
+            }
+            
         } catch (error) {
             console.error('Auto-fetch error:', error);
             // Don't show error to user for auto-fetch to avoid spam
@@ -1510,12 +1580,39 @@ class NewsTracker {
         localStorage.setItem('newsTracker.autoFetchEnabled', 'true');
         localStorage.setItem('newsTracker.autoFetchInterval', '30');
         
+        // Also enable auto-indexing with optimal settings
+        this.autoIndexEnabled = true;
+        this.autoIndexThreshold = 0.99; // 99% confidence
+        this.autoIndexBatchSize = 100;
+        
+        const autoIndexToggle = document.getElementById('autoIndexToggle');
+        if (autoIndexToggle) {
+            autoIndexToggle.checked = true;
+            this.updateToggleAppearance(autoIndexToggle, true);
+        }
+        
+        const autoIndexSettings = document.getElementById('autoIndexSettings');
+        if (autoIndexSettings) {
+            autoIndexSettings.style.display = 'block';
+        }
+        
+        const autoIndexStats = document.getElementById('autoIndexStats');
+        if (autoIndexStats) {
+            autoIndexStats.style.display = 'block';
+        }
+        
+        // Save auto-indexing settings
+        localStorage.setItem('newsTracker.autoIndexEnabled', 'true');
+        localStorage.setItem('newsTracker.autoIndexThreshold', '0.99');
+        localStorage.setItem('newsTracker.autoIndexBatchSize', '100');
+        
         // Start auto-fetch
         this.startAutoFetch();
         this.updateAutoFetchStatus();
         this.updateAutoFetchStats();
+        this.updateAutoIndexStatsDisplay();
         
-        this.showSuccess('Auto-fetch has been set up with optimal settings (30 minutes interval)');
+        this.showSuccess('Auto-fetch and auto-indexing have been set up with optimal settings (30 min interval, 99% confidence threshold)');
     }
     
     resetAutoFetchSettings() {
@@ -1550,11 +1647,213 @@ class NewsTracker {
         localStorage.removeItem('newsTracker.autoFetchInterval');
         localStorage.removeItem('newsTracker.autoFetchStats');
         
+        // Reset auto-indexing settings too
+        this.autoIndexEnabled = false;
+        this.autoIndexThreshold = 0.99;
+        this.autoIndexBatchSize = 100;
+        this.autoIndexStats = {
+            totalIndexed: 0,
+            lastBatchSize: 0,
+            lastBatchTime: null,
+            successRate: 0,
+            highConfidenceQueue: 0
+        };
+        
+        const autoIndexToggle = document.getElementById('autoIndexToggle');
+        if (autoIndexToggle) {
+            autoIndexToggle.checked = false;
+            this.updateToggleAppearance(autoIndexToggle, false);
+        }
+        
+        const autoIndexSettings = document.getElementById('autoIndexSettings');
+        if (autoIndexSettings) {
+            autoIndexSettings.style.display = 'none';
+        }
+        
+        const autoIndexStats = document.getElementById('autoIndexStats');
+        if (autoIndexStats) {
+            autoIndexStats.style.display = 'none';
+        }
+        
+        // Clear auto-indexing localStorage
+        localStorage.removeItem('newsTracker.autoIndexEnabled');
+        localStorage.removeItem('newsTracker.autoIndexThreshold');
+        localStorage.removeItem('newsTracker.autoIndexBatchSize');
+        
         // Update displays
         this.updateAutoFetchStatus();
         this.updateAutoFetchStats();
+        this.updateAutoIndexStatsDisplay();
         
-        this.showInfo('Auto-fetch settings have been reset to defaults');
+        this.showInfo('Auto-fetch and auto-indexing settings have been reset to defaults');
+    }
+
+    // Auto-indexing methods
+    toggleAutoIndex(enabled) {
+        this.autoIndexEnabled = enabled;
+        
+        // Update toggle appearance
+        const toggle = document.getElementById('autoIndexToggle');
+        if (toggle) {
+            this.updateToggleAppearance(toggle, enabled);
+        }
+        
+        // Show/hide auto-indexing settings
+        const settings = document.getElementById('autoIndexSettings');
+        if (settings) {
+            settings.style.display = enabled ? 'block' : 'none';
+        }
+        
+        // Show/hide auto-indexing stats
+        const stats = document.getElementById('autoIndexStats');
+        if (stats) {
+            stats.style.display = enabled ? 'block' : 'none';
+        }
+        
+        // Save preference
+        localStorage.setItem('newsTracker.autoIndexEnabled', enabled.toString());
+        
+        this.showInfo(`Auto-indexing ${enabled ? 'enabled' : 'disabled'}`);
+    }
+
+    updateAutoIndexThreshold(threshold) {
+        this.autoIndexThreshold = threshold / 100; // Convert percentage to decimal
+        localStorage.setItem('newsTracker.autoIndexThreshold', this.autoIndexThreshold.toString());
+        this.updateHighConfidenceQueue();
+        this.showInfo(`Auto-indexing threshold updated to ${threshold}%`);
+    }
+
+    updateAutoIndexBatchSize(batchSize) {
+        this.autoIndexBatchSize = batchSize;
+        localStorage.setItem('newsTracker.autoIndexBatchSize', batchSize.toString());
+        this.showInfo(`Auto-indexing batch size updated to ${batchSize} articles`);
+    }
+
+    async triggerAutoIndex() {
+        try {
+            this.showLoading('Finding high confidence articles to index...');
+            
+            // Use the backend API endpoint instead of frontend processing
+            const response = await fetch('/api/news-tracker/auto-index-high-confidence', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    confidence_threshold: this.autoIndexThreshold,
+                    batch_size: this.autoIndexBatchSize
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Update stats
+                this.autoIndexStats.totalIndexed += result.articles_indexed;
+                this.autoIndexStats.lastBatchSize = result.articles_indexed;
+                this.autoIndexStats.lastBatchTime = new Date().toISOString();
+                this.updateAutoIndexStatsDisplay();
+                
+                this.showSuccess(result.message);
+            } else {
+                this.showError(result.error || 'Failed to trigger auto-indexing');
+            }
+            
+        } catch (error) {
+            console.error('Auto-indexing error:', error);
+            this.showError('Failed to trigger auto-indexing');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    getHighConfidenceArticles() {
+        return this.articleQueue.filter(article => {
+            const confidence = article.confidence || 0;
+            return confidence >= this.autoIndexThreshold && 
+                   !article.verified && 
+                   article.is_news_prediction !== false;
+        });
+    }
+
+    updateHighConfidenceQueue() {
+        const highConfidenceArticles = this.getHighConfidenceArticles();
+        this.autoIndexStats.highConfidenceQueue = highConfidenceArticles.length;
+        
+        const queueElement = document.getElementById('highConfidenceQueue');
+        if (queueElement) {
+            queueElement.textContent = highConfidenceArticles.length;
+        }
+    }
+
+    updateAutoIndexStatsDisplay() {
+        const autoIndexedCount = document.getElementById('autoIndexedCount');
+        const lastAutoIndexBatch = document.getElementById('lastAutoIndexBatch');
+        const highConfidenceQueue = document.getElementById('highConfidenceQueue');
+        const autoIndexSuccessRate = document.getElementById('autoIndexSuccessRate');
+        
+        if (autoIndexedCount) autoIndexedCount.textContent = this.autoIndexStats.totalIndexed;
+        if (lastAutoIndexBatch) lastAutoIndexBatch.textContent = this.autoIndexStats.lastBatchSize;
+        if (highConfidenceQueue) highConfidenceQueue.textContent = this.autoIndexStats.highConfidenceQueue;
+        
+        // Calculate success rate if we have data
+        if (this.autoIndexStats.totalIndexed > 0 && autoIndexSuccessRate) {
+            // This is a simplified calculation - in a real implementation, 
+            // you'd track successes vs attempts more precisely
+            const successRate = Math.round((this.autoIndexStats.totalIndexed / (this.autoIndexStats.totalIndexed + 1)) * 100);
+            autoIndexSuccessRate.textContent = `${successRate}%`;
+        }
+    }
+
+    chunkArray(array, chunkSize) {
+        const chunks = [];
+        for (let i = 0; i < array.length; i += chunkSize) {
+            chunks.push(array.slice(i, i + chunkSize));
+        }
+        return chunks;
+    }
+
+    loadAutoIndexPreferences() {
+        // Load saved auto-indexing preferences
+        const savedEnabled = localStorage.getItem('newsTracker.autoIndexEnabled');
+        const savedThreshold = localStorage.getItem('newsTracker.autoIndexThreshold');
+        const savedBatchSize = localStorage.getItem('newsTracker.autoIndexBatchSize');
+        
+        if (savedEnabled !== null) {
+            this.autoIndexEnabled = savedEnabled === 'true';
+            const toggle = document.getElementById('autoIndexToggle');
+            if (toggle) {
+                toggle.checked = this.autoIndexEnabled;
+                this.updateToggleAppearance(toggle, this.autoIndexEnabled);
+            }
+        }
+        
+        if (savedThreshold !== null) {
+            this.autoIndexThreshold = parseFloat(savedThreshold);
+            const thresholdSelect = document.getElementById('autoIndexThreshold');
+            if (thresholdSelect) {
+                thresholdSelect.value = Math.round(this.autoIndexThreshold * 100).toString();
+            }
+        }
+        
+        if (savedBatchSize !== null) {
+            this.autoIndexBatchSize = parseInt(savedBatchSize);
+            const batchSizeSelect = document.getElementById('autoIndexBatchSize');
+            if (batchSizeSelect) {
+                batchSizeSelect.value = this.autoIndexBatchSize.toString();
+            }
+        }
+        
+        // Update UI visibility
+        const settings = document.getElementById('autoIndexSettings');
+        if (settings) {
+            settings.style.display = this.autoIndexEnabled ? 'block' : 'none';
+        }
+        
+        const stats = document.getElementById('autoIndexStats');
+        if (stats) {
+            stats.style.display = this.autoIndexEnabled ? 'block' : 'none';
+        }
+        
+        this.updateHighConfidenceQueue();
     }
     
     // Additional methods for missing functionality

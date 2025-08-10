@@ -979,6 +979,101 @@ def get_tracker_data():
     except Exception as e:
         return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
+@news_tracker_bp.route('/api/news-tracker/auto-index-high-confidence', methods=['POST'])
+def auto_index_high_confidence():
+    """Auto-index high confidence articles in batches"""
+    try:
+        data = request.get_json()
+        confidence_threshold = float(data.get('confidence_threshold', 0.99))
+        batch_size = int(data.get('batch_size', 100))
+        user_session = session.get('session_id', 'default')
+        
+        # Validate parameters
+        if confidence_threshold < 0 or confidence_threshold > 1:
+            return jsonify({'success': False, 'error': 'Confidence threshold must be between 0 and 1'}), 400
+        
+        if batch_size < 1 or batch_size > 500:
+            return jsonify({'success': False, 'error': 'Batch size must be between 1 and 500'}), 400
+        
+        start_time = time.time()
+        
+        # Get high confidence articles that haven't been verified yet
+        with db_pool.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT url, title, confidence, is_news_prediction, probability_news
+                FROM article_queue 
+                WHERE user_session = ? 
+                AND verified = FALSE 
+                AND confidence >= ? 
+                AND is_news_prediction = TRUE
+                ORDER BY confidence DESC, found_at DESC
+                LIMIT ?
+            ''', (user_session, confidence_threshold, batch_size * 5))  # Get more than batch size for selection
+            
+            high_confidence_articles = cursor.fetchall()
+        
+        if not high_confidence_articles:
+            return jsonify({
+                'success': True,
+                'message': f'No high confidence articles found (threshold: {confidence_threshold*100:.0f}%)',
+                'articles_processed': 0,
+                'articles_indexed': 0,
+                'batches_processed': 0
+            })
+        
+        # Process articles in batches
+        total_processed = 0
+        total_indexed = 0
+        batches_processed = 0
+        indexing_results = []
+        
+        # Split articles into batches
+        for i in range(0, min(len(high_confidence_articles), batch_size * 3), batch_size):
+            batch = high_confidence_articles[i:i + batch_size]
+            batch_urls = [article[0] for article in batch]  # Extract URLs
+            
+            try:
+                # Use the existing batch indexing function
+                batch_results = batch_index_philippine_news_articles(batch_urls, force_reindex=False)
+                
+                # Count successful indexing
+                batch_indexed = len([r for r in batch_results if r.get('success', False)])
+                total_indexed += batch_indexed
+                total_processed += len(batch)
+                batches_processed += 1
+                
+                indexing_results.extend(batch_results)
+                
+                print(f"✅ Auto-indexing batch {batches_processed}: {batch_indexed}/{len(batch)} articles indexed")
+                
+            except Exception as e:
+                print(f"❌ Auto-indexing batch {batches_processed + 1} failed: {str(e)}")
+                batches_processed += 1
+                continue
+        
+        end_time = time.time()
+        duration_ms = (end_time - start_time) * 1000
+        
+        return jsonify({
+            'success': True,
+            'message': f'Auto-indexing completed: {total_indexed} articles indexed from {total_processed} high confidence articles',
+            'articles_processed': total_processed,
+            'articles_indexed': total_indexed,
+            'batches_processed': batches_processed,
+            'confidence_threshold': confidence_threshold,
+            'batch_size': batch_size,
+            'processing_time_ms': round(duration_ms, 2),
+            'indexing_results': indexing_results[:10] if indexing_results else [],  # Return first 10 results for feedback
+            'stats': {
+                'success_rate': round((total_indexed / total_processed) * 100, 1) if total_processed > 0 else 0,
+                'avg_time_per_article_ms': round(duration_ms / total_processed, 2) if total_processed > 0 else 0
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Auto-indexing failed: {str(e)}'}), 500
+
 def extract_root_domain(url):
     """Extract root domain from URL for grouping purposes with improved ccTLD handling"""
     try:

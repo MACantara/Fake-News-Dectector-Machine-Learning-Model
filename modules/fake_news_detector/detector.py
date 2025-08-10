@@ -57,110 +57,6 @@ class FakeNewsDetector:
     def save_feedback_data(self):
         """Save feedback data to file"""
         save_feedback_data(self.feedback_data, self.feedback_file)
-    
-    def retrain_url_classifier_with_patterns(self):
-        """Retrain URL classifier using URL classifier feedback data"""
-        try:
-            print("🚀 Starting URL classifier retraining with feedback data...")
-            
-            # Check if URL classifier is available
-            if not self.url_classifier:
-                print("❌ URL classifier not available - cannot perform retraining")
-                print("💡 The URL classifier needs to be initialized first. Please check the app initialization.")
-                return False
-            
-            # Check if URL classifier has the required methods
-            if not hasattr(self.url_classifier, 'add_feedback') or not hasattr(self.url_classifier, 'retrain_model'):
-                print("❌ URL classifier doesn't have required methods for retraining")
-                return False
-            
-            # Load URL classifier feedback data
-            feedback_urls = []
-            feedback_labels = []
-            
-            try:
-                if hasattr(self.url_classifier, 'feedback_data') and self.url_classifier.feedback_data:
-                    print(f"📊 Processing {len(self.url_classifier.feedback_data)} URL classifier feedback entries...")
-                    for feedback in self.url_classifier.feedback_data:
-                        url = feedback.get('url', '')
-                        actual_label = feedback.get('actual_label', None)
-                        if url and actual_label is not None:
-                            feedback_urls.append(url)
-                            feedback_labels.append(bool(actual_label))
-                    
-                    print(f"✅ Extracted {len(feedback_urls)} URLs from feedback data")
-                else:
-                    print("ℹ️ No URL classifier feedback data available")
-            except Exception as e:
-                print(f"⚠️ Could not load URL classifier feedback: {e}")
-            
-            if len(feedback_urls) < 5:
-                print(f"❌ Insufficient training data for URL classifier: {len(feedback_urls)} URLs (minimum 5 required)")
-                return False
-            
-            print(f"🔄 Training URL classifier with {len(feedback_urls)} URLs...")
-            print(f"   📰 News URLs: {sum(feedback_labels)} | 🚫 Non-news URLs: {len(feedback_labels) - sum(feedback_labels)}")
-            
-            # Add some negative examples (non-news URLs) if we have mostly positive examples
-            positive_ratio = sum(feedback_labels) / len(feedback_labels) if feedback_labels else 0
-            if positive_ratio > 0.8:  # If more than 80% are news URLs
-                print("⚖️ Adding negative examples to balance the dataset...")
-                # Add some common non-news URL patterns
-                non_news_urls = [
-                    'https://example.com/about-us',
-                    'https://example.com/contact',
-                    'https://example.com/privacy-policy',
-                    'https://example.com/shop/products',
-                    'https://example.com/login',
-                    'https://example.com/register',
-                    'https://example.com/search?q=test'
-                ]
-                feedback_urls.extend(non_news_urls)
-                feedback_labels.extend([False] * len(non_news_urls))
-                print(f"✅ Added {len(non_news_urls)} negative examples")
-            
-            # Create training data for URL classifier
-            training_data = []
-            for url, label in zip(feedback_urls, feedback_labels):
-                training_data.append({
-                    'url': url,
-                    'actual_label': label,
-                    'predicted_label': label,  # Initial assumption
-                    'user_confidence': 1.0,
-                    'source': 'feedback_retraining'
-                })
-            
-            # Store current model stats for comparison
-            old_stats = self.url_classifier.get_model_stats() if hasattr(self.url_classifier, 'get_model_stats') else {}
-            
-            # Batch add feedback to URL classifier (this will trigger retraining)
-            print("🔄 Adding batch feedback to URL classifier...")
-            added_count = self.url_classifier.add_batch_feedback(training_data)
-            
-            print(f"✅ Added {added_count} feedback entries to URL classifier")
-            
-            # Force retraining if it hasn't been triggered automatically
-            if hasattr(self.url_classifier, 'retrain_model'):
-                print("🔄 Triggering URL classifier model retraining...")
-                self.url_classifier.retrain_model()
-            
-            # Get new model stats
-            new_stats = self.url_classifier.get_model_stats() if hasattr(self.url_classifier, 'get_model_stats') else {}
-            
-            print("✅ URL classifier retraining completed!")
-            if old_stats and new_stats:
-                print(f"📊 Model improvement stats:")
-                print(f"   Feedback entries: {old_stats.get('total_feedback', 0)} → {new_stats.get('total_feedback', 0)}")
-                if 'accuracy' in new_stats:
-                    print(f"   Model accuracy: {new_stats.get('accuracy', 'N/A')}")
-            
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error during URL classifier retraining: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return False
 
     def add_feedback(self, text, predicted_label, actual_label, confidence, user_comment=None):
         """Add user feedback for model improvement"""
@@ -248,7 +144,7 @@ class FakeNewsDetector:
             print(f"Error during retraining: {str(e)}")
     
     def retrain_from_new_pattern(self, training_data):
-        """Add new patterns to cache for future model improvements"""
+        """Add new training data for immediate model improvement"""
         try:
             if not training_data:
                 print("No training data provided for pattern learning")
@@ -263,10 +159,10 @@ class FakeNewsDetector:
                 print("No valid training data provided for pattern learning")
                 return
             
-            print(f"Processing {len(training_data)} new patterns for caching...")
+            print(f"Processing {len(training_data)} new patterns for immediate training...")
             
-            # Process each training sample and add to pattern cache
-            patterns_added = 0
+            # Process each training sample for immediate training
+            valid_samples = []
             
             for item in training_data:
                 if not isinstance(item, dict):
@@ -282,25 +178,18 @@ class FakeNewsDetector:
                 # Extract label (default to 1 for real news in pattern learning)
                 label = item.get('label', 1)
                 
-                # Extract metadata
-                metadata = {
-                    'source': item.get('source', 'news_article_pattern'),
-                    'url': item.get('url', ''),
-                    'title': item.get('title', ''),
-                    'training_type': item.get('training_type', 'pattern_recognition')
-                }
-                
-                # Add to pattern cache
-                self.add_pattern_to_cache(text_content, label, metadata)
-                patterns_added += 1
+                valid_samples.append({
+                    'text': text_content,
+                    'label': label
+                })
             
-            if patterns_added == 0:
-                print("No valid patterns were added to cache")
+            if len(valid_samples) == 0:
+                print("No valid patterns found for training")
                 return
             
-            print(f"✅ Successfully added {patterns_added} new patterns to cache")
+            print(f"✅ Successfully processed {len(valid_samples)} valid patterns")
             
-            # Check if model supports incremental training for immediate improvement
+            # Attempt immediate incremental training if model is available
             if self.is_trained and self.model is not None:
                 print("🔄 Attempting immediate pattern integration...")
                 
@@ -312,8 +201,8 @@ class FakeNewsDetector:
                     if classifier and vectorizer and hasattr(classifier, 'partial_fit'):
                         try:
                             # Prepare data for immediate training
-                            texts = [item.get('text', '') or item.get('content', '') for item in training_data if isinstance(item, dict)]
-                            labels = [item.get('label', 1) for item in training_data if isinstance(item, dict)]
+                            texts = [sample['text'] for sample in valid_samples]
+                            labels = [sample['label'] for sample in valid_samples]
                             
                             if texts:
                                 # Transform using existing vectorizer
@@ -325,27 +214,98 @@ class FakeNewsDetector:
                                 
                                 # Save updated model
                                 try:
-                                    with open('models/fake_news_model.pkl', 'wb') as f:
-                                        pickle.dump(self.model, f)
+                                    model_data = {
+                                        'model': self.model,
+                                        'accuracy': self.accuracy,
+                                        'stemmer': self.stemmer,
+                                        'stop_words': self.stop_words,
+                                        'last_update': datetime.now().isoformat()
+                                    }
+                                    import joblib
+                                    joblib.dump(model_data, 'models/fake_news_model.pkl')
                                     print("✅ Model saved with new patterns")
                                 except Exception as save_error:
                                     print(f"Warning: Could not save model: {save_error}")
                         except Exception as inc_error:
                             print(f"Could not apply immediate training: {inc_error}")
-                            print("Patterns saved to cache for future full retraining")
+                            print("Adding patterns to feedback data for future full retraining")
+                            
+                            # Fallback: Add to feedback data for future retraining
+                            for sample in valid_samples:
+                                feedback_entry = {
+                                    'timestamp': datetime.now().isoformat(),
+                                    'text': sample['text'],
+                                    'predicted_label': 'Real' if sample['label'] == 1 else 'Fake',
+                                    'actual_label': 'Real' if sample['label'] == 1 else 'Fake',
+                                    'confidence': 1.0,
+                                    'user_comment': 'Added from pattern learning',
+                                    'processed_text': self.preprocess_text(sample['text'])
+                                }
+                                self.feedback_data.append(feedback_entry)
+                            
+                            self.save_feedback_data()
+                            print(f"✅ Added {len(valid_samples)} patterns to feedback data")
                     else:
                         print("🔄 Model doesn't support incremental training")
-                        print("✅ Patterns cached for future full retraining")
+                        print("Adding patterns to feedback data for future full retraining")
+                        
+                        # Add to feedback data for future retraining
+                        for sample in valid_samples:
+                            feedback_entry = {
+                                'timestamp': datetime.now().isoformat(),
+                                'text': sample['text'],
+                                'predicted_label': 'Real' if sample['label'] == 1 else 'Fake',
+                                'actual_label': 'Real' if sample['label'] == 1 else 'Fake',
+                                'confidence': 1.0,
+                                'user_comment': 'Added from pattern learning',
+                                'processed_text': self.preprocess_text(sample['text'])
+                            }
+                            self.feedback_data.append(feedback_entry)
+                        
+                        self.save_feedback_data()
+                        print(f"✅ Added {len(valid_samples)} patterns to feedback data for future retraining")
                 else:
                     print("🔄 Model structure doesn't support incremental updates")
-                    print("✅ Patterns cached for future full retraining")
+                    print("Adding patterns to feedback data for future full retraining")
+                    
+                    # Add to feedback data for future retraining
+                    for sample in valid_samples:
+                        feedback_entry = {
+                            'timestamp': datetime.now().isoformat(),
+                            'text': sample['text'],
+                            'predicted_label': 'Real' if sample['label'] == 1 else 'Fake',
+                            'actual_label': 'Real' if sample['label'] == 1 else 'Fake',
+                            'confidence': 1.0,
+                            'user_comment': 'Added from pattern learning',
+                            'processed_text': self.preprocess_text(sample['text'])
+                        }
+                        self.feedback_data.append(feedback_entry)
+                    
+                    self.save_feedback_data()
+                    print(f"✅ Added {len(valid_samples)} patterns to feedback data for future retraining")
             else:
-                print("✅ Patterns cached - model not currently available for immediate training")
+                print("Adding patterns to feedback data - model not currently available for immediate training")
+                
+                # Add to feedback data for future retraining
+                for sample in valid_samples:
+                    feedback_entry = {
+                        'timestamp': datetime.now().isoformat(),
+                        'text': sample['text'],
+                        'predicted_label': 'Real' if sample['label'] == 1 else 'Fake',
+                        'actual_label': 'Real' if sample['label'] == 1 else 'Fake',
+                        'confidence': 1.0,
+                        'user_comment': 'Added from pattern learning',
+                        'processed_text': self.preprocess_text(sample['text'])
+                    }
+                    self.feedback_data.append(feedback_entry)
+                
+                self.save_feedback_data()
+                print(f"✅ Added {len(valid_samples)} patterns to feedback data")
             
-            print("✅ Feedback data stored successfully")
+            print("✅ Pattern learning completed successfully")
             
         except Exception as e:
-            print(f"Error during feedback processing: {str(e)}")
+            print(f"Error during pattern learning: {str(e)}")
             import traceback
             traceback.print_exc()
     

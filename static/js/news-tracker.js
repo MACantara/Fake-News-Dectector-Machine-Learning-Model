@@ -192,12 +192,8 @@ class NewsTracker {
     
     async addWebsite() {
         const urlInput = document.getElementById('websiteUrl');
-        const nameInput = document.getElementById('websiteName');
-        const intervalSelect = document.getElementById('fetchInterval');
         
         const url = urlInput.value.trim();
-        const name = nameInput.value.trim() || this.extractDomainName(url);
-        const interval = parseInt(intervalSelect.value);
         
         if (!url) {
             this.showError('Please enter a website URL');
@@ -221,7 +217,7 @@ class NewsTracker {
             const response = await fetch('/api/news-tracker/add-website', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, name, interval })
+                body: JSON.stringify({ url })
             });
             
             const data = await response.json();
@@ -230,8 +226,8 @@ class NewsTracker {
                 const website = {
                     id: data.id,
                     url,
-                    name,
-                    interval,
+                    name: this.extractDomainName(url), // Auto-generate display name
+                    interval: 60, // Default interval
                     addedAt: new Date().toISOString(),
                     lastFetch: null,
                     articleCount: 0,
@@ -244,10 +240,8 @@ class NewsTracker {
                 
                 // Clear inputs
                 urlInput.value = '';
-                nameInput.value = '';
-                intervalSelect.value = '60';
                 
-                this.showSuccess(`Successfully added ${name} to tracking list`);
+                this.showSuccess(data.message || 'Website added successfully');
                 
                 // Start auto-fetch if enabled and this is the first website
                 if (this.autoFetchEnabled && this.trackedWebsites.length === 1) {

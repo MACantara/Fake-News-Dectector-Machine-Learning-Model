@@ -184,11 +184,9 @@ def add_website():
     try:
         data = request.get_json()
         url = data.get('url', '').strip()
-        name = data.get('name', '').strip()
-        interval = int(data.get('interval', 60))
         
-        if not url or not name:
-            return jsonify({'success': False, 'error': 'URL and name are required'}), 400
+        if not url:
+            return jsonify({'success': False, 'error': 'URL is required'}), 400
         
         # Optimized URL validation
         if not url.startswith(('http://', 'https://')):
@@ -201,6 +199,9 @@ def add_website():
         except Exception:
             return jsonify({'success': False, 'error': 'Invalid URL format'}), 400
         
+        # Auto-generate name from URL
+        name = get_domain_display_name(extract_root_domain(url))
+        
         user_session = session.get('session_id', 'default')
         
         with db_pool.get_connection() as conn:
@@ -208,9 +209,9 @@ def add_website():
             
             try:
                 cursor.execute('''
-                    INSERT INTO tracked_websites (url, name, fetch_interval, user_session)
-                    VALUES (?, ?, ?, ?)
-                ''', (url, name, interval, user_session))
+                    INSERT INTO tracked_websites (url, name, user_session)
+                    VALUES (?, ?, ?)
+                ''', (url, name, user_session))
                 
                 website_id = cursor.lastrowid
                 conn.commit()

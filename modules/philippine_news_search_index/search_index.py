@@ -671,17 +671,20 @@ class PhilippineNewsSearchIndex:
                     search_results = searcher.search(final_query, limit=limit)
                     
                     for result in search_results:
+                        # Safely access the id field with fallback
+                        article_id = result.get('id')
+                            
                         results.append({
-                            'id': result['id'],
-                            'url': result['url'],
-                            'title': result['title'],
-                            'summary': result['summary'],
+                            'id': article_id,
+                            'url': result.get('url', ''),
+                            'title': result.get('title', ''),
+                            'summary': result.get('summary', ''),
                             'author': result.get('author', ''),
                             'publish_date': result.get('publish_date'),
-                            'source_domain': result['source_domain'],
+                            'source_domain': result.get('source_domain', ''),
                             'category': result.get('category', ''),
                             'relevance_score': result.get('philippine_relevance_score', 0),
-                            'score': result.score
+                            'score': result.score if hasattr(result, 'score') else 0
                         })
                 
                 searcher.close()

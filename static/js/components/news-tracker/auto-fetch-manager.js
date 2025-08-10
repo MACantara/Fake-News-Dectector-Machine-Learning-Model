@@ -174,7 +174,7 @@ export const AutoFetchManagerMixin = {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            confidence_threshold: this.autoIndexThreshold,
+                            confidence_threshold: this.autoIndexThreshold / 100, // Convert percentage to decimal
                             batch_size: this.autoIndexBatchSize
                         })
                     });

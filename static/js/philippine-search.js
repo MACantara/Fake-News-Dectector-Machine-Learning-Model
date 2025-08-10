@@ -192,7 +192,7 @@ class PhilippineNewsSearch {
                 `Found ${data.total_count} articles for "${data.query}"`;
         }
         if (this.elements.searchResponseTime) {
-            this.elements.searchResponseTime.textContent = `${(data.response_time * 1000).toFixed(0)}ms`;
+            this.elements.searchResponseTime.textContent = `${data.response_time.toFixed(0)}ms`;
         }
 
         // Clear previous results

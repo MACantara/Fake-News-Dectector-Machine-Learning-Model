@@ -117,8 +117,8 @@ def search_philippine_news():
             'query': query,
             'results': search_results['results'],
             'total_count': search_results['count'],
-            'response_time': total_response_time,
-            'search_engine_time': round(search_results.get('response_time', 0) * 1000, 2),
+            'response_time': total_response_time,  # Total route processing time in ms
+            'search_engine_time': round(search_results.get('response_time', 0) * 1000, 2),  # Search engine time in ms
             'filters': {
                 'category': category,
                 'source': source,
@@ -126,6 +126,7 @@ def search_philippine_news():
             },
             'performance_stats': {
                 'total_response_time_ms': total_response_time,
+                'search_engine_time_ms': round(search_results.get('response_time', 0) * 1000, 2),
                 'search_optimization': 'Connection pooling and indexed queries'
             }
         })

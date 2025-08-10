@@ -194,7 +194,7 @@ export const AutoIndexManagerMixin = {
                     this.updateStatistics();
                     
                 } else {
-                    this.showInfo('No articles found that meet the high confidence criteria.');
+                    this.showNotification('No articles found that meet the high confidence criteria.', 'info');
                 }
             } else {
                 this.showError(`Auto-index failed: ${result.message || 'Unknown error'}`);
@@ -223,7 +223,7 @@ export const AutoIndexManagerMixin = {
             );
             
             if (eligibleArticles.length === 0) {
-                this.showInfo(`No articles found with ${this.autoIndexThreshold}%+ confidence that haven't been indexed yet.`);
+                this.showNotification(`No articles found with ${this.autoIndexThreshold}%+ confidence that haven't been indexed yet.`, 'info');
                 return;
             }
             
@@ -233,7 +233,7 @@ export const AutoIndexManagerMixin = {
                 `- Batch size: ${this.autoIndexBatchSize}\n` +
                 `- Next batch would process: ${Math.min(eligibleArticles.length, this.autoIndexBatchSize)} articles`;
             
-            this.showInfo(message);
+            this.showNotification(message, 'info');
             
         } catch (error) {
             console.error('Test auto-index error:', error);

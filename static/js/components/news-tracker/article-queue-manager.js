@@ -325,7 +325,7 @@ export const ArticleQueueManagerMixin = {
         console.log(`Attempting to select ${maxSelections} articles from ${availableArticles.length} available`);
         
         if (availableArticles.length === 0) {
-            this.showInfo('No unverified articles available for selection');
+            this.showNotification('No unverified articles available for selection', 'info');
             return;
         }
         
@@ -340,7 +340,7 @@ export const ArticleQueueManagerMixin = {
         }
         
         if (availableArticles.length > maxSelections) {
-            this.showInfo(`Selected ${selectedCount} articles (maximum ${maxSelections} articles can be selected at once)`);
+            this.showNotification(`Selected ${selectedCount} articles (maximum ${maxSelections} articles can be selected at once)`, 'info');
         } else {
             this.showSuccess(`Selected ${selectedCount} articles`);
         }

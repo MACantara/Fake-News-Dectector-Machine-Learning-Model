@@ -1,7 +1,9 @@
 /**
  * Auto-fetch Management Mixin
- * Handles automatic article fetching with configurable intervals
+ * Handles automatic article fetching with robust scheduling system
  */
+
+import { AutoFetchScheduler } from './auto-fetch-scheduler.js';
 
 export const AutoFetchManagerMixin = {
     /**
@@ -26,17 +28,21 @@ export const AutoFetchManagerMixin = {
     },
     
     /**
-     * Setup auto-fetch system
+     * Setup auto-fetch system with robust scheduler
      */
     setupAutoFetch() {
+        // Initialize the robust scheduler
+        this.autoFetchScheduler = new AutoFetchScheduler(this);
+        
         // Load auto-fetch preferences from localStorage
         const autoFetchEnabled = localStorage.getItem('newsTracker.autoFetchEnabled') === 'true';
         const autoFetchInterval = parseInt(localStorage.getItem('newsTracker.autoFetchInterval')) || 30;
-        const autoFetchStats = JSON.parse(localStorage.getItem('newsTracker.autoFetchStats') || '{"totalRuns":0,"articlesFound":0,"lastRun":null,"nextRun":null}');
         
         this.autoFetchEnabled = autoFetchEnabled;
         this.autoFetchIntervalMinutes = autoFetchInterval;
-        this.autoFetchStats = autoFetchStats;
+        
+        // Set scheduler interval
+        this.autoFetchScheduler.setInterval(autoFetchInterval);
         
         // Update UI to reflect current state
         const toggle = document.getElementById('autoFetchToggle');
@@ -51,13 +57,16 @@ export const AutoFetchManagerMixin = {
             intervalSelect.value = autoFetchInterval.toString();
         }
         
+        // Start scheduler if enabled
+        if (autoFetchEnabled && this.trackedWebsites.length > 0) {
+            this.autoFetchScheduler.start();
+        }
+        
+        // Update UI displays
         this.updateAutoFetchStatus();
         this.updateAutoFetchStats();
         
-        // Start auto-fetch if enabled
-        if (autoFetchEnabled && this.trackedWebsites.length > 0) {
-            this.startAutoFetch();
-        }
+        console.log('Auto-fetch system setup complete with robust scheduler');
     },
     
     /**
@@ -91,11 +100,11 @@ export const AutoFetchManagerMixin = {
                 return;
             }
             
-            this.startAutoFetch();
-            this.showSuccess(`Auto-fetch enabled. Articles will be fetched every ${this.autoFetchIntervalMinutes} minutes.`);
+            this.autoFetchScheduler.start();
+            this.showSuccess(`Auto-fetch enabled with robust scheduling (${this.autoFetchIntervalMinutes} minute intervals)`);
         } else {
-            this.stopAutoFetch();
-            this.showSuccess('Auto-fetch disabled.');
+            this.autoFetchScheduler.stop();
+            this.showSuccess('Auto-fetch disabled');
         }
         
         this.updateAutoFetchStatus();
@@ -108,49 +117,31 @@ export const AutoFetchManagerMixin = {
         this.autoFetchIntervalMinutes = minutes;
         localStorage.setItem('newsTracker.autoFetchInterval', minutes.toString());
         
-        // Restart auto-fetch if enabled to apply new interval
-        if (this.autoFetchEnabled) {
-            this.stopAutoFetch();
-            this.startAutoFetch();
+        // Update scheduler interval
+        if (this.autoFetchScheduler) {
+            this.autoFetchScheduler.setInterval(minutes);
         }
         
         this.updateAutoFetchStatus();
+        console.log(`Auto-fetch interval set to ${minutes} minutes`);
     },
     
     /**
-     * Start auto-fetch timer
+     * Start auto-fetch (legacy compatibility)
      */
     startAutoFetch() {
-        this.stopAutoFetch(); // Clear existing timer
-        
-        console.log(`Starting auto-fetch with ${this.autoFetchIntervalMinutes} minute interval`);
-        
-        const intervalMs = this.autoFetchIntervalMinutes * 60 * 1000;
-        
-        this.autoFetchInterval = setInterval(() => {
-            this.autoFetchArticles();
-        }, intervalMs);
-        
-        // Update next run time
-        this.autoFetchStats.nextRun = new Date(Date.now() + intervalMs).toISOString();
-        localStorage.setItem('newsTracker.autoFetchStats', JSON.stringify(this.autoFetchStats));
-        this.updateAutoFetchStats();
+        if (this.autoFetchScheduler) {
+            this.autoFetchScheduler.start();
+        }
     },
     
     /**
-     * Stop auto-fetch timer
+     * Stop auto-fetch (legacy compatibility)
      */
     stopAutoFetch() {
-        if (this.autoFetchInterval) {
-            clearInterval(this.autoFetchInterval);
-            this.autoFetchInterval = null;
-            console.log('Auto-fetch stopped');
+        if (this.autoFetchScheduler) {
+            this.autoFetchScheduler.stop();
         }
-        
-        // Clear next run time
-        this.autoFetchStats.nextRun = null;
-        localStorage.setItem('newsTracker.autoFetchStats', JSON.stringify(this.autoFetchStats));
-        this.updateAutoFetchStats();
     },
     
     /**
@@ -164,11 +155,11 @@ export const AutoFetchManagerMixin = {
             const newCount = this.articleQueue.length;
             const foundArticles = newCount - initialCount;
             
-            // Update stats
-            this.autoFetchStats.totalRuns++;
-            this.autoFetchStats.articlesFound += foundArticles;
-            this.autoFetchStats.lastRun = new Date().toISOString();
-            localStorage.setItem('newsTracker.autoFetchStats', JSON.stringify(this.autoFetchStats));
+            // Update scheduler stats
+            this.autoFetchScheduler.updateStats({
+                articlesFound: foundArticles,
+                lastRun: new Date().toISOString()
+            });
             this.updateAutoFetchStats();
             
             console.log(`Auto-fetch completed: Found ${foundArticles} new articles`);
@@ -209,20 +200,34 @@ export const AutoFetchManagerMixin = {
                         // Hide real-time activity after a brief delay
                         setTimeout(() => this.hideRealtimeActivity(), 3000);
                         
+                        this.showSuccess(`Auto-indexed ${result.articles_indexed} high confidence articles`);
+                    } else if (result.success && result.articles_indexed === 0) {
+                        console.log('Auto-indexing: No high confidence articles found for indexing');
+                        this.updateRealtimeActivity('No high confidence articles found');
+                        setTimeout(() => this.hideRealtimeActivity(), 2000);
                     } else {
-                        console.log('Auto-indexing: No high confidence articles to index');
-                        this.hideRealtimeActivity();
+                        console.error('Auto-indexing failed:', result.error);
+                        this.updateRealtimeActivity('Auto-indexing failed');
+                        setTimeout(() => this.hideRealtimeActivity(), 3000);
                     }
-                } catch (indexError) {
-                    console.error('Auto-indexing error during auto-fetch:', indexError);
-                    this.hideRealtimeActivity();
-                    // Don't break auto-fetch if indexing fails
+                } catch (error) {
+                    console.error('Auto-indexing error:', error);
+                    this.updateRealtimeActivity('Auto-indexing error');
+                    setTimeout(() => this.hideRealtimeActivity(), 3000);
                 }
+            } else if (this.autoIndexEnabled && foundArticles === 0) {
+                console.log('Auto-indexing: No new articles to check for high confidence');
+            }
+            
+            // Show notification about the auto-fetch result
+            if (foundArticles > 0) {
+                this.showRealtimeActivity(`Auto-fetch found ${foundArticles} new articles`);
+                setTimeout(() => this.hideRealtimeActivity(), 2000);
             }
             
         } catch (error) {
             console.error('Auto-fetch error:', error);
-            // Don't show error to user for auto-fetch to avoid spam
+            this.showError('Auto-fetch failed: ' + error.message);
         }
     },
     
@@ -282,7 +287,7 @@ export const AutoFetchManagerMixin = {
         }
         
         // Start auto-fetch
-        this.startAutoFetch();
+        this.autoFetchScheduler.start();
         this.updateAutoFetchStatus();
         
         this.showSuccess('Auto-fetch enabled with optimal settings (30 minutes interval)');
@@ -295,20 +300,16 @@ export const AutoFetchManagerMixin = {
         // Reset to defaults
         this.autoFetchEnabled = false;
         this.autoFetchIntervalMinutes = 30;
-        this.autoFetchStats = {
-            totalRuns: 0,
-            articlesFound: 0,
-            lastRun: null,
-            nextRun: null
-        };
         
         // Clear localStorage
         localStorage.removeItem('newsTracker.autoFetchEnabled');
         localStorage.removeItem('newsTracker.autoFetchInterval');
-        localStorage.removeItem('newsTracker.autoFetchStats');
+        
+        // Reset scheduler
+        this.autoFetchScheduler.reset();
         
         // Stop auto-fetch
-        this.stopAutoFetch();
+        this.autoFetchScheduler.stop();
         
         // Update UI
         const toggle = document.getElementById('autoFetchToggle');
@@ -337,8 +338,9 @@ export const AutoFetchManagerMixin = {
         if (!statusEl) return;
         
         if (this.autoFetchEnabled) {
-            const nextRun = this.autoFetchStats.nextRun ? 
-                new Date(this.autoFetchStats.nextRun).toLocaleTimeString() : 
+            const schedulerStats = this.autoFetchScheduler.getStats();
+            const nextRun = schedulerStats.nextRun ? 
+                new Date(schedulerStats.nextRun).toLocaleTimeString() : 
                 'calculating...';
             
             statusEl.innerHTML = `
@@ -357,7 +359,7 @@ export const AutoFetchManagerMixin = {
             statusEl.innerHTML = `
                 <div class="flex items-center">
                     <i class="bi bi-pause-circle text-gray-500 mr-2"></i>
-                    <span class="text-sm text-gray-600">Auto-fetch is currently disabled</span>
+                    <span class="text-sm text-gray-600">Auto-fetch is stopped</span>
                 </div>
             `;
             statusEl.className = 'p-3 bg-gray-50 rounded-lg border border-gray-200';
@@ -368,22 +370,24 @@ export const AutoFetchManagerMixin = {
      * Update auto-fetch statistics display
      */
     updateAutoFetchStats() {
+        const schedulerStats = this.autoFetchScheduler.getStats();
+        
         const totalRunsEl = document.getElementById('autoFetchTotalRuns');
         const articlesFoundEl = document.getElementById('autoFetchArticlesFound');
         const lastRunEl = document.getElementById('autoFetchLastRun');
         const nextRunEl = document.getElementById('autoFetchNextRun');
         
-        if (totalRunsEl) totalRunsEl.textContent = this.autoFetchStats.totalRuns;
-        if (articlesFoundEl) articlesFoundEl.textContent = this.autoFetchStats.articlesFound;
+        if (totalRunsEl) totalRunsEl.textContent = schedulerStats.totalRuns;
+        if (articlesFoundEl) articlesFoundEl.textContent = schedulerStats.articlesFound;
         
         if (lastRunEl) {
-            lastRunEl.textContent = this.autoFetchStats.lastRun ? 
-                this.formatDate(this.autoFetchStats.lastRun) : 'Never';
+            lastRunEl.textContent = schedulerStats.lastRun ? 
+                this.formatDate(schedulerStats.lastRun) : 'Never';
         }
         
         if (nextRunEl) {
-            if (this.autoFetchEnabled && this.autoFetchStats.nextRun) {
-                const nextRun = new Date(this.autoFetchStats.nextRun);
+            if (this.autoFetchEnabled && schedulerStats.nextRun) {
+                const nextRun = new Date(schedulerStats.nextRun);
                 const now = new Date();
                 const diffMs = nextRun - now;
                 

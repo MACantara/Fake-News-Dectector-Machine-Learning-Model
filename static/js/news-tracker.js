@@ -21,12 +21,6 @@ class NewsTrackerApp extends NewsTrackerBase {
         
         // Initialize flags for event handling
         this.globalEventsInitialized = false;
-        this.isRealTimePaused = false;
-        this.visibilityDebounceTimer = null;
-        this.lastVisibilityChange = 0;
-        
-        // Configuration flag to disable visibility change handling if problematic
-        this.disableVisibilityHandling = localStorage.getItem('newsTracker.disableVisibilityHandling') === 'true';
         
         this.initMixins();
     }
@@ -110,46 +104,6 @@ class NewsTrackerApp extends NewsTrackerBase {
         }
         
         this.globalEventsInitialized = true;
-        this.visibilityDebounceTimer = null;
-        this.isRealTimePaused = false;
-        this.lastVisibilityChange = 0;
-        
-        // Page visibility change (pause/resume real-time features) with improved debouncing
-        if (!this.disableVisibilityHandling) {
-            document.addEventListener('visibilitychange', () => {
-                const now = Date.now();
-                const timeSinceLastChange = now - this.lastVisibilityChange;
-                
-                // Clear existing debounce timer
-                if (this.visibilityDebounceTimer) {
-                    clearTimeout(this.visibilityDebounceTimer);
-                }
-                
-                // Log visibility change for debugging
-                console.log(`Visibility change: document.hidden=${document.hidden}, timeSinceLastChange=${timeSinceLastChange}ms`);
-                
-                // Ignore rapid visibility changes (less than 1 second apart)
-                if (timeSinceLastChange < 1000) {
-                    console.log('Ignoring rapid visibility change');
-                    return;
-                }
-                
-                this.lastVisibilityChange = now;
-                
-                // Debounce visibility changes to prevent rapid toggling
-                this.visibilityDebounceTimer = setTimeout(() => {
-                    if (document.hidden && !this.isRealTimePaused) {
-                        console.log('Page hidden - pausing real-time features');
-                        this.pauseRealTimeFeatures();
-                    } else if (!document.hidden && this.isRealTimePaused) {
-                        console.log('Page visible - resuming real-time features');
-                        this.resumeRealTimeFeatures();
-                    }
-                }, 1000); // Increased debounce to 1 second
-            });
-        } else {
-            console.log('Visibility change handling disabled by user preference');
-        }
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -226,34 +180,6 @@ class NewsTrackerApp extends NewsTrackerBase {
         }
         
         console.log('Real-time features started');
-    }
-    
-    /**
-     * Pause real-time features (when page is hidden)
-     */
-    pauseRealTimeFeatures() {
-        if (this.isRealTimePaused) {
-            return; // Already paused
-        }
-        
-        console.log('Pausing real-time features');
-        this.isRealTimePaused = true;
-        this.stopPeriodicRefresh();
-        this.stopAutoFetch();
-        this.stopStatisticsAutoRefresh();
-    }
-    
-    /**
-     * Resume real-time features (when page becomes visible)
-     */
-    resumeRealTimeFeatures() {
-        if (!this.isRealTimePaused) {
-            return; // Already running
-        }
-        
-        console.log('Resuming real-time features');
-        this.isRealTimePaused = false;
-        this.startRealTimeFeatures();
     }
     
     /**
@@ -354,12 +280,6 @@ class NewsTrackerApp extends NewsTrackerBase {
         this.stopAutoFetch();
         this.stopStatisticsAutoRefresh();
         
-        // Clear visibility debounce timer
-        if (this.visibilityDebounceTimer) {
-            clearTimeout(this.visibilityDebounceTimer);
-            this.visibilityDebounceTimer = null;
-        }
-        
         console.log('News Tracker cleanup completed');
     }
     
@@ -399,14 +319,14 @@ class NewsTrackerApp extends NewsTrackerBase {
                     <h4 class="font-bold mb-2">Debug Information</h4>
                     <pre class="text-xs mb-3">${JSON.stringify(this.getStatus(), null, 2)}</pre>
                     <div class="space-x-2">
-                        <button onclick="newsTracker.toggleVisibilityHandling()" class="px-2 py-1 text-xs bg-blue-500 text-white rounded">
-                            ${this.disableVisibilityHandling ? 'Enable' : 'Disable'} Visibility Handling
-                        </button>
                         <button onclick="newsTracker.forceResume()" class="px-2 py-1 text-xs bg-green-500 text-white rounded">
                             Force Resume
                         </button>
                         <button onclick="newsTracker.getStatus()" class="px-2 py-1 text-xs bg-purple-500 text-white rounded">
                             Log Status
+                        </button>
+                        <button onclick="newsTracker.testAutoFetch()" class="px-2 py-1 text-xs bg-blue-500 text-white rounded">
+                            Test Auto Fetch
                         </button>
                     </div>
                 </div>
@@ -415,23 +335,10 @@ class NewsTrackerApp extends NewsTrackerBase {
     }
     
     /**
-     * Toggle visibility change handling
-     */
-    toggleVisibilityHandling() {
-        this.disableVisibilityHandling = !this.disableVisibilityHandling;
-        localStorage.setItem('newsTracker.disableVisibilityHandling', this.disableVisibilityHandling.toString());
-        
-        const action = this.disableVisibilityHandling ? 'disabled' : 'enabled';
-        console.log(`Visibility change handling ${action}`);
-        this.showSuccess(`Visibility change handling ${action}. Refresh page to apply.`);
-    }
-    
-    /**
      * Force resume real-time features
      */
     forceResume() {
         console.log('Force resuming real-time features');
-        this.isRealTimePaused = false;
         this.startRealTimeFeatures();
         this.showSuccess('Real-time features force resumed');
     }

@@ -7,6 +7,7 @@ import numpy as np
 import json
 import re
 import os
+import sqlite3
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 
@@ -197,8 +198,268 @@ def update_feature_weights(feature_weights, feedback_entry, learning_rate=0.1):
     
     return feature_weights
 
+def initialize_feedback_db(db_path='datasets/url_classifier_feedback.db'):
+    """Initialize SQLite database for feedback storage"""
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Create feedback table if it doesn't exist
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                url TEXT NOT NULL,
+                predicted_label BOOLEAN NOT NULL,
+                actual_label BOOLEAN NOT NULL,
+                user_confidence REAL NOT NULL,
+                was_correct BOOLEAN NOT NULL,
+                prediction_confidence REAL,
+                feature_vector TEXT
+            )
+        ''')
+        
+        # Create index on timestamp for faster queries
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_timestamp ON feedback(timestamp)
+        ''')
+        
+        # Create index on url for faster lookups
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_url ON feedback(url)
+        ''')
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error initializing feedback database: {str(e)}")
+        return False
+
+def save_feedback_to_db(feedback_data, db_path='datasets/url_classifier_feedback.db'):
+    """Save feedback data to SQLite database"""
+    try:
+        # Initialize database if it doesn't exist
+        initialize_feedback_db(db_path)
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Insert new feedback entries
+        for entry in feedback_data:
+            # Convert feature vector to JSON string
+            feature_vector_str = json.dumps(entry.get('feature_vector', []))
+            
+            cursor.execute('''
+                INSERT OR REPLACE INTO feedback 
+                (timestamp, url, predicted_label, actual_label, user_confidence, 
+                 was_correct, prediction_confidence, feature_vector)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                entry.get('timestamp'),
+                entry.get('url'),
+                entry.get('predicted_label'),
+                entry.get('actual_label'),
+                entry.get('user_confidence'),
+                entry.get('was_correct'),
+                entry.get('prediction_confidence'),
+                feature_vector_str
+            ))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error saving feedback to database: {str(e)}")
+        return False
+
+def load_feedback_from_db(db_path='datasets/url_classifier_feedback.db'):
+    """Load feedback data from SQLite database"""
+    try:
+        if not os.path.exists(db_path):
+            # If database doesn't exist, initialize it and return empty list
+            initialize_feedback_db(db_path)
+            return []
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT timestamp, url, predicted_label, actual_label, user_confidence,
+                   was_correct, prediction_confidence, feature_vector
+            FROM feedback
+            ORDER BY timestamp
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        feedback_data = []
+        for row in rows:
+            # Parse feature vector from JSON string
+            try:
+                feature_vector = json.loads(row[7]) if row[7] else []
+            except (json.JSONDecodeError, TypeError):
+                feature_vector = []
+            
+            feedback_entry = {
+                'timestamp': row[0],
+                'url': row[1],
+                'predicted_label': bool(row[2]),
+                'actual_label': bool(row[3]),
+                'user_confidence': float(row[4]),
+                'was_correct': bool(row[5]),
+                'prediction_confidence': float(row[6]) if row[6] is not None else 0.5,
+                'feature_vector': feature_vector
+            }
+            feedback_data.append(feedback_entry)
+        
+        return feedback_data
+    except Exception as e:
+        print(f"Error loading feedback from database: {str(e)}")
+        return []
+
+def add_single_feedback_to_db(feedback_entry, db_path='datasets/url_classifier_feedback.db'):
+    """Add a single feedback entry to the database"""
+    try:
+        # Initialize database if it doesn't exist
+        initialize_feedback_db(db_path)
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Convert feature vector to JSON string
+        feature_vector_str = json.dumps(feedback_entry.get('feature_vector', []))
+        
+        cursor.execute('''
+            INSERT INTO feedback 
+            (timestamp, url, predicted_label, actual_label, user_confidence, 
+             was_correct, prediction_confidence, feature_vector)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            feedback_entry.get('timestamp'),
+            feedback_entry.get('url'),
+            feedback_entry.get('predicted_label'),
+            feedback_entry.get('actual_label'),
+            feedback_entry.get('user_confidence'),
+            feedback_entry.get('was_correct'),
+            feedback_entry.get('prediction_confidence'),
+            feature_vector_str
+        ))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error adding feedback to database: {str(e)}")
+        return False
+
+def get_recent_feedback_from_db(limit=10, db_path='datasets/url_classifier_feedback.db'):
+    """Get recent feedback samples from database"""
+    try:
+        if not os.path.exists(db_path):
+            return []
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT timestamp, url, predicted_label, actual_label, user_confidence,
+                   was_correct, prediction_confidence, feature_vector
+            FROM feedback
+            ORDER BY timestamp DESC
+            LIMIT ?
+        ''', (limit,))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        feedback_data = []
+        for row in rows:
+            # Parse feature vector from JSON string
+            try:
+                feature_vector = json.loads(row[7]) if row[7] else []
+            except (json.JSONDecodeError, TypeError):
+                feature_vector = []
+            
+            feedback_entry = {
+                'timestamp': row[0],
+                'url': row[1],
+                'predicted_label': bool(row[2]),
+                'actual_label': bool(row[3]),
+                'user_confidence': float(row[4]),
+                'was_correct': bool(row[5]),
+                'prediction_confidence': float(row[6]) if row[6] is not None else 0.5,
+                'feature_vector': feature_vector
+            }
+            feedback_data.append(feedback_entry)
+        
+        return feedback_data
+    except Exception as e:
+        print(f"Error getting recent feedback from database: {str(e)}")
+        return []
+
+def get_feedback_count_from_db(db_path='datasets/url_classifier_feedback.db'):
+    """Get total count of feedback entries in database"""
+    try:
+        if not os.path.exists(db_path):
+            return 0
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT COUNT(*) FROM feedback')
+        count = cursor.fetchone()[0]
+        
+        conn.close()
+        return count
+    except Exception as e:
+        print(f"Error getting feedback count from database: {str(e)}")
+        return 0
+
+def migrate_json_to_db(json_path='datasets/url_classifier_feedback.json', db_path='datasets/url_classifier_feedback.db'):
+    """Migrate existing JSON feedback data to SQLite database"""
+    try:
+        # Load existing JSON data
+        json_data = load_feedback_data(json_path)
+        
+        if not json_data:
+            print("No JSON data to migrate")
+            return True
+        
+        # Initialize database
+        initialize_feedback_db(db_path)
+        
+        # Save to database
+        result = save_feedback_to_db(json_data, db_path)
+        
+        if result:
+            print(f"Successfully migrated {len(json_data)} feedback entries from JSON to SQLite")
+            # Optionally backup and remove JSON file
+            backup_path = json_path + '.backup'
+            if os.path.exists(json_path):
+                os.rename(json_path, backup_path)
+                print(f"JSON file backed up to {backup_path}")
+        
+        return result
+    except Exception as e:
+        print(f"Error migrating JSON to database: {str(e)}")
+        return False
+
+def calculate_accuracy_from_feedback(feedback_data):
+    """Calculate accuracy from feedback data"""
+    if not feedback_data:
+        return 0.0
+    
+    correct_predictions = sum(1 for entry in feedback_data if entry.get('was_correct', False))
+    return correct_predictions / len(feedback_data)
+
+def get_recent_feedback(feedback_data, limit=10):
+    """Get recent feedback samples (legacy function - use get_recent_feedback_from_db for database)"""
+    return feedback_data[-limit:] if feedback_data else []
+
 def load_feedback_data(feedback_path='datasets/url_classifier_feedback.json'):
-    """Load existing feedback data"""
+    """Load existing feedback data from JSON (legacy function)"""
     try:
         if os.path.exists(feedback_path):
             with open(feedback_path, 'r') as f:
@@ -211,7 +472,7 @@ def load_feedback_data(feedback_path='datasets/url_classifier_feedback.json'):
         return []
 
 def save_feedback_data(feedback_data, feedback_path='datasets/url_classifier_feedback.json'):
-    """Save feedback data to file"""
+    """Save feedback data to JSON file (legacy function)"""
     try:
         with open(feedback_path, 'w') as f:
             json.dump(feedback_data, f, indent=2)
@@ -219,18 +480,6 @@ def save_feedback_data(feedback_data, feedback_path='datasets/url_classifier_fee
     except Exception as e:
         print(f"Error saving feedback data: {str(e)}")
         return False
-
-def calculate_accuracy_from_feedback(feedback_data):
-    """Calculate accuracy from feedback data"""
-    if not feedback_data:
-        return 0.0
-    
-    correct_predictions = sum(1 for entry in feedback_data if entry.get('was_correct', False))
-    return correct_predictions / len(feedback_data)
-
-def get_recent_feedback(feedback_data, limit=10):
-    """Get recent feedback samples"""
-    return feedback_data[-limit:] if feedback_data else []
 
 def validate_url(url):
     """Validate if URL is properly formatted"""

@@ -20,8 +20,13 @@ from .utils import (
     create_feature_vector,
     heuristic_prediction,
     update_feature_weights,
-    load_feedback_data,
-    save_feedback_data,
+    initialize_feedback_db,
+    load_feedback_from_db,
+    save_feedback_to_db,
+    add_single_feedback_to_db,
+    get_recent_feedback_from_db,
+    get_feedback_count_from_db,
+    migrate_json_to_db,
     calculate_accuracy_from_feedback,
     get_recent_feedback,
     validate_url
@@ -35,9 +40,9 @@ class URLNewsClassifier:
     Uses user feedback to continuously improve classification accuracy
     """
     
-    def __init__(self, model_path='models/url_news_classifier.pkl', feedback_path='datasets/url_classifier_feedback.json'):
+    def __init__(self, model_path='models/url_news_classifier.pkl', feedback_db_path='datasets/url_classifier_feedback.db'):
         self.model_path = model_path
-        self.feedback_path = feedback_path
+        self.feedback_db_path = feedback_db_path
         self.model = None
         self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
         self.is_trained = False
@@ -60,13 +65,27 @@ class URLNewsClassifier:
             'special_indicators': 1.0
         }
         
-        # Feedback storage
+        # Feedback storage - now using database
         self.feedback_data = []
         self.training_history = []
+        
+        # Initialize database and migrate from JSON if needed
+        self._initialize_feedback_system()
         
         # Load existing model and feedback
         self.load_feedback()
         self.load_model()
+    
+    def _initialize_feedback_system(self):
+        """Initialize feedback database and migrate from JSON if needed"""
+        # Initialize SQLite database
+        initialize_feedback_db(self.feedback_db_path)
+        
+        # Check if we need to migrate from JSON
+        json_path = 'datasets/url_classifier_feedback.json'
+        if os.path.exists(json_path):
+            print("Found existing JSON feedback file. Migrating to SQLite database...")
+            migrate_json_to_db(json_path, self.feedback_db_path)
     
     def predict_with_confidence(self, url):
         """Predict if URL is a news article with confidence score"""
@@ -174,7 +193,9 @@ class URLNewsClassifier:
         })
         
         self.feedback_data.append(feedback_entry)
-        self.save_feedback()
+        
+        # Save individual feedback entry to database
+        add_single_feedback_to_db(feedback_entry, self.feedback_db_path)
         
         # Update feature weights based on feedback
         self.feature_weights = update_feature_weights(
@@ -184,7 +205,8 @@ class URLNewsClassifier:
         )
         
         # Trigger retraining if enough feedback collected
-        if len(self.feedback_data) % 100 == 0 and len(self.feedback_data) >= 100:
+        feedback_count = get_feedback_count_from_db(self.feedback_db_path)
+        if feedback_count % 100 == 0 and feedback_count >= 100:
             self.retrain_model()
         
         return feedback_entry
@@ -236,31 +258,39 @@ class URLNewsClassifier:
             except Exception as e:
                 errors.append(f"Error processing feedback for {feedback.get('url', 'unknown')}: {str(e)}")
         
-        self.save_feedback()
+        # Save all feedback entries to database in batch
+        if processed_count > 0:
+            # Get the new entries we just added to feedback_data
+            new_entries = self.feedback_data[-processed_count:]
+            save_feedback_to_db(new_entries, self.feedback_db_path)
         
         # Check if retraining is needed
-        if len(self.feedback_data) >= 100 and len(self.feedback_data) % 100 == 0:
+        feedback_count = get_feedback_count_from_db(self.feedback_db_path)
+        if feedback_count >= 100 and feedback_count % 100 == 0:
             self.retrain_model()
         
         return {
             'processed_count': processed_count,
             'errors': errors,
-            'total_feedback': len(self.feedback_data)
+            'total_feedback': feedback_count
         }
     
     def retrain_model(self):
         """Retrain the model with accumulated feedback"""
-        if len(self.feedback_data) < 100:
-            print(f"Need at least 10 feedback samples, have {len(self.feedback_data)}")
+        # Load all feedback from database
+        all_feedback = load_feedback_from_db(self.feedback_db_path)
+        
+        if len(all_feedback) < 10:
+            print(f"Need at least 10 feedback samples, have {len(all_feedback)}")
             return None
         
-        print(f"Retraining model with {len(self.feedback_data)} feedback samples...")
+        print(f"Retraining model with {len(all_feedback)} feedback samples...")
         
         # Prepare training data
         X = []
         y = []
         
-        for feedback in self.feedback_data:
+        for feedback in all_feedback:
             feature_vector = feedback.get('feature_vector')
             
             # Generate feature vector if missing
@@ -362,19 +392,24 @@ class URLNewsClassifier:
             return False
     
     def save_feedback(self):
-        """Save feedback data to file"""
-        return save_feedback_data(self.feedback_data, self.feedback_path)
+        """Save feedback data to database (legacy method maintained for compatibility)"""
+        if self.feedback_data:
+            return save_feedback_to_db(self.feedback_data, self.feedback_db_path)
+        return True
     
     def load_feedback(self):
-        """Load existing feedback data"""
-        self.feedback_data = load_feedback_data(self.feedback_path)
-        print(f"Loaded {len(self.feedback_data)} feedback entries")
+        """Load existing feedback data from database"""
+        self.feedback_data = load_feedback_from_db(self.feedback_db_path)
+        print(f"Loaded {len(self.feedback_data)} feedback entries from database")
     
     def get_model_stats(self):
         """Get model statistics and performance metrics"""
+        # Get feedback count from database
+        feedback_count = get_feedback_count_from_db(self.feedback_db_path)
+        
         stats = {
             'is_trained': self.is_trained,
-            'feedback_count': len(self.feedback_data),
+            'feedback_count': feedback_count,
             'training_iterations': len(self.training_history),
             'feature_weights': self.feature_weights.copy(),
             'last_accuracy': None,
@@ -387,16 +422,18 @@ class URLNewsClassifier:
             stats['last_accuracy'] = self.training_history[-1]['accuracy']
         
         # Calculate accuracy from feedback
-        if self.feedback_data:
-            stats['accuracy'] = calculate_accuracy_from_feedback(self.feedback_data)
-            stats['correct_predictions'] = sum(1 for entry in self.feedback_data if entry.get('was_correct', False))
-            stats['total_predictions'] = len(self.feedback_data)
+        if feedback_count > 0:
+            # Load all feedback for accuracy calculation
+            all_feedback = load_feedback_from_db(self.feedback_db_path)
+            stats['accuracy'] = calculate_accuracy_from_feedback(all_feedback)
+            stats['correct_predictions'] = sum(1 for entry in all_feedback if entry.get('was_correct', False))
+            stats['total_predictions'] = len(all_feedback)
         
         return stats
     
     def get_recent_feedback(self, limit=10):
-        """Get recent feedback samples"""
-        return get_recent_feedback(self.feedback_data, limit)
+        """Get recent feedback samples from database"""
+        return get_recent_feedback_from_db(limit, self.feedback_db_path)
     
     def analyze_urls_batch(self, urls, confidence_threshold=0.7):
         """Analyze a batch of URLs and return categorized results"""
@@ -489,8 +526,9 @@ class URLNewsClassifier:
         stats = self.get_model_stats()
         
         # Add performance metrics
-        if self.feedback_data:
-            recent_feedback = get_recent_feedback(self.feedback_data, 20)
+        feedback_count = get_feedback_count_from_db(self.feedback_db_path)
+        if feedback_count > 0:
+            recent_feedback = get_recent_feedback_from_db(20, self.feedback_db_path)
             if recent_feedback:
                 recent_accuracy = calculate_accuracy_from_feedback(recent_feedback)
                 stats['recent_accuracy'] = recent_accuracy
@@ -508,3 +546,16 @@ class URLNewsClassifier:
                     stats['model_improvement'].append(improvement)
         
         return stats
+    
+    def migrate_from_json(self, json_path='datasets/url_classifier_feedback.json'):
+        """Migrate feedback data from JSON file to SQLite database"""
+        return migrate_json_to_db(json_path, self.feedback_db_path)
+    
+    def get_database_info(self):
+        """Get information about the feedback database"""
+        return {
+            'database_path': self.feedback_db_path,
+            'database_exists': os.path.exists(self.feedback_db_path),
+            'feedback_count': get_feedback_count_from_db(self.feedback_db_path),
+            'database_size_bytes': os.path.getsize(self.feedback_db_path) if os.path.exists(self.feedback_db_path) else 0
+        }

@@ -910,7 +910,7 @@ def get_tracker_data():
                 ORDER BY w.added_at DESC
             ''', (user_session,))
             
-            # Efficiently process website data
+            # Efficiently process website data with domain extraction
             websites = []
             for row in cursor.fetchall():
                 website = dict(row)
@@ -921,6 +921,10 @@ def get_tracker_data():
                     website['lastFetch'] = website['last_fetch']
                 if website['last_article']:
                     website['lastArticle'] = website['last_article']
+                
+                # Add domain information for grouping
+                website['rootDomain'] = extract_root_domain(website['url'])
+                website['displayName'] = get_domain_display_name(website['rootDomain'])
                 
                 websites.append(website)
             
@@ -954,12 +958,17 @@ def get_tracker_data():
         # Calculate basic prediction metrics for inclusion in response
         basic_metrics = calculate_comprehensive_metrics(user_session)
         
+        # Group websites by domain for enhanced organization
+        domain_groups = group_websites_by_domain(websites)
+        
         return jsonify({
             'success': True,
             'websites': websites,
+            'domain_groups': domain_groups,
             'articles': articles,
             'stats': {
                 'total_websites': len(websites),
+                'total_domains': len(domain_groups),
                 'total_articles': len(articles),
                 'verified_articles': sum(1 for a in articles if a['verified'])
             },
@@ -968,6 +977,91 @@ def get_tracker_data():
         
     except Exception as e:
         return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+def extract_root_domain(url):
+    """Extract root domain from URL for grouping purposes"""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        hostname = parsed.hostname.replace('www.', '') if parsed.hostname else 'unknown'
+        
+        parts = hostname.split('.')
+        # For domains like news.bbc.com, get bbc.com
+        # For domains like cnn.com, get cnn.com
+        if len(parts) >= 2:
+            return '.'.join(parts[-2:])
+        return hostname
+    except Exception:
+        return 'unknown'
+
+def get_domain_display_name(domain):
+    """Convert domain to friendly display name"""
+    domain_map = {
+        'cnn.com': 'CNN',
+        'bbc.com': 'BBC',
+        'reuters.com': 'Reuters',
+        'nytimes.com': 'New York Times',
+        'washingtonpost.com': 'Washington Post',
+        'theguardian.com': 'The Guardian',
+        'abc.net.au': 'ABC News',
+        'news.yahoo.com': 'Yahoo News',
+        'foxnews.com': 'Fox News',
+        'nbcnews.com': 'NBC News',
+        'cbsnews.com': 'CBS News',
+        'npr.org': 'NPR',
+        'apnews.com': 'Associated Press',
+        'usatoday.com': 'USA Today',
+        'wsj.com': 'Wall Street Journal',
+        'bloomberg.com': 'Bloomberg',
+        'time.com': 'Time',
+        'newsweek.com': 'Newsweek',
+        'huffpost.com': 'HuffPost',
+        'politico.com': 'Politico',
+        'rappler.com': 'Rappler',
+        'abs-cbn.com': 'ABS-CBN',
+        'gmanetwork.com': 'GMA News',
+        'inquirer.net': 'Philippine Daily Inquirer',
+        'philstar.com': 'Philippine Star',
+        'manilabulletin.com': 'Manila Bulletin',
+        'businessworld.com.ph': 'BusinessWorld'
+    }
+    
+    if domain in domain_map:
+        return domain_map[domain]
+    
+    # Generate display name from domain
+    name = domain.replace('.com', '').replace('.org', '').replace('.net', '').replace('.ph', '')
+    return ' '.join(word.capitalize() for word in name.split('.'))
+
+def group_websites_by_domain(websites):
+    """Group websites by their root domain"""
+    groups = {}
+    
+    for website in websites:
+        root_domain = website.get('rootDomain', 'unknown')
+        
+        if root_domain not in groups:
+            groups[root_domain] = {
+                'domain': root_domain,
+                'display_name': website.get('displayName', root_domain),
+                'websites': [],
+                'total_articles': 0,
+                'active_count': 0,
+                'total_count': 0
+            }
+        
+        group = groups[root_domain]
+        group['websites'].append(website)
+        group['total_articles'] += website.get('article_count', 0)
+        group['total_count'] += 1
+        
+        if website.get('status') == 'active':
+            group['active_count'] += 1
+    
+    # Sort groups by total articles (descending) then by domain name
+    sorted_groups = sorted(groups.values(), key=lambda x: (-x['total_articles'], x['domain']))
+    
+    return sorted_groups
 
 def fetch_articles_from_crawler(url, site_name, website_id):
     """Fetch articles from a website using direct crawler method calls for better performance"""

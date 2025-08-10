@@ -70,10 +70,33 @@
 
 <!-- Tracked Websites List -->
 <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-    <h3 class="text-xl font-semibold text-gray-800 mb-4">
-        <i class="bi bi-list-ul"></i>
-        Tracked Websites
-    </h3>
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-semibold text-gray-800">
+            <i class="bi bi-list-ul"></i>
+            Tracked Websites
+        </h3>
+        
+        <!-- View Controls -->
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
+                <label for="websiteViewMode" class="text-sm font-medium text-gray-700">View:</label>
+                <select id="websiteViewMode" class="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="grouped">Grouped by Domain</option>
+                    <option value="list">Simple List</option>
+                </select>
+            </div>
+            
+            <button id="expandAllDomainsBtn" class="text-sm text-blue-600 hover:text-blue-800 flex items-center">
+                <i class="bi bi-arrows-expand mr-1"></i>
+                Expand All
+            </button>
+            
+            <button id="collapseAllDomainsBtn" class="text-sm text-blue-600 hover:text-blue-800 flex items-center">
+                <i class="bi bi-arrows-collapse mr-1"></i>
+                Collapse All
+            </button>
+        </div>
+    </div>
     
     <div id="trackedWebsitesList" class="space-y-3 max-h-96 overflow-y-auto">
         <!-- Websites will be populated here -->

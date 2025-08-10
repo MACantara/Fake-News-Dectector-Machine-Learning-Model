@@ -20,12 +20,14 @@ class NewsTracker {
         };
         this.selectedArticles = new Set(); // Track selected articles
         this.predictionMetrics = null; // Store comprehensive prediction metrics
+        this.websiteViewMode = 'grouped'; // Default to grouped view
         
         this.init();
     }
     
     init() {
         this.bindEvents();
+        this.loadViewPreferences();
         this.loadTrackedWebsites();
         this.loadArticleQueue();
         this.updateStatistics();
@@ -44,12 +46,45 @@ class NewsTracker {
         });
     }
     
+    loadViewPreferences() {
+        // Load website view mode preference
+        const savedViewMode = localStorage.getItem('newsTracker.websiteViewMode') || 'grouped';
+        this.websiteViewMode = savedViewMode;
+        
+        // Update UI to reflect saved preference
+        const viewModeSelect = document.getElementById('websiteViewMode');
+        if (viewModeSelect) {
+            viewModeSelect.value = savedViewMode;
+        }
+        
+        // Update control visibility
+        this.setWebsiteViewMode(savedViewMode);
+    }
+    
     bindEvents() {
         // Website management
         document.getElementById('addWebsiteBtn').addEventListener('click', () => this.addWebsite());
         document.getElementById('websiteUrl').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.addWebsite();
         });
+        
+        // Website view controls
+        const websiteViewMode = document.getElementById('websiteViewMode');
+        if (websiteViewMode) {
+            websiteViewMode.addEventListener('change', (e) => {
+                this.setWebsiteViewMode(e.target.value);
+            });
+        }
+        
+        const expandAllBtn = document.getElementById('expandAllDomainsBtn');
+        if (expandAllBtn) {
+            expandAllBtn.addEventListener('click', () => this.expandAllDomains());
+        }
+        
+        const collapseAllBtn = document.getElementById('collapseAllDomainsBtn');
+        if (collapseAllBtn) {
+            collapseAllBtn.addEventListener('click', () => this.collapseAllDomains());
+        }
         
         // Auto-fetch controls
         const autoFetchToggle = document.getElementById('autoFetchToggle');
@@ -415,6 +450,12 @@ class NewsTracker {
     }
     
     renderTrackedWebsites() {
+        // Check view mode and render accordingly
+        if (this.websiteViewMode === 'list') {
+            this.renderTrackedWebsitesSimple();
+            return;
+        }
+        
         const container = document.getElementById('trackedWebsitesList');
         
         if (this.trackedWebsites.length === 0) {
@@ -428,40 +469,90 @@ class NewsTracker {
             return;
         }
         
-        container.innerHTML = this.trackedWebsites.map(website => `
-            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
-                <div class="flex-1">
-                    <h4 class="font-medium text-gray-800">${this.escapeHtml(website.name)}</h4>
-                    <p class="text-sm text-gray-600">${website.url}</p>
-                    <div class="flex items-center mt-1 text-xs text-gray-500">
-                        <span class="mr-3">
-                            <i class="bi bi-clock mr-1"></i>
-                            Every ${website.fetch_interval || website.interval || 60} min
-                        </span>
-                        <span class="mr-3">
-                            <i class="bi bi-newspaper mr-1"></i>
-                            ${website.article_count || website.articleCount || 0} articles
-                        </span>
-                        <span>
-                            <i class="bi bi-calendar mr-1"></i>
-                            ${website.last_fetch || website.lastFetch ? new Date(website.last_fetch || website.lastFetch).toLocaleString() : 'Never fetched'}
-                        </span>
+        // Group websites by domain
+        const domainGroups = this.groupWebsitesByDomain(this.trackedWebsites);
+        
+        container.innerHTML = domainGroups.map(group => `
+            <div class="domain-group border border-gray-200 rounded-lg mb-4" data-domain-group="${group.domain}" data-expanded="false">
+                <!-- Domain Group Header -->
+                <div class="domain-header p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-t-lg border-b border-blue-200 cursor-pointer hover:from-blue-100 hover:to-blue-150 transition-all duration-200" 
+                     onclick="newsTracker.toggleDomainGroup('${group.domain}')">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <i class="domain-toggle-icon bi bi-chevron-right text-blue-600 mr-2 transition-transform duration-200"></i>
+                            <div>
+                                <h3 class="font-semibold text-blue-800">${this.escapeHtml(group.displayName)}</h3>
+                                <p class="text-sm text-blue-600">${group.domain}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4 text-sm text-blue-700">
+                            <span class="flex items-center">
+                                <i class="bi bi-globe mr-1"></i>
+                                ${group.websites.length} source${group.websites.length !== 1 ? 's' : ''}
+                            </span>
+                            <span class="flex items-center">
+                                <i class="bi bi-newspaper mr-1"></i>
+                                ${group.totalArticles} articles
+                            </span>
+                            <span class="px-2 py-1 text-xs bg-blue-200 text-blue-800 rounded-full">
+                                ${this.getGroupStatus(group.websites)}
+                            </span>
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <span class="px-2 py-1 text-xs rounded-full ${website.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                        ${website.status}
-                    </span>
-                    <button 
-                        onclick="newsTracker.removeWebsite('${website.id}')"
-                        class="text-red-600 hover:text-red-800 p-1"
-                        title="Remove website"
-                    >
-                        <i class="bi bi-trash"></i>
-                    </button>
+                
+                <!-- Websites in Domain Group -->
+                <div class="domain-websites" style="display: none;">
+                    ${group.websites.map(website => `
+                        <div class="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-100 last:border-b-0 last:rounded-b-lg hover:bg-gray-100 transition-colors duration-150">
+                            <div class="flex-1">
+                                <h4 class="font-medium text-gray-800">${this.escapeHtml(website.name)}</h4>
+                                <p class="text-sm text-gray-600 break-all">${website.url}</p>
+                                <div class="flex items-center mt-2 text-xs text-gray-500">
+                                    <span class="mr-4 flex items-center">
+                                        <i class="bi bi-clock mr-1"></i>
+                                        Every ${website.fetch_interval || website.interval || 60} min
+                                    </span>
+                                    <span class="mr-4 flex items-center">
+                                        <i class="bi bi-newspaper mr-1"></i>
+                                        ${website.article_count || website.articleCount || 0} articles
+                                    </span>
+                                    <span class="flex items-center">
+                                        <i class="bi bi-calendar mr-1"></i>
+                                        ${website.last_fetch || website.lastFetch ? new Date(website.last_fetch || website.lastFetch).toLocaleString() : 'Never fetched'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2 ml-4">
+                                <span class="px-2 py-1 text-xs rounded-full ${website.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                    ${website.status}
+                                </span>
+                                <button 
+                                    onclick="event.stopPropagation(); newsTracker.removeWebsite('${website.id}')"
+                                    class="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 transition-colors duration-150"
+                                    title="Remove website"
+                                >
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
         `).join('');
+    }
+    
+    getGroupStatus(websites) {
+        const activeCount = websites.filter(w => w.status === 'active').length;
+        const totalCount = websites.length;
+        
+        if (activeCount === totalCount) {
+            return 'All Active';
+        } else if (activeCount === 0) {
+            return 'None Active';
+        } else {
+            return `${activeCount}/${totalCount} Active`;
+        }
     }
     
     renderArticleQueue() {
@@ -691,6 +782,208 @@ class NewsTracker {
         } catch (_) {
             return 'Unknown Website';
         }
+    }
+    
+    extractRootDomain(url) {
+        try {
+            const domain = new URL(url).hostname.replace('www.', '');
+            const parts = domain.split('.');
+            // For domains like news.bbc.com, get bbc.com
+            // For domains like cnn.com, get cnn.com
+            if (parts.length >= 2) {
+                return parts.slice(-2).join('.');
+            }
+            return domain;
+        } catch (_) {
+            return 'unknown';
+        }
+    }
+    
+    groupWebsitesByDomain(websites) {
+        const groups = {};
+        
+        websites.forEach(website => {
+            const rootDomain = this.extractRootDomain(website.url);
+            
+            if (!groups[rootDomain]) {
+                groups[rootDomain] = {
+                    domain: rootDomain,
+                    displayName: this.getDomainDisplayName(rootDomain),
+                    websites: [],
+                    totalArticles: 0,
+                    isExpanded: false // Start collapsed for cleaner view
+                };
+            }
+            
+            groups[rootDomain].websites.push(website);
+            groups[rootDomain].totalArticles += (website.article_count || website.articleCount || 0);
+        });
+        
+        // Sort groups by total articles (descending) and then by domain name
+        const sortedGroups = Object.values(groups).sort((a, b) => {
+            if (b.totalArticles !== a.totalArticles) {
+                return b.totalArticles - a.totalArticles;
+            }
+            return a.domain.localeCompare(b.domain);
+        });
+        
+        return sortedGroups;
+    }
+    
+    getDomainDisplayName(domain) {
+        // Convert domain to friendly display name
+        const domainMap = {
+            'cnn.com': 'CNN',
+            'bbc.com': 'BBC',
+            'reuters.com': 'Reuters',
+            'nytimes.com': 'New York Times',
+            'washingtonpost.com': 'Washington Post',
+            'theguardian.com': 'The Guardian',
+            'abc.net.au': 'ABC News',
+            'news.yahoo.com': 'Yahoo News',
+            'foxnews.com': 'Fox News',
+            'nbcnews.com': 'NBC News',
+            'cbsnews.com': 'CBS News',
+            'npr.org': 'NPR',
+            'apnews.com': 'Associated Press',
+            'usatoday.com': 'USA Today',
+            'wsj.com': 'Wall Street Journal',
+            'bloomberg.com': 'Bloomberg',
+            'time.com': 'Time',
+            'newsweek.com': 'Newsweek',
+            'huffpost.com': 'HuffPost',
+            'politico.com': 'Politico'
+        };
+        
+        return domainMap[domain] || this.capitalizeWords(domain.replace('.com', '').replace('.org', '').replace('.net', ''));
+    }
+    
+    capitalizeWords(str) {
+        return str.split('.').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ');
+    }
+    
+    toggleDomainGroup(domain) {
+        const groupElement = document.querySelector(`[data-domain-group="${domain}"]`);
+        const websitesContainer = groupElement?.querySelector('.domain-websites');
+        const toggleIcon = groupElement?.querySelector('.domain-toggle-icon');
+        
+        if (!groupElement || !websitesContainer || !toggleIcon) return;
+        
+        const isExpanded = websitesContainer.style.display !== 'none';
+        
+        if (isExpanded) {
+            websitesContainer.style.display = 'none';
+            toggleIcon.classList.remove('bi-chevron-down');
+            toggleIcon.classList.add('bi-chevron-right');
+            groupElement.dataset.expanded = 'false';
+        } else {
+            websitesContainer.style.display = 'block';
+            toggleIcon.classList.remove('bi-chevron-right');
+            toggleIcon.classList.add('bi-chevron-down');
+            groupElement.dataset.expanded = 'true';
+        }
+    }
+    
+    setWebsiteViewMode(mode) {
+        this.websiteViewMode = mode;
+        localStorage.setItem('newsTracker.websiteViewMode', mode);
+        
+        // Update control visibility
+        const expandBtn = document.getElementById('expandAllDomainsBtn');
+        const collapseBtn = document.getElementById('collapseAllDomainsBtn');
+        
+        if (mode === 'grouped') {
+            expandBtn?.classList.remove('hidden');
+            collapseBtn?.classList.remove('hidden');
+        } else {
+            expandBtn?.classList.add('hidden');
+            collapseBtn?.classList.add('hidden');
+        }
+        
+        this.renderTrackedWebsites();
+    }
+    
+    expandAllDomains() {
+        const domainGroups = document.querySelectorAll('[data-domain-group]');
+        domainGroups.forEach(group => {
+            const domain = group.dataset.domainGroup;
+            const websitesContainer = group.querySelector('.domain-websites');
+            const toggleIcon = group.querySelector('.domain-toggle-icon');
+            
+            if (websitesContainer && websitesContainer.style.display === 'none') {
+                this.toggleDomainGroup(domain);
+            }
+        });
+    }
+    
+    collapseAllDomains() {
+        const domainGroups = document.querySelectorAll('[data-domain-group]');
+        domainGroups.forEach(group => {
+            const domain = group.dataset.domainGroup;
+            const websitesContainer = group.querySelector('.domain-websites');
+            const toggleIcon = group.querySelector('.domain-toggle-icon');
+            
+            if (websitesContainer && websitesContainer.style.display !== 'none') {
+                this.toggleDomainGroup(domain);
+            }
+        });
+    }
+    
+    renderTrackedWebsitesSimple() {
+        const container = document.getElementById('trackedWebsitesList');
+        
+        if (this.trackedWebsites.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="bi bi-inbox text-4xl mb-2 opacity-50"></i>
+                    <p>No websites being tracked yet.</p>
+                    <p class="text-sm">Add a website above to start tracking articles.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Sort websites by article count for simple view
+        const sortedWebsites = [...this.trackedWebsites].sort((a, b) => 
+            (b.article_count || b.articleCount || 0) - (a.article_count || a.articleCount || 0)
+        );
+        
+        container.innerHTML = sortedWebsites.map(website => `
+            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors duration-150">
+                <div class="flex-1">
+                    <h4 class="font-medium text-gray-800">${this.escapeHtml(website.name)}</h4>
+                    <p class="text-sm text-gray-600 break-all">${website.url}</p>
+                    <div class="flex items-center mt-1 text-xs text-gray-500">
+                        <span class="mr-3">
+                            <i class="bi bi-clock mr-1"></i>
+                            Every ${website.fetch_interval || website.interval || 60} min
+                        </span>
+                        <span class="mr-3">
+                            <i class="bi bi-newspaper mr-1"></i>
+                            ${website.article_count || website.articleCount || 0} articles
+                        </span>
+                        <span>
+                            <i class="bi bi-calendar mr-1"></i>
+                            ${website.last_fetch || website.lastFetch ? new Date(website.last_fetch || website.lastFetch).toLocaleString() : 'Never fetched'}
+                        </span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="px-2 py-1 text-xs rounded-full ${website.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                        ${website.status}
+                    </span>
+                    <button 
+                        onclick="newsTracker.removeWebsite('${website.id}')"
+                        class="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 transition-colors duration-150"
+                        title="Remove website"
+                    >
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
     }
     
     escapeHtml(text) {

@@ -226,128 +226,169 @@ def fetch_articles():
     try:
         user_session = session.get('session_id', 'default')
         
+        # Phase 1: Data Collection and Validation (NO database operations)
+        logging.info("🔍 Phase 1: Starting article fetch and data collection")
+        print("🔍 DEBUG: Phase 1: Starting article fetch and data collection")
+        
+        # Get tracked websites first
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
         
-        # Get tracked websites
         cursor.execute('''
             SELECT id, url, name FROM tracked_websites 
             WHERE status = 'active' AND user_session = ?
         ''', (user_session,))
         
         websites = cursor.fetchall()
-        all_articles = []
+        conn.close()
         
+        # Collect all articles and prepare database operations
+        all_articles = []
+        batch_operations = {
+            'website_updates': [],  # last_fetch updates
+            'fetch_logs': [],       # success/error logs
+            'article_inserts': []   # new articles to insert
+        }
+        
+        # Process each website and collect data
         for website_id, url, name in websites:
             try:
+                logging.info(f"🔄 Fetching articles from {name} ({url})")
+                print(f"🔄 DEBUG: Fetching articles from {name} ({url})")
+                
                 articles = fetch_articles_from_crawler(url, name, website_id)
                 all_articles.extend(articles)
                 
-                # Update last fetch time
-                cursor.execute('''
+                # Prepare website update operation
+                batch_operations['website_updates'].append((website_id,))
+                
+                # Prepare fetch log operation
+                batch_operations['fetch_logs'].append((website_id, len(articles), True, None))
+                
+                logging.info(f"✅ Collected {len(articles)} articles from {name}")
+                print(f"✅ DEBUG: Collected {len(articles)} articles from {name}")
+                
+            except Exception as e:
+                logging.error(f"❌ Error fetching from {url}: {str(e)}")
+                print(f"❌ DEBUG: Error fetching from {url}: {str(e)}")
+                
+                # Prepare error log operation
+                batch_operations['fetch_logs'].append((website_id, 0, False, str(e)))
+        
+        # Phase 2: Database Operation Preparation
+        logging.info(f"� Phase 2: Preparing database operations for {len(all_articles)} total articles")
+        print(f"� DEBUG: Phase 2: Preparing database operations for {len(all_articles)} total articles")
+        
+        valid_articles = []
+        if all_articles:
+            for article in all_articles:
+                try:
+                    # Validate article data before adding to batch
+                    insert_data = (
+                        article['url'], article['title'], article['description'],
+                        article['content'], article['site_name'], article['website_id'],
+                        user_session, article.get('confidence', 0.0), 
+                        article.get('is_news_prediction', True), article.get('probability_news', 0.0)
+                    )
+                    batch_operations['article_inserts'].append(insert_data)
+                    valid_articles.append(article)
+                except KeyError as e:
+                    logging.warning(f"⚠️ Skipping article with missing field: {e}")
+                    print(f"⚠️ DEBUG: Skipping article with missing field: {e}")
+        
+        # Phase 3: Single Atomic Database Transaction
+        logging.info(f"🚀 Phase 3: Executing atomic database transaction")
+        print(f"🚀 DEBUG: Phase 3: Executing atomic database transaction")
+        print(f"   DEBUG: - {len(batch_operations['website_updates'])} website updates")
+        print(f"   DEBUG: - {len(batch_operations['fetch_logs'])} fetch logs")
+        print(f"   DEBUG: - {len(batch_operations['article_inserts'])} article inserts")
+        
+        new_articles = []
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+        
+        try:
+            # Execute all operations in single transaction
+            
+            # 1. Update website last_fetch times
+            if batch_operations['website_updates']:
+                cursor.executemany('''
                     UPDATE tracked_websites 
                     SET last_fetch = CURRENT_TIMESTAMP 
                     WHERE id = ?
-                ''', (website_id,))
-                
-                # Log fetch attempt
-                cursor.execute('''
-                    INSERT INTO fetch_logs (website_id, articles_found, success)
-                    VALUES (?, ?, ?)
-                ''', (website_id, len(articles), True))
-                
-            except Exception as e:
-                logging.error(f"Error fetching from {url}: {str(e)}")
-                cursor.execute('''
+                ''', batch_operations['website_updates'])
+                logging.info(f"✅ Batch updated {len(batch_operations['website_updates'])} website timestamps")
+                print(f"✅ DEBUG: Batch updated {len(batch_operations['website_updates'])} website timestamps")
+            
+            # 2. Insert fetch logs
+            if batch_operations['fetch_logs']:
+                cursor.executemany('''
                     INSERT INTO fetch_logs (website_id, articles_found, success, error_message)
                     VALUES (?, ?, ?, ?)
-                ''', (website_id, 0, False, str(e)))
-        
-        # Save articles to database using batch insert
-        new_articles = []
-        if all_articles:
-            try:
-                logging.info(f"🔄 Performing batch insert for {len(all_articles)} fetched articles")
-                print(f"🔄 DEBUG: Performing batch insert for {len(all_articles)} fetched articles")
+                ''', batch_operations['fetch_logs'])
+                logging.info(f"✅ Batch inserted {len(batch_operations['fetch_logs'])} fetch logs")
+                print(f"✅ DEBUG: Batch inserted {len(batch_operations['fetch_logs'])} fetch logs")
+            
+            # 3. Insert articles with duplicate handling
+            if batch_operations['article_inserts']:
+                cursor.executemany('''
+                    INSERT OR IGNORE INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', batch_operations['article_inserts'])
                 
-                # Prepare batch insert data
-                batch_insert_data = []
-                valid_articles = []
-                
-                for article in all_articles:
-                    try:
-                        insert_data = (
-                            article['url'], article['title'], article['description'],
-                            article['content'], article['site_name'], article['website_id'],
-                            user_session, article.get('confidence', 0.0), 
-                            article.get('is_news_prediction', True), article.get('probability_news', 0.0)
-                        )
-                        batch_insert_data.append(insert_data)
-                        valid_articles.append(article)
-                    except KeyError as e:
-                        logging.warning(f"⚠️ Skipping article with missing field: {e}")
-                
-                if batch_insert_data:
-                    # Use INSERT OR IGNORE for batch insert to handle duplicates
-                    cursor.executemany('''
-                        INSERT OR IGNORE INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', batch_insert_data)
+                # Get the newly inserted articles (excluding duplicates)
+                for article in valid_articles:
+                    cursor.execute('''
+                        SELECT id FROM article_queue 
+                        WHERE url = ? AND user_session = ?
+                    ''', (article['url'], user_session))
                     
-                    # Get the newly inserted articles (excluding duplicates)
-                    for article in valid_articles:
-                        cursor.execute('''
-                            SELECT id FROM article_queue 
-                            WHERE url = ? AND user_session = ?
-                        ''', (article['url'], user_session))
-                        
-                        result = cursor.fetchone()
-                        if result:
-                            new_articles.append({
-                                'id': result[0],
-                                **article
-                            })
-                    
-                    logging.info(f"✅ Batch insert completed: {len(new_articles)} new articles added (duplicates ignored)")
-                    print(f"✅ DEBUG: Batch insert completed: {len(new_articles)} new articles added (duplicates ignored)")
-                
-            except Exception as e:
-                logging.error(f"❌ Batch insert failed, falling back to individual inserts: {str(e)}")
-                print(f"❌ DEBUG: Batch insert failed, falling back to individual inserts: {str(e)}")
-                
-                # Fallback to individual inserts
-                for article in all_articles:
-                    try:
-                        cursor.execute('''
-                            INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (
-                            article['url'], article['title'], article['description'],
-                            article['content'], article['site_name'], article['website_id'],
-                            user_session, article.get('confidence', 0.0), 
-                            article.get('is_news_prediction', True), article.get('probability_news', 0.0)
-                        ))
-                        
+                    result = cursor.fetchone()
+                    if result:
                         new_articles.append({
-                            'id': cursor.lastrowid,
+                            'id': result[0],
                             **article
                         })
-                        
-                    except sqlite3.IntegrityError:
-                        # Article already exists
-                        pass
+                
+                logging.info(f"✅ Batch inserted articles: {len(batch_operations['article_inserts'])} attempted, {len(new_articles)} new")
+                print(f"✅ DEBUG: Batch inserted articles: {len(batch_operations['article_inserts'])} attempted, {len(new_articles)} new")
+            
+            # Commit entire transaction
+            conn.commit()
+            logging.info(f"🎉 Atomic transaction completed successfully!")
+            print(f"🎉 DEBUG: Atomic transaction completed successfully!")
+            
+        except Exception as e:
+            conn.rollback()
+            logging.error(f"❌ Atomic transaction failed, rolling back all operations: {str(e)}")
+            print(f"❌ DEBUG: Atomic transaction failed, rolling back all operations: {str(e)}")
+            
+            # Return error but don't crash
+            conn.close()
+            return jsonify({'success': False, 'error': f'Database transaction failed: {str(e)}'})
         
-        conn.commit()
-        conn.close()
+        finally:
+            conn.close()
         
         return jsonify({
             'success': True,
             'articles': new_articles,
-            'message': f'Found {len(new_articles)} new articles'
+            'message': f'Found {len(new_articles)} new articles',
+            'batch_summary': {
+                'websites_processed': len(websites),
+                'total_articles_collected': len(all_articles),
+                'valid_articles_prepared': len(valid_articles),
+                'new_articles_inserted': len(new_articles),
+                'database_operations': {
+                    'website_updates': len(batch_operations['website_updates']),
+                    'fetch_logs': len(batch_operations['fetch_logs']),
+                    'article_inserts': len(batch_operations['article_inserts'])
+                }
+            }
         })
         
     except Exception as e:
-        logging.error(f"Error fetching articles: {str(e)}")
+        logging.error(f"Error in fetch articles: {str(e)}")
         return jsonify({'success': False, 'error': 'Internal server error'})
 
 @news_tracker_bp.route('/api/news-tracker/verify-article', methods=['POST'])
@@ -424,21 +465,26 @@ def batch_verify_articles():
         
         user_session = session.get('session_id', 'default')
         
-        # Process each article in the batch
+        # Phase 1: Data Collection and Validation (NO database writes)
+        logging.info(f"🔍 Phase 1: Processing batch verification for {len(articles)} articles")
+        print(f"🔍 DEBUG: Phase 1: Processing batch verification for {len(articles)} articles")
+        
         results = []
         news_articles_for_indexing = []
+        batch_operations = {
+            'article_updates': [],    # verification updates
+            'feedback_data': [],      # URL classifier feedback
+            'philippine_urls': []     # URLs for Philippine indexing
+        }
         
+        # Get existing article data first (single read operation)
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
         
-        logging.info(f"🔍 Processing batch verification for {len(articles)} articles")
-        print(f"🔍 DEBUG: Processing batch verification for {len(articles)} articles")
-        
-        # Prepare batch data for database operations
         valid_articles = []
         article_data_cache = {}
         
-        # First pass: validate articles and fetch existing data
+        # Validate and fetch all article data upfront
         for i, article in enumerate(articles):
             try:
                 article_id = article.get('articleId')
@@ -458,7 +504,7 @@ def batch_verify_articles():
                     })
                     continue
                 
-                # Get article data including crawler metadata before updating
+                # Get article data including crawler metadata
                 cursor.execute('''
                     SELECT url, confidence, is_news_prediction, probability_news
                     FROM article_queue 
@@ -475,7 +521,7 @@ def batch_verify_articles():
                     })
                     continue
                 
-                # Cache article data and add to valid articles for batch processing
+                # Cache article data and prepare for batch operations
                 article_data_cache[article_id] = article_data
                 valid_articles.append({
                     'articleId': article_id,
@@ -486,89 +532,120 @@ def batch_verify_articles():
                 
             except Exception as e:
                 logging.error(f"❌ Error validating article {i+1} (ID: {article.get('articleId')}): {str(e)}")
+                print(f"❌ DEBUG: Error validating article {i+1} (ID: {article.get('articleId')}): {str(e)}")
                 results.append({
                     'articleId': article.get('articleId'),
                     'success': False,
                     'error': str(e)
                 })
         
-        # Batch update database for all valid articles
-        if valid_articles:
+        conn.close()
+        
+        # Phase 2: Prepare All Database Operations (NO database writes yet)
+        logging.info(f"� Phase 2: Preparing batch operations for {len(valid_articles)} valid articles")
+        print(f"� DEBUG: Phase 2: Preparing batch operations for {len(valid_articles)} valid articles")
+        
+        for i, article in enumerate(valid_articles):
+            article_id = article['articleId']
+            is_news = article['isNews']
+            url = article['url']
+            article_data = article['article_data']
+            
+            # Prepare database update operation
+            batch_operations['article_updates'].append((
+                is_news,  # is_news
+                article_id,  # id
+                user_session  # user_session
+            ))
+            
+            # Prepare URL classifier feedback data
+            batch_operations['feedback_data'].append({
+                'url': url or article_data[0],
+                'article_data': article_data,
+                'user_verification': is_news
+            })
+            
+            # Collect news articles for batch Philippine indexing
+            if is_news:
+                final_url = url or article_data[0]
+                news_articles_for_indexing.append(final_url)
+                batch_operations['philippine_urls'].append(final_url)
+                logging.info(f"✅ Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
+                print(f"✅ DEBUG: Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
+            else:
+                logging.info(f"⏭️ Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
+                print(f"⏭️ DEBUG: Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
+            
+            # Prepare success result
+            results.append({
+                'articleId': article_id,
+                'success': True,
+                'message': f'Article marked as {"news" if is_news else "not news"}',
+                'url_classifier_feedback_sent': True,
+                'philippine_indexing_queued': is_news
+            })
+        
+        # Phase 3: Single Atomic Database Transaction
+        logging.info(f"🚀 Phase 3: Executing atomic database transaction")
+        print(f"🚀 DEBUG: Phase 3: Executing atomic database transaction")
+        print(f"   DEBUG: - {len(batch_operations['article_updates'])} article verification updates")
+        print(f"   DEBUG: - {len(batch_operations['feedback_data'])} URL classifier feedback entries")
+        print(f"   DEBUG: - {len(batch_operations['philippine_urls'])} Philippine indexing URLs")
+        
+        if batch_operations['article_updates']:
+            conn = sqlite3.connect(DATABASE_FILE)
+            cursor = conn.cursor()
+            
             try:
-                logging.info(f"🔄 Performing batch database update for {len(valid_articles)} valid articles")
-                print(f"🔄 DEBUG: Performing batch database update for {len(valid_articles)} valid articles")
-                
-                # Prepare batch update data
-                batch_update_data = []
-                for article in valid_articles:
-                    batch_update_data.append((
-                        article['isNews'],  # is_news
-                        article['articleId'],  # id
-                        user_session  # user_session
-                    ))
-                
-                # Execute batch update
+                # Execute batch article verification updates
                 cursor.executemany('''
                     UPDATE article_queue 
                     SET verified = TRUE, is_news = ?, verified_at = CURRENT_TIMESTAMP
                     WHERE id = ? AND user_session = ?
-                ''', batch_update_data)
+                ''', batch_operations['article_updates'])
                 
-                logging.info(f"✅ Batch database update completed for {len(valid_articles)} articles")
-                print(f"✅ DEBUG: Batch database update completed for {len(valid_articles)} articles")
+                logging.info(f"✅ Batch updated {len(batch_operations['article_updates'])} article verifications")
+                print(f"✅ DEBUG: Batch updated {len(batch_operations['article_updates'])} article verifications")
                 
-                # Process each valid article for feedback and indexing collection
-                for i, article in enumerate(valid_articles):
-                    article_id = article['articleId']
-                    is_news = article['isNews']
-                    url = article['url']
-                    article_data = article['article_data']
-                    
-                    # Send feedback to URL classifier for model improvement
-                    send_url_classifier_feedback(
-                        url=url or article_data[0],
-                        article_data=article_data,
-                        user_verification=is_news
-                    )
-                    
-                    # Collect news articles for batch Philippine indexing
-                    if is_news:
-                        final_url = url or article_data[0]
-                        news_articles_for_indexing.append(final_url)
-                        logging.info(f"✅ Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
-                        print(f"✅ DEBUG: Article {i+1} marked as NEWS - queued for Philippine indexing: {final_url}")
-                    else:
-                        logging.info(f"⏭️ Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
-                        print(f"⏭️ DEBUG: Article {i+1} marked as NOT NEWS - skipping Philippine indexing")
-                    
-                    results.append({
-                        'articleId': article_id,
-                        'success': True,
-                        'message': f'Article marked as {"news" if is_news else "not news"}',
-                        'url_classifier_feedback_sent': True,
-                        'philippine_indexing_queued': is_news
-                    })
-                
+                # Commit database transaction
                 conn.commit()
-                logging.info(f"✅ Batch verification database transaction committed")
-                print(f"✅ DEBUG: Batch verification database transaction committed")
+                logging.info(f"🎉 Atomic verification transaction completed successfully!")
+                print(f"🎉 DEBUG: Atomic verification transaction completed successfully!")
                 
             except Exception as e:
                 conn.rollback()
-                logging.error(f"❌ Batch database update failed, rolling back: {str(e)}")
-                print(f"❌ DEBUG: Batch database update failed, rolling back: {str(e)}")
+                logging.error(f"❌ Atomic verification transaction failed, rolling back: {str(e)}")
+                print(f"❌ DEBUG: Atomic verification transaction failed, rolling back: {str(e)}")
                 
-                # Add error results for all valid articles
-                for article in valid_articles:
-                    results.append({
-                        'articleId': article['articleId'],
-                        'success': False,
-                        'error': f'Database batch update failed: {str(e)}'
-                    })
+                # Update all results to show failure
+                for result in results:
+                    if result.get('success'):
+                        result['success'] = False
+                        result['error'] = f'Database batch update failed: {str(e)}'
+                
+                conn.close()
+                return jsonify({'success': False, 'error': f'Database transaction failed: {str(e)}'})
+            
+            finally:
+                conn.close()
         
-        conn.close()
+        # Phase 4: Post-Database Operations (URL Classifier Feedback & Philippine Indexing)
+        logging.info(f"📡 Phase 4: Processing post-database operations")
+        print(f"📡 DEBUG: Phase 4: Processing post-database operations")
         
-        # Log summary before indexing
+        # Send URL classifier feedback (external system - done after DB success)
+        for feedback_item in batch_operations['feedback_data']:
+            try:
+                send_url_classifier_feedback(
+                    url=feedback_item['url'],
+                    article_data=feedback_item['article_data'],
+                    user_verification=feedback_item['user_verification']
+                )
+            except Exception as e:
+                logging.warning(f"⚠️ URL classifier feedback failed: {str(e)}")
+                print(f"⚠️ DEBUG: URL classifier feedback failed: {str(e)}")
+        
+        # Log summary statistics
         total_articles = len(articles)
         news_articles_count = len(news_articles_for_indexing)
         non_news_count = total_articles - news_articles_count
@@ -591,7 +668,7 @@ def batch_verify_articles():
             logging.info("ℹ️ No news articles to index into Philippine system")
             print("ℹ️ DEBUG: No news articles to index into Philippine system")
         
-        # Calculate summary statistics (enhanced to match philippine_news_search_routes pattern)
+        # Calculate summary statistics
         successful_verifications = len([r for r in results if r['success']])
         failed_verifications = len([r for r in results if not r['success']])
         news_count = len([r for r in results if r.get('philippine_indexing_queued')])
@@ -623,7 +700,15 @@ def batch_verify_articles():
                 }
             },
             'results': results,
-            'philippine_indexing_results': philippine_indexing_results
+            'philippine_indexing_results': philippine_indexing_results,
+            'batch_summary': {
+                'valid_articles_processed': len(valid_articles),
+                'database_operations': {
+                    'article_updates': len(batch_operations['article_updates']),
+                    'url_classifier_feedback': len(batch_operations['feedback_data']),
+                    'philippine_urls_queued': len(batch_operations['philippine_urls'])
+                }
+            }
         })
         
     except Exception as e:
@@ -998,35 +1083,84 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
             logging.warning("⚠️ Philippine search index not available for batch indexing")
             return []
         
-        # Process URLs in batch similar to philippine_news_search_routes.py
-        def process_batch():
-            results = []
-            for i, url in enumerate(urls_to_process):
-                try:
-                    logging.info(f"🔄 Processing URL {i+1}/{len(urls_to_process)}: {url}")
-                    print(f"🔄 DEBUG: Processing URL {i+1}/{len(urls_to_process)}: {url}")
+        # Phase 1: Data Collection and Validation (NO indexing operations yet)
+        logging.info(f"📋 Phase 1: Validating and preparing {len(urls_to_process)} URLs for Philippine indexing")
+        print(f"📋 DEBUG: Phase 1: Validating and preparing {len(urls_to_process)} URLs for Philippine indexing")
+        
+        valid_urls = []
+        batch_operations = {
+            'indexing_operations': [],  # URLs ready for indexing
+            'validation_errors': []     # URLs with validation errors
+        }
+        
+        # Validate all URLs first (no indexing yet)
+        for i, url in enumerate(urls_to_process):
+            try:
+                logging.info(f"� Validating URL {i+1}/{len(urls_to_process)}: {url}")
+                print(f"� DEBUG: Validating URL {i+1}/{len(urls_to_process)}: {url}")
+                
+                # Validate URL format
+                from urllib.parse import urlparse
+                parsed_url = urlparse(url.strip())
+                if not parsed_url.scheme or not parsed_url.netloc:
+                    logging.warning(f"❌ Invalid URL format for URL {i+1}: {url}")
+                    print(f"❌ DEBUG: Invalid URL format for URL {i+1}: {url}")
+                    batch_operations['validation_errors'].append({
+                        'url': url,
+                        'status': 'error',
+                        'message': 'Invalid URL format',
+                        'success': False
+                    })
+                    continue
+                
+                # Add to valid URLs for batch processing
+                cleaned_url = url.strip()
+                valid_urls.append(cleaned_url)
+                batch_operations['indexing_operations'].append({
+                    'url': cleaned_url,
+                    'original_index': i,
+                    'force_reindex': force_reindex
+                })
+                
+                logging.info(f"✅ URL {i+1} validated successfully")
+                print(f"✅ DEBUG: URL {i+1} validated successfully")
+                
+            except Exception as e:
+                logging.error(f"❌ Validation error for URL {i+1} ({url}): {str(e)}")
+                print(f"❌ DEBUG: Validation error for URL {i+1} ({url}): {str(e)}")
+                batch_operations['validation_errors'].append({
+                    'url': url,
+                    'status': 'error',
+                    'message': str(e),
+                    'success': False
+                })
+        
+        # Phase 2: Batch Philippine News Indexing Operations
+        logging.info(f"🚀 Phase 2: Executing batch Philippine indexing for {len(valid_urls)} valid URLs")
+        print(f"🚀 DEBUG: Phase 2: Executing batch Philippine indexing for {len(valid_urls)} valid URLs")
+        
+        indexing_results = []
+        start_time = time.time()
+        
+        # Process all valid URLs in batch through Philippine search index
+        if batch_operations['indexing_operations']:
+            try:
+                # Execute batch indexing through Philippine search system
+                for i, operation in enumerate(batch_operations['indexing_operations']):
+                    url = operation['url']
+                    force_reindex_flag = operation['force_reindex']
+                    original_index = operation['original_index']
                     
-                    # Validate URL format
-                    from urllib.parse import urlparse
-                    parsed_url = urlparse(url.strip())
-                    if not parsed_url.scheme or not parsed_url.netloc:
-                        logging.warning(f"❌ Invalid URL format for URL {i+1}: {url}")
-                        print(f"❌ DEBUG: Invalid URL format for URL {i+1}: {url}")
-                        results.append({
-                            'url': url,
-                            'status': 'error',
-                            'message': 'Invalid URL format',
-                            'success': False
-                        })
-                        continue
+                    logging.info(f"🔄 Indexing URL {i+1}/{len(batch_operations['indexing_operations'])}: {url}")
+                    print(f"🔄 DEBUG: Indexing URL {i+1}/{len(batch_operations['indexing_operations'])}: {url}")
                     
                     # Index the article using direct method call (same as batch-index-philippine-articles)
-                    result = philippine_search_index.index_article(url.strip(), force_reindex)
+                    result = philippine_search_index.index_article(url, force_reindex_flag)
                     logging.info(f"✅ URL {i+1} indexing result: {result['status']} - {result.get('message', 'No message')}")
                     print(f"✅ DEBUG: URL {i+1} indexing result: {result['status']} - {result.get('message', 'No message')}")
                     
                     # Convert result to consistent format
-                    results.append({
+                    indexing_results.append({
                         'url': url,
                         'status': result['status'],
                         'message': result.get('message', ''),
@@ -1034,23 +1168,34 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                         'relevance_score': result.get('relevance_score', 0),
                         'success': result['status'] in ['success', 'already_indexed', 'skipped']
                     })
-                    
-                except Exception as e:
-                    logging.error(f"❌ Exception processing URL {i+1} ({url}): {str(e)}")
-                    results.append({
-                        'url': url,
+                
+                logging.info(f"✅ Batch Philippine indexing operations completed for {len(indexing_results)} URLs")
+                print(f"✅ DEBUG: Batch Philippine indexing operations completed for {len(indexing_results)} URLs")
+                
+            except Exception as e:
+                logging.error(f"❌ Batch Philippine indexing failed: {str(e)}")
+                print(f"❌ DEBUG: Batch Philippine indexing failed: {str(e)}")
+                
+                # Add error results for failed batch
+                for operation in batch_operations['indexing_operations']:
+                    indexing_results.append({
+                        'url': operation['url'],
                         'status': 'error',
-                        'message': str(e),
+                        'message': f'Batch indexing failed: {str(e)}',
                         'success': False
                     })
-            
-            return results
         
-        # Process synchronously for reliability (can be made async later)
-        start_time = time.time()
-        batch_results = process_batch()
         end_time = time.time()
         duration_ms = (end_time - start_time) * 1000
+        
+        # Phase 3: Combine Results and Generate Final Statistics
+        logging.info(f"📊 Phase 3: Combining results and generating statistics")
+        print(f"📊 DEBUG: Phase 3: Combining results and generating statistics")
+        
+        # Combine validation errors and indexing results
+        batch_results = []
+        batch_results.extend(batch_operations['validation_errors'])
+        batch_results.extend(indexing_results)
         
         # Calculate summary statistics
         success_count = len([r for r in batch_results if r['status'] == 'success'])
@@ -1155,6 +1300,9 @@ def start_auto_fetch():
                 websites = cursor.fetchall()
                 current_time = datetime.now()
                 
+                # Phase 1: Collect data from all websites (no database writes)
+                website_batch_data = []
+                
                 for website_id, url, name, interval, last_fetch in websites:
                     try:
                         if last_fetch:
@@ -1165,56 +1313,100 @@ def start_auto_fetch():
                         # Fetch articles using crawler
                         articles = fetch_articles_from_crawler(url, name, website_id)
                         
-                        # Save new articles using batch insert
-                        if articles:
-                            try:
-                                # Prepare batch insert data
-                                batch_insert_data = []
-                                for article in articles:
-                                    batch_insert_data.append((
-                                        article['url'], article['title'], article['description'],
-                                        article['content'], article['site_name'], article['website_id'], 'default',
-                                        article.get('confidence', 0.0), article.get('is_news_prediction', True), 
-                                        article.get('probability_news', 0.0)
-                                    ))
-                                
-                                # Execute batch insert with duplicate handling
-                                cursor.executemany('''
-                                    INSERT OR IGNORE INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', batch_insert_data)
-                                
-                                logging.info(f"✅ Auto-fetch batch insert completed for {len(articles)} articles from {url}")
-                                
-                            except Exception as e:
-                                logging.error(f"❌ Auto-fetch batch insert failed for {url}, falling back to individual inserts: {str(e)}")
-                                
-                                # Fallback to individual inserts
-                                for article in articles:
-                                    try:
-                                        cursor.execute('''
-                                            INSERT INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                        ''', (
-                                            article['url'], article['title'], article['description'],
-                                            article['content'], article['site_name'], article['website_id'], 'default',
-                                            article.get('confidence', 0.0), article.get('is_news_prediction', True), 
-                                            article.get('probability_news', 0.0)
-                                        ))
-                                    except sqlite3.IntegrityError:
-                                        pass  # Article already exists
-                        
-                        # Update last fetch time
-                        cursor.execute('''
-                            UPDATE tracked_websites 
-                            SET last_fetch = CURRENT_TIMESTAMP 
-                            WHERE id = ?
-                        ''', (website_id,))
-                        
-                        conn.commit()
+                        # Collect articles for batch processing (don't insert yet)
+                        website_batch_data.append({
+                            'website_id': website_id,
+                            'url': url,
+                            'name': name,
+                            'articles': articles,
+                            'success': True,
+                            'error': None
+                        })
                         
                     except Exception as e:
                         logging.error(f"Auto-fetch error for {url}: {str(e)}")
+                        
+                        # Collect error for batch processing
+                        website_batch_data.append({
+                            'website_id': website_id,
+                            'url': url,
+                            'name': name,
+                            'articles': [],
+                            'success': False,
+                            'error': str(e)
+                        })
+                
+                # Phase 2: Prepare All Database Operations
+                batch_operations = {
+                    'website_updates': [],   # last_fetch updates
+                    'article_inserts': [],   # new articles
+                    'fetch_logs': []        # log entries
+                }
+                
+                for website_data in website_batch_data:
+                    website_id = website_data['website_id']
+                    articles = website_data['articles']
+                    success = website_data['success']
+                    error = website_data['error']
+                    
+                    # Prepare website update
+                    batch_operations['website_updates'].append((website_id,))
+                    
+                    # Prepare fetch log
+                    batch_operations['fetch_logs'].append((
+                        website_id, len(articles), success, error
+                    ))
+                    
+                    # Prepare article inserts
+                    if articles:
+                        for article in articles:
+                            try:
+                                batch_operations['article_inserts'].append((
+                                    article['url'], article['title'], article['description'],
+                                    article['content'], article['site_name'], article['website_id'], 'default',
+                                    article.get('confidence', 0.0), article.get('is_news_prediction', True), 
+                                    article.get('probability_news', 0.0)
+                                ))
+                            except KeyError as ke:
+                                logging.warning(f"Auto-fetch: Skipping article with missing field: {ke}")
+                
+                # Phase 3: Single Atomic Transaction
+                if (batch_operations['website_updates'] or 
+                    batch_operations['article_inserts'] or 
+                    batch_operations['fetch_logs']):
+                    
+                    try:
+                        # Execute all operations in single transaction
+                        if batch_operations['website_updates']:
+                            cursor.executemany('''
+                                UPDATE tracked_websites 
+                                SET last_fetch = CURRENT_TIMESTAMP 
+                                WHERE id = ?
+                            ''', batch_operations['website_updates'])
+                        
+                        if batch_operations['fetch_logs']:
+                            cursor.executemany('''
+                                INSERT INTO fetch_logs (website_id, articles_found, success, error_message)
+                                VALUES (?, ?, ?, ?)
+                            ''', batch_operations['fetch_logs'])
+                        
+                        if batch_operations['article_inserts']:
+                            cursor.executemany('''
+                                INSERT OR IGNORE INTO article_queue (url, title, description, content, site_name, website_id, user_session, confidence, is_news_prediction, probability_news)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', batch_operations['article_inserts'])
+                        
+                        # Commit entire auto-fetch transaction
+                        conn.commit()
+                        
+                        logging.info(f"✅ Auto-fetch atomic transaction completed:")
+                        logging.info(f"   - {len(batch_operations['website_updates'])} websites updated")
+                        logging.info(f"   - {len(batch_operations['fetch_logs'])} fetch logs added")
+                        logging.info(f"   - {len(batch_operations['article_inserts'])} articles processed")
+                        
+                    except Exception as e:
+                        conn.rollback()
+                        logging.error(f"❌ Auto-fetch atomic transaction failed: {str(e)}")
                 
                 conn.close()
                 

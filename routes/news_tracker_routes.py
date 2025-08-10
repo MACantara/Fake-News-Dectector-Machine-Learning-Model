@@ -1135,53 +1135,55 @@ def batch_index_philippine_news_articles(urls, force_reindex=False):
                     'success': False
                 })
         
-        # Phase 2: Batch Philippine News Indexing Operations
-        logging.info(f"🚀 Phase 2: Executing batch Philippine indexing for {len(valid_urls)} valid URLs")
-        print(f"🚀 DEBUG: Phase 2: Executing batch Philippine indexing for {len(valid_urls)} valid URLs")
+        # Phase 2: Batch Philippine News Indexing Operations using new atomic method
+        logging.info(f"🚀 Phase 2: Executing atomic batch Philippine indexing for {len(valid_urls)} valid URLs")
+        print(f"🚀 DEBUG: Phase 2: Executing atomic batch Philippine indexing for {len(valid_urls)} valid URLs")
         
         indexing_results = []
         start_time = time.time()
         
-        # Process all valid URLs in batch through Philippine search index
+        # Process all valid URLs using new batch indexing with atomic transactions
         if batch_operations['indexing_operations']:
             try:
-                # Execute batch indexing through Philippine search system
-                for i, operation in enumerate(batch_operations['indexing_operations']):
-                    url = operation['url']
-                    force_reindex_flag = operation['force_reindex']
-                    original_index = operation['original_index']
+                # Extract URLs for batch processing
+                urls_for_batch = [op['url'] for op in batch_operations['indexing_operations']]
+                force_reindex_flag = batch_operations['indexing_operations'][0]['force_reindex'] if batch_operations['indexing_operations'] else False
+                
+                logging.info(f"🔄 Executing atomic batch indexing for {len(urls_for_batch)} URLs")
+                print(f"🔄 DEBUG: Executing atomic batch indexing for {len(urls_for_batch)} URLs")
+                
+                # Use the new batch indexing method with atomic transactions
+                batch_results = philippine_search_index.batch_index_articles(urls_for_batch, force_reindex_flag)
+                
+                # Convert results to consistent format
+                for i, result in enumerate(batch_results):
+                    logging.info(f"✅ URL {i+1} batch indexing result: {result['status']} - {result.get('message', 'No message')}")
+                    print(f"✅ DEBUG: URL {i+1} batch indexing result: {result['status']} - {result.get('message', 'No message')}")
                     
-                    logging.info(f"🔄 Indexing URL {i+1}/{len(batch_operations['indexing_operations'])}: {url}")
-                    print(f"🔄 DEBUG: Indexing URL {i+1}/{len(batch_operations['indexing_operations'])}: {url}")
-                    
-                    # Index the article using direct method call (same as batch-index-philippine-articles)
-                    result = philippine_search_index.index_article(url, force_reindex_flag)
-                    logging.info(f"✅ URL {i+1} indexing result: {result['status']} - {result.get('message', 'No message')}")
-                    print(f"✅ DEBUG: URL {i+1} indexing result: {result['status']} - {result.get('message', 'No message')}")
-                    
-                    # Convert result to consistent format
                     indexing_results.append({
-                        'url': url,
+                        'url': result['url'],
                         'status': result['status'],
                         'message': result.get('message', ''),
                         'article_id': result.get('article_id'),
                         'relevance_score': result.get('relevance_score', 0),
+                        'locations': result.get('locations', []),
+                        'government_entities': result.get('government_entities', []),
                         'success': result['status'] in ['success', 'already_indexed', 'skipped']
                     })
                 
-                logging.info(f"✅ Batch Philippine indexing operations completed for {len(indexing_results)} URLs")
-                print(f"✅ DEBUG: Batch Philippine indexing operations completed for {len(indexing_results)} URLs")
+                logging.info(f"✅ Atomic batch Philippine indexing operations completed for {len(indexing_results)} URLs")
+                print(f"✅ DEBUG: Atomic batch Philippine indexing operations completed for {len(indexing_results)} URLs")
                 
             except Exception as e:
-                logging.error(f"❌ Batch Philippine indexing failed: {str(e)}")
-                print(f"❌ DEBUG: Batch Philippine indexing failed: {str(e)}")
+                logging.error(f"❌ Atomic batch Philippine indexing failed: {str(e)}")
+                print(f"❌ DEBUG: Atomic batch Philippine indexing failed: {str(e)}")
                 
                 # Add error results for failed batch
                 for operation in batch_operations['indexing_operations']:
                     indexing_results.append({
                         'url': operation['url'],
                         'status': 'error',
-                        'message': f'Batch indexing failed: {str(e)}',
+                        'message': f'Atomic batch indexing failed: {str(e)}',
                         'success': False
                     })
         

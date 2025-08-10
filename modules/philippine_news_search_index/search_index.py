@@ -244,6 +244,232 @@ class PhilippineNewsSearchIndex:
         
         return list(set(locations)), list(set(government_entities))
     
+    def batch_index_articles(self, urls, force_reindex=False):
+        """Batch index multiple Philippine news articles with atomic transactions"""
+        try:
+            if not urls or not isinstance(urls, list):
+                return []
+            
+            print(f"🚀 Starting batch indexing of {len(urls)} articles with atomic transactions")
+            
+            # Phase 1: Data Collection and Validation (NO database writes)
+            valid_articles = []
+            batch_operations = {
+                'indexing_tasks': [],      # Task creation operations
+                'article_inserts': [],     # Article data insertions
+                'search_updates': [],      # Search index updates
+                'task_updates': []         # Task completion updates
+            }
+            
+            start_time = time.time()
+            
+            # Process all URLs and collect data first
+            for i, url in enumerate(urls):
+                try:
+                    print(f"📋 Phase 1: Processing URL {i+1}/{len(urls)}: {url}")
+                    
+                    # Check if already exists (unless force reindex)
+                    if not force_reindex:
+                        conn = sqlite3.connect(self.db_path)
+                        cursor = conn.cursor()
+                        cursor.execute('SELECT id FROM philippine_articles WHERE url = ?', (url,))
+                        existing = cursor.fetchone()
+                        conn.close()
+                        
+                        if existing:
+                            print(f"⏭️ URL {i+1} already indexed, skipping")
+                            valid_articles.append({
+                                'url': url,
+                                'status': 'already_indexed',
+                                'message': 'Article already in index'
+                            })
+                            continue
+                    
+                    # Extract content
+                    content_data = extract_advanced_content(url)
+                    if not content_data:
+                        print(f"❌ URL {i+1} content extraction failed")
+                        valid_articles.append({
+                            'url': url,
+                            'status': 'error',
+                            'message': 'Content extraction failed'
+                        })
+                        continue
+                    
+                    # Calculate Philippine relevance
+                    relevance_score = self.calculate_philippine_relevance(
+                        content_data['title'], 
+                        content_data['content'], 
+                        url
+                    )
+                    
+                    # Skip if not relevant to Philippines (threshold: 0.1)
+                    if relevance_score < 0.1:
+                        print(f"⏭️ URL {i+1} not relevant to Philippines (score: {relevance_score:.3f})")
+                        valid_articles.append({
+                            'url': url,
+                            'status': 'skipped',
+                            'message': f'Low Philippine relevance (score: {relevance_score:.3f})'
+                        })
+                        continue
+                    
+                    # Extract Philippine entities
+                    locations, government_entities = self.extract_philippine_entities(
+                        f"{content_data['title']} {content_data['content']}"
+                    )
+                    
+                    # Calculate sentiment
+                    sentiment_score = 0.0
+                    try:
+                        # Add sentiment analysis here if needed
+                        pass
+                    except:
+                        sentiment_score = 0.0
+                    
+                    # Generate content hash
+                    content_hash = hashlib.md5(
+                        f"{content_data['title']}{content_data['content']}".encode('utf-8')
+                    ).hexdigest()
+                    
+                    # Get source domain
+                    source_domain = urlparse(url).netloc
+                    
+                    # Prepare batch operations
+                    batch_operations['indexing_tasks'].append((url, 'processing'))
+                    
+                    batch_operations['article_inserts'].append((
+                        url, content_data['title'], content_data['content'], content_data['summary'],
+                        content_data['author'], content_data['publish_date'], source_domain,
+                        content_data['category'], ','.join(locations + government_entities),
+                        relevance_score, ','.join(locations), ','.join(government_entities),
+                        sentiment_score, content_hash
+                    ))
+                    
+                    # Store processed data
+                    valid_articles.append({
+                        'url': url,
+                        'status': 'success',
+                        'relevance_score': relevance_score,
+                        'locations': locations,
+                        'government_entities': government_entities,
+                        'content_data': content_data
+                    })
+                    
+                    print(f"✅ URL {i+1} prepared for batch indexing (relevance: {relevance_score:.3f})")
+                    
+                except Exception as e:
+                    print(f"❌ Error preparing URL {i+1} ({url}): {str(e)}")
+                    valid_articles.append({
+                        'url': url,
+                        'status': 'error',
+                        'message': str(e)
+                    })
+            
+            # Phase 2: Single Atomic Database Transaction
+            if batch_operations['indexing_tasks'] or batch_operations['article_inserts']:
+                print(f"🚀 Phase 2: Executing atomic database transaction for {len(batch_operations['article_inserts'])} articles")
+                
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                try:
+                    # 1. Create indexing tasks
+                    if batch_operations['indexing_tasks']:
+                        cursor.executemany('''
+                            INSERT INTO indexing_tasks (url, status) VALUES (?, ?)
+                        ''', batch_operations['indexing_tasks'])
+                        print(f"✅ Batch created {len(batch_operations['indexing_tasks'])} indexing tasks")
+                    
+                    # 2. Insert all articles
+                    if batch_operations['article_inserts']:
+                        cursor.executemany('''
+                            INSERT OR REPLACE INTO philippine_articles 
+                            (url, title, content, summary, author, publish_date, source_domain, category, 
+                             tags, philippine_relevance_score, location_mentions, government_entities, 
+                             sentiment_score, content_hash, last_updated)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        ''', batch_operations['article_inserts'])
+                        print(f"✅ Batch inserted {len(batch_operations['article_inserts'])} articles")
+                    
+                    # 3. Update task statuses to completed
+                    successful_urls = [article['url'] for article in valid_articles if article['status'] == 'success']
+                    if successful_urls:
+                        cursor.executemany('''
+                            UPDATE indexing_tasks 
+                            SET status = 'completed', completed_date = CURRENT_TIMESTAMP 
+                            WHERE url = ? AND status = 'processing'
+                        ''', [(url,) for url in successful_urls])
+                        print(f"✅ Batch updated {len(successful_urls)} task statuses")
+                    
+                    # Commit entire transaction
+                    conn.commit()
+                    print(f"🎉 Atomic database transaction completed successfully!")
+                    
+                    # Get article IDs for successful insertions
+                    for article in valid_articles:
+                        if article['status'] == 'success':
+                            cursor.execute('SELECT id FROM philippine_articles WHERE url = ?', (article['url'],))
+                            result = cursor.fetchone()
+                            if result:
+                                article['article_id'] = result[0]
+                    
+                except Exception as e:
+                    conn.rollback()
+                    print(f"❌ Atomic database transaction failed, rolling back: {str(e)}")
+                    
+                    # Update all success statuses to error
+                    for article in valid_articles:
+                        if article['status'] == 'success':
+                            article['status'] = 'error'
+                            article['message'] = f'Database batch transaction failed: {str(e)}'
+                    
+                finally:
+                    conn.close()
+            
+            # Phase 3: Search Index Updates (if database succeeded)
+            successful_articles = [a for a in valid_articles if a['status'] == 'success']
+            if successful_articles and self.search_index:
+                print(f"📋 Phase 3: Updating search index for {len(successful_articles)} articles")
+                try:
+                    writer = self.search_index.writer()
+                    for article in successful_articles:
+                        content_data = article.get('content_data', {})
+                        writer.add_document(
+                            url=article['url'],
+                            title=content_data.get('title', ''),
+                            content=content_data.get('content', ''),
+                            summary=content_data.get('summary', ''),
+                            category=content_data.get('category', ''),
+                            source_domain=urlparse(article['url']).netloc,
+                            philippine_relevance_score=article['relevance_score']
+                        )
+                    writer.commit()
+                    print(f"✅ Batch updated search index for {len(successful_articles)} articles")
+                except Exception as e:
+                    print(f"⚠️ Search index update failed: {str(e)}")
+            
+            end_time = time.time()
+            duration_ms = (end_time - start_time) * 1000
+            
+            # Generate summary statistics
+            success_count = len([a for a in valid_articles if a['status'] == 'success'])
+            error_count = len([a for a in valid_articles if a['status'] == 'error'])
+            skipped_count = len([a for a in valid_articles if a['status'] == 'skipped'])
+            already_indexed_count = len([a for a in valid_articles if a['status'] == 'already_indexed'])
+            
+            print(f"🎯 Batch indexing completed in {duration_ms:.1f}ms:")
+            print(f"   📊 Total URLs: {len(urls)}")
+            print(f"   ✅ Successfully indexed: {success_count}")
+            print(f"   ⏭️ Skipped: {skipped_count}")
+            print(f"   ℹ️ Already indexed: {already_indexed_count}")
+            print(f"   ❌ Errors: {error_count}")
+            
+            return valid_articles
+            
+        except Exception as e:
+            print(f"❌ Batch indexing failed: {str(e)}")
+            return [{'url': url, 'status': 'error', 'message': str(e)} for url in urls]
+
     def index_article(self, url, force_reindex=False):
         """Index a single Philippine news article"""
         try:
@@ -810,66 +1036,64 @@ class PhilippineNewsSearchIndex:
                     'results': []
                 }
             
-            # Index all articles found without any limits
+            # Index all articles found using batch processing for better performance
             articles_to_index = crawl_result['articles']
             
-            print(f"Found {len(articles_to_index)} articles to index")
+            print(f"Found {len(articles_to_index)} articles to index using batch processing")
             
-            # Index each found article
-            indexing_results = []
-            successful_indexes = 0
-            skipped_indexes = 0
-            error_indexes = 0
-            already_indexed_count = 0
+            # Extract URLs from articles for batch processing
+            article_urls = []
+            article_titles = {}  # Store titles for reference
             
             for article in articles_to_index:
-                try:
-                    if isinstance(article, dict):
-                        article_url = article.get('url', '')
-                        article_title = article.get('text', '') or article.get('title', '')
-                    else:
-                        article_url = str(article)
-                        article_title = ''
-                    
-                    print(f"Indexing: {article_title[:50]}...")
-                    
-                    # Index the article
-                    index_result = self.index_article(article_url, force_reindex)
+                if isinstance(article, dict):
+                    article_url = article.get('url', '')
+                    article_title = article.get('text', '') or article.get('title', '')
+                else:
+                    article_url = str(article)
+                    article_title = ''
+                
+                if article_url:
+                    article_urls.append(article_url)
+                    article_titles[article_url] = article_title
+            
+            print(f"Extracted {len(article_urls)} URLs for batch indexing")
+            
+            # Use batch indexing with atomic transactions
+            indexing_results = []
+            if article_urls:
+                batch_results = self.batch_index_articles(article_urls, force_reindex)
+                
+                # Convert batch results to expected format
+                for result in batch_results:
+                    url = result['url']
+                    title = article_titles.get(url, '')
                     
                     result_entry = {
-                        'url': article_url,
-                        'title': article_title,
-                        'status': index_result['status']
+                        'url': url,
+                        'title': title,
+                        'status': result['status']
                     }
                     
-                    if index_result['status'] == 'success':
-                        successful_indexes += 1
+                    if result['status'] == 'success':
                         result_entry.update({
-                            'article_id': index_result['article_id'],
-                            'relevance_score': index_result['relevance_score'],
-                            'locations_found': index_result['locations'],
-                            'government_entities_found': index_result['government_entities']
+                            'article_id': result.get('article_id'),
+                            'relevance_score': result.get('relevance_score', 0),
+                            'locations_found': result.get('locations', []),
+                            'government_entities_found': result.get('government_entities', [])
                         })
-                    elif index_result['status'] == 'skipped':
-                        skipped_indexes += 1
-                        result_entry['message'] = index_result.get('message', 'Low Philippine relevance')
-                    elif index_result['status'] == 'already_indexed':
-                        already_indexed_count += 1
-                        result_entry['message'] = 'Article already in index'
-                    else:
-                        error_indexes += 1
-                        result_entry['error'] = index_result.get('message', 'Unknown error')
+                    elif result['status'] in ['skipped', 'already_indexed', 'error']:
+                        result_entry['message'] = result.get('message', f'Status: {result["status"]}')
+                        if result['status'] == 'error':
+                            result_entry['error'] = result.get('message', 'Unknown error')
                     
                     indexing_results.append(result_entry)
-                    
-                except Exception as e:
-                    error_indexes += 1
-                    indexing_results.append({
-                        'url': article.get('url', '') if isinstance(article, dict) else str(article),
-                        'title': article.get('title', '') if isinstance(article, dict) else '',
-                        'status': 'error',
-                        'error': str(e)
-                    })
+            
+            # Calculate summary statistics
+            successful_indexes = len([r for r in indexing_results if r['status'] == 'success'])
+            skipped_indexes = len([r for r in indexing_results if r['status'] == 'skipped'])
+            error_indexes = len([r for r in indexing_results if r['status'] == 'error'])
+            already_indexed_count = len([r for r in indexing_results if r['status'] == 'already_indexed'])
             
             # Log crawling task completion
             try:

@@ -189,7 +189,7 @@ def get_philippine_article(article_id):
 
 @philippine_news_bp.route('/batch-index-philippine-articles', methods=['POST'])
 def batch_index_philippine_articles():
-    """Index multiple Philippine news article URLs in batch"""
+    """Index multiple Philippine news article URLs in batch with atomic transactions"""
     try:
         data = request.get_json()
         urls = data.get('urls', [])
@@ -201,30 +201,8 @@ def batch_index_philippine_articles():
         if len(urls) > 50:  # Limit batch size
             return jsonify({'error': 'Maximum 50 URLs allowed per batch'}), 400
         
-        # Process URLs in background thread for better performance
-        def process_batch():
-            results = []
-            for url in urls:
-                try:
-                    result = philippine_search_index.index_article(url.strip(), force_reindex)
-                    results.append({
-                        'url': url,
-                        'status': result['status'],
-                        'message': result.get('message', ''),
-                        'article_id': result.get('article_id'),
-                        'relevance_score': result.get('relevance_score', 0)
-                    })
-                except Exception as e:
-                    results.append({
-                        'url': url,
-                        'status': 'error',
-                        'message': str(e)
-                    })
-            
-            return results
-        
-        # For now, process synchronously (can be made async later)
-        batch_results = process_batch()
+        # Use the new batch indexing method with atomic transactions
+        batch_results = philippine_search_index.batch_index_articles(urls, force_reindex)
         
         # Summary statistics
         success_count = len([r for r in batch_results if r['status'] == 'success'])
@@ -233,7 +211,7 @@ def batch_index_philippine_articles():
         already_indexed_count = len([r for r in batch_results if r['status'] == 'already_indexed'])
         
         return jsonify({
-            'message': f'Batch indexing completed',
+            'message': f'Batch indexing completed with atomic transactions',
             'summary': {
                 'total_urls': len(urls),
                 'successfully_indexed': success_count,

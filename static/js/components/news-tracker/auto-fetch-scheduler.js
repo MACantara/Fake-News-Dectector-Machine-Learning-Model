@@ -223,7 +223,7 @@ export class AutoFetchScheduler {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    confidence_threshold: this.app.autoIndexThreshold || 95,
+                    confidence_threshold: (this.app.autoIndexThreshold || 95) / 100, // Convert percentage to decimal
                     batch_size: this.app.autoIndexBatchSize || 10
                 })
             });

@@ -319,18 +319,30 @@ export const ArticleQueueManagerMixin = {
         const batchSizeSelect = document.getElementById('batchSize');
         const maxSelections = batchSizeSelect ? parseInt(batchSizeSelect.value) : 10;
         
+        // Find unverified articles that can be selected
         const availableArticles = document.querySelectorAll('[data-batch-selectable="true"]:not([data-batch-selected="true"])');
+        
+        console.log(`Attempting to select ${maxSelections} articles from ${availableArticles.length} available`);
+        
+        if (availableArticles.length === 0) {
+            this.showInfo('No unverified articles available for selection');
+            return;
+        }
         
         let selectedCount = 0;
         for (const element of availableArticles) {
             if (selectedCount >= maxSelections) break;
             
-            this.toggleArticleSelection(element.dataset.articleId, true);
+            const articleId = element.dataset.articleId;
+            console.log(`Selecting article ${articleId}`);
+            this.toggleArticleSelection(articleId, true);
             selectedCount++;
         }
         
         if (availableArticles.length > maxSelections) {
-            this.showError(`Maximum ${maxSelections} articles can be selected at once`);
+            this.showInfo(`Selected ${selectedCount} articles (maximum ${maxSelections} articles can be selected at once)`);
+        } else {
+            this.showSuccess(`Selected ${selectedCount} articles`);
         }
     },
     
@@ -436,7 +448,7 @@ export const ArticleQueueManagerMixin = {
         const selectionClass = isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200';
         
         return `
-            <div class="article-item border rounded-lg p-4 mb-4 hover:shadow-md transition-shadow ${selectionClass}"
+            <div class="article-item border rounded-lg p-4 mb-4 hover:shadow-md transition-shadow ${selectionClass} break-words"
                  data-article-id="${article.id}"
                  data-batch-selected="${isSelected}"
                  data-batch-selectable="${canSelect}"
@@ -444,11 +456,11 @@ export const ArticleQueueManagerMixin = {
                  ${canSelect ? 'style="cursor: pointer;"' : ''}>
                 
                 <div class="flex items-start justify-between">
-                    <div class="flex-1">
+                    <div class="flex-1 min-w-0 pr-4">
                         ${canSelect ? `
                             <div class="flex items-center mb-2">
                                 <input type="checkbox" 
-                                       class="mr-3" 
+                                       class="mr-3 flex-shrink-0" 
                                        ${isSelected ? 'checked' : ''}
                                        onclick="event.stopPropagation(); newsTracker.toggleArticleSelection(${article.id})">
                                 <span class="text-xs text-blue-600 font-medium">
@@ -457,24 +469,24 @@ export const ArticleQueueManagerMixin = {
                             </div>
                         ` : ''}
                         
-                        <h4 class="font-semibold text-gray-800 mb-2 line-clamp-2">
+                        <h4 class="font-semibold text-gray-800 mb-2 break-words hyphens-auto">
                             ${article.title || 'No title available'}
                         </h4>
                         
-                        <div class="flex items-center text-sm text-gray-600 mb-2">
-                            <i class="bi bi-link-45deg mr-1"></i>
-                            <a href="${article.url}" target="_blank" class="text-blue-600 hover:text-blue-800 truncate">
+                        <div class="flex items-center text-sm text-gray-600 mb-2 min-w-0">
+                            <i class="bi bi-link-45deg mr-1 flex-shrink-0"></i>
+                            <a href="${article.url}" target="_blank" class="text-blue-600 hover:text-blue-800 break-all">
                                 ${article.url}
                             </a>
                         </div>
                         
-                        <div class="flex items-center text-xs text-gray-500 space-x-4 mb-3">
-                            <span>
+                        <div class="flex flex-wrap items-center text-xs text-gray-500 gap-x-4 gap-y-1 mb-3">
+                            <span class="flex items-center whitespace-nowrap">
                                 <i class="bi bi-calendar mr-1"></i>
                                 Found: ${this.formatDate(article.foundAt)}
                             </span>
                             ${article.verifiedAt ? `
-                                <span>
+                                <span class="flex items-center whitespace-nowrap">
                                     <i class="bi bi-check-circle mr-1"></i>
                                     Verified: ${this.formatDate(article.verifiedAt)}
                                 </span>
@@ -484,19 +496,19 @@ export const ArticleQueueManagerMixin = {
                         ${this.renderPredictionMetrics(article)}
                     </div>
                     
-                    <div class="flex flex-col items-end space-y-2 ml-4">
+                    <div class="flex flex-col items-end space-y-2 ml-4 flex-shrink-0">
                         ${this.renderVerificationBadge(article)}
                         ${!article.verified ? `
-                            <div class="flex space-x-2">
+                            <div class="flex flex-col sm:flex-row gap-2">
                                 <button 
-                                    class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors"
+                                    class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors whitespace-nowrap"
                                     onclick="event.stopPropagation(); newsTracker.verifyArticle(${article.id}, true)"
                                     title="Mark as news"
                                 >
                                     <i class="bi bi-check mr-1"></i>News
                                 </button>
                                 <button 
-                                    class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+                                    class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors whitespace-nowrap"
                                     onclick="event.stopPropagation(); newsTracker.verifyArticle(${article.id}, false)"
                                     title="Mark as not news"
                                 >
@@ -634,7 +646,7 @@ export const ArticleQueueManagerMixin = {
     },
     
     /**
-     * Update batch size for article selection
+     * Update batch size for article selection and display
      */
     updateBatchSize(batchSize) {
         // Update the displayed batch size in the button
@@ -643,12 +655,25 @@ export const ArticleQueueManagerMixin = {
             selectedBatchSizeSpan.textContent = batchSize.toString();
         }
         
+        // Update the items per page for display
+        this.itemsPerPage = batchSize;
+        this.currentPage = 1; // Reset to first page when changing display count
+        
+        // Update the displayed article count info
+        const displayedArticleCountSpan = document.getElementById('displayedArticleCount');
+        if (displayedArticleCountSpan) {
+            displayedArticleCountSpan.textContent = batchSize.toString();
+        }
+        
         // Clear current selection when batch size changes
         this.clearBatchSelection();
+        
+        // Re-render the queue with new pagination
+        this.renderArticleQueue();
         
         // Store the batch size for future use
         this.currentBatchSize = batchSize;
         
-        console.log(`Batch size updated to: ${batchSize}`);
+        console.log(`Batch size updated to: ${batchSize}, items per page: ${this.itemsPerPage}`);
     }
 };

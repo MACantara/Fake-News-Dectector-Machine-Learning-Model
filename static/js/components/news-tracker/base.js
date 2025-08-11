@@ -15,6 +15,7 @@ export class NewsTrackerBase {
         this.websiteViewMode = 'grouped';
         this.isPerformingOperation = false;
         this.isFetchInProgress = false; // Lock to prevent concurrent fetch operations
+        this.isRenderingWebsites = false; // Lock to prevent concurrent renders
         
         // Initialize properties that will be set by mixins
         this.autoFetchInterval = null;
@@ -68,8 +69,8 @@ export class NewsTrackerBase {
         // Core navigation events
         const websiteViewMode = document.getElementById('websiteViewMode');
         if (websiteViewMode) {
-            websiteViewMode.addEventListener('change', (e) => {
-                this.setWebsiteViewMode(e.target.value);
+            websiteViewMode.addEventListener('change', async (e) => {
+                await this.setWebsiteViewMode(e.target.value);
             });
         }
         
@@ -110,7 +111,7 @@ export class NewsTrackerBase {
     /**
      * Set website view mode
      */
-    setWebsiteViewMode(mode) {
+    async setWebsiteViewMode(mode) {
         this.websiteViewMode = mode;
         localStorage.setItem('newsTracker.websiteViewMode', mode);
         
@@ -126,7 +127,10 @@ export class NewsTrackerBase {
             collapseBtn?.classList.add('hidden');
         }
         
-        this.renderTrackedWebsites();
+        // Only render if we have websites to display
+        if (this.trackedWebsites && this.trackedWebsites.length > 0) {
+            await this.renderTrackedWebsites();
+        }
     }
     
     /**

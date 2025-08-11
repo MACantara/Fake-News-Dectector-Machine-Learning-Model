@@ -145,24 +145,38 @@ export const WebsiteManagerMixin = {
      * Render tracked websites list
      */
     async renderTrackedWebsites() {
-        const container = document.getElementById('trackedWebsitesList');
-        if (!container) return;
-        
-        if (this.trackedWebsites.length === 0) {
-            container.innerHTML = `
-                <div class="text-center text-gray-500 py-8">
-                    <i class="bi bi-inbox text-4xl mb-2 opacity-50"></i>
-                    <p>No websites being tracked yet.</p>
-                    <p class="text-sm">Add a website above to start tracking articles.</p>
-                </div>
-            `;
+        // Prevent multiple simultaneous renders
+        if (this.isRenderingWebsites) {
+            console.log('🔄 Render already in progress, skipping duplicate call');
             return;
         }
         
-        if (this.websiteViewMode === 'grouped') {
-            await this.renderGroupedWebsites(container);
-        } else {
-            this.renderSimpleWebsiteList(container);
+        console.log('🎨 Starting website render, mode:', this.websiteViewMode, 'websites:', this.trackedWebsites.length);
+        this.isRenderingWebsites = true;
+        
+        try {
+            const container = document.getElementById('trackedWebsitesList');
+            if (!container) return;
+            
+            if (this.trackedWebsites.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="bi bi-inbox text-4xl mb-2 opacity-50"></i>
+                        <p>No websites being tracked yet.</p>
+                        <p class="text-sm">Add a website above to start tracking articles.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (this.websiteViewMode === 'grouped') {
+                await this.renderGroupedWebsites(container);
+            } else {
+                this.renderSimpleWebsiteList(container);
+            }
+            console.log('✅ Website render completed');
+        } finally {
+            this.isRenderingWebsites = false;
         }
     },
     
@@ -267,9 +281,23 @@ export const WebsiteManagerMixin = {
     async groupWebsitesByDomain() {
         const grouped = {};
         
+        // Initialize domain cache if not exists
+        if (!this.domainCache) {
+            this.domainCache = new Map();
+        }
+        
         // Process domains in parallel for better performance
         const domainPromises = this.trackedWebsites.map(async (website) => {
+            // Check cache first
+            if (this.domainCache.has(website.url)) {
+                return { website, domain: this.domainCache.get(website.url) };
+            }
+            
             const domain = await this.extractRootDomain(website.url);
+            
+            // Cache the result
+            this.domainCache.set(website.url, domain);
+            
             return { website, domain };
         });
         

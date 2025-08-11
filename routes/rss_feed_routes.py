@@ -31,19 +31,19 @@ DEFAULT_RSS_FEEDS = {
         'name': 'Philippine Daily Inquirer',
         'url': 'https://newsinfo.inquirer.net/rss',
         'category': 'News',
-        'active': False
+        'active': True
     },
     'rappler': {
         'name': 'Rappler',
         'url': 'https://www.rappler.com/rss',
         'category': 'News',
-        'active': False
+        'active': True
     },
     'philstar': {
         'name': 'Philippine Star',
         'url': 'https://www.philstar.com/rss/headlines',
         'category': 'News',
-        'active': False
+        'active': True
     }
 }
 

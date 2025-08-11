@@ -17,6 +17,7 @@ from routes.political_news_routes import political_news_bp, init_political_detec
 from routes.fake_news_routes import fake_news_bp, init_fake_news_detector
 from routes.url_classifier_routes import url_classifier_bp, init_url_classifier
 from routes.news_tracker_routes import news_tracker_bp
+from routes.rss_feed_routes import rss_feed_bp
 
 # Import utility functions from political news detector
 from modules.political_news_detector.utils import extract_political_content_from_url
@@ -217,6 +218,7 @@ app.register_blueprint(political_news_bp)
 app.register_blueprint(fake_news_bp)
 app.register_blueprint(url_classifier_bp)
 app.register_blueprint(news_tracker_bp)
+app.register_blueprint(rss_feed_bp)
 
 if __name__ == '__main__':
     # Initialize models in a separate thread to avoid blocking

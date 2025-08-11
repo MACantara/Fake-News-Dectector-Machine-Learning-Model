@@ -90,13 +90,11 @@ def search_philippine_news():
         if request.method == 'POST':
             data = request.get_json()
             query = data.get('query', '').strip()
-            category = data.get('category')
             source = data.get('source')
             page = max(int(data.get('page', 1)), 1)  # Page number (1-based)
             per_page = min(max(int(data.get('per_page', 20)), 1), 100)  # Results per page (1-100)
         else:
             query = request.args.get('q', '').strip()
-            category = request.args.get('category')
             source = request.args.get('source')
             page = max(int(request.args.get('page', 1)), 1)
             per_page = min(max(int(request.args.get('per_page', 20)), 1), 100)
@@ -112,7 +110,6 @@ def search_philippine_news():
             query=query,
             limit=per_page,
             offset=offset,
-            category=category,
             source=source
         )
         
@@ -143,7 +140,6 @@ def search_philippine_news():
             'response_time': total_response_time,  # Total route processing time in ms
             'search_engine_time': round(search_results.get('response_time', 0) * 1000, 2),  # Search engine time in ms
             'filters': {
-                'category': category,
                 'source': source
             },
             'performance_stats': {
@@ -392,36 +388,88 @@ def get_philippine_news_categories_route():
 
 @philippine_news_bp.route('/philippine-news-sources')
 def get_philippine_news_sources_route():
-    """Get available sources in the Philippine news index with optimized performance"""
+    """Get list of available Philippine news sources from tracked websites"""
     try:
-        # Use connection pooling if available, otherwise fallback to direct connection
-        if hasattr(philippine_search_index, 'db_pool'):
-            with philippine_search_index.db_pool.get_connection() as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    SELECT source_domain, COUNT(*) as count 
-                    FROM philippine_articles 
-                    GROUP BY source_domain 
-                    ORDER BY count DESC
-                    LIMIT 100
-                ''')
-                
-                sources = [{'source': row[0], 'count': row[1]} for row in cursor.fetchall()]
-        else:
-            conn = sqlite3.connect(philippine_search_index.db_path)
+        # Import here to avoid circular imports
+        import sqlite3
+        from urllib.parse import urlparse
+        
+        # Get sources from tracked websites database
+        sources = []
+        try:
+            conn = sqlite3.connect('news_tracker.db')
             cursor = conn.cursor()
             
+            # Get distinct root domains from tracked websites
             cursor.execute('''
-                SELECT source_domain, COUNT(*) as count 
-                FROM philippine_articles 
-                GROUP BY source_domain 
-                ORDER BY count DESC
-                LIMIT 100
+                SELECT DISTINCT url, name 
+                FROM tracked_websites 
+                WHERE status = 'active'
+                ORDER BY name
             ''')
             
-            sources = [{'source': row[0], 'count': row[1]} for row in cursor.fetchall()]
+            websites = cursor.fetchall()
             conn.close()
+            
+            # Extract root domains and create source list
+            domain_map = {}
+            for url, name in websites:
+                try:
+                    parsed = urlparse(url)
+                    domain = parsed.netloc.lower()
+                    
+                    # Remove www. prefix if present
+                    if domain.startswith('www.'):
+                        domain = domain[4:]
+                    
+                    # Use the website name as display name, domain as value
+                    if domain not in domain_map:
+                        domain_map[domain] = {
+                            'source': domain,
+                            'name': name,
+                            'url': url,
+                            'count': 1
+                        }
+                    else:
+                        domain_map[domain]['count'] += 1
+                
+                except Exception as e:
+                    continue
+            
+            # Convert to list format expected by frontend
+            sources = list(domain_map.values())
+            
+            # Sort by name
+            sources.sort(key=lambda x: x['name'])
+            
+        except Exception as e:
+            print(f"Error getting tracked websites: {e}")
+            # Fallback to Philippine news index sources if database query fails
+            if hasattr(philippine_search_index, 'db_pool'):
+                with philippine_search_index.db_pool.get_connection() as conn:
+                    cursor = conn.cursor()
+                    
+                    cursor.execute('''
+                        SELECT source_domain, COUNT(*) as count 
+                        FROM philippine_articles 
+                        GROUP BY source_domain 
+                        ORDER BY count DESC
+                        LIMIT 100
+                    ''')
+                    
+                    sources = [{'source': row[0], 'name': row[0], 'count': row[1]} for row in cursor.fetchall()]
+            else:
+                # Final fallback to hardcoded sources
+                sources = [
+                    {'source': 'abs-cbn.com', 'name': 'ABS-CBN', 'count': 0},
+                    {'source': 'gmanetwork.com', 'name': 'GMA News', 'count': 0},
+                    {'source': 'inquirer.net', 'name': 'Philippine Daily Inquirer', 'count': 0},
+                    {'source': 'rappler.com', 'name': 'Rappler', 'count': 0},
+                    {'source': 'philstar.com', 'name': 'Philippine Star', 'count': 0},
+                    {'source': 'manilabulletin.com.ph', 'name': 'Manila Bulletin', 'count': 0},
+                    {'source': 'cnnphilippines.com', 'name': 'CNN Philippines', 'count': 0},
+                    {'source': 'pna.gov.ph', 'name': 'Philippine News Agency', 'count': 0}
+                ]
         
         return jsonify({
             'success': True,

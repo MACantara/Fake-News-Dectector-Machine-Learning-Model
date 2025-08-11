@@ -37,6 +37,12 @@ export const StatisticsManagerMixin = {
             averageConfidence: 0
         };
         
+        // Initialize data containers
+        this.trackerData = null;
+        this.trackedWebsites = [];
+        this.articleQueue = [];
+        this.predictionMetrics = null;
+        
         this.updateStatistics();
         
         // Auto-refresh statistics every 2 minutes if enabled
@@ -50,18 +56,38 @@ export const StatisticsManagerMixin = {
      */
     async updateStatistics() {
         try {
+            // Fetch data from the backend API
+            const response = await fetch('/api/news-tracker/get-data');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error('Failed to fetch tracker data');
+            }
+            
+            // Store the fetched data
+            this.trackerData = data;
+            this.trackedWebsites = data.websites || [];
+            this.articleQueue = data.articles || [];
+            this.predictionMetrics = data.prediction_metrics;
+            
+            // Update all statistics using the fetched data
             await Promise.all([
                 this.updateBasicStats(),
                 this.updateVerificationStats(),
                 this.updateConfidenceStats(),
                 this.updateCategoryStats(),
-                this.updateTimelineStats()
+                this.updateTimelineStats(),
+                this.updateTopWebsites()
             ]);
             
             this.renderStatisticsCharts();
             
         } catch (error) {
             console.error('Error updating statistics:', error);
+            this.showError('Failed to update statistics');
         }
     },
     
@@ -69,27 +95,37 @@ export const StatisticsManagerMixin = {
      * Update basic statistics
      */
     updateBasicStats() {
+        // Use backend data if available, otherwise fall back to local data
+        const stats = this.trackerData?.stats || {};
+        
         // Count tracked websites
-        this.statisticsCounters.totalWebsites = this.trackedWebsites.length;
+        this.statisticsCounters.totalWebsites = stats.total_websites || this.trackedWebsites.length;
         
         // Count articles
-        this.statisticsCounters.totalArticles = this.articleQueue.length;
+        this.statisticsCounters.totalArticles = stats.total_articles || this.articleQueue.length;
         
         // Count verified articles
-        this.statisticsCounters.verifiedArticles = this.articleQueue.filter(article => 
-            article.verified === 1 || article.verified === true
-        ).length;
+        this.statisticsCounters.verifiedArticles = stats.verified_articles || 
+            this.articleQueue.filter(article => article.verified === 1 || article.verified === true).length;
         
-        // Count indexed articles
+        // Count indexed articles (is_news = true)
         this.statisticsCounters.indexedArticles = this.articleQueue.filter(article => 
-            article.is_news === 1 || article.is_news === true
+            article.is_news === 1 || article.is_news === true || article.isNews === true
         ).length;
         
-        // Update DOM
-        this.updateStatElement('totalWebsites', this.statisticsCounters.totalWebsites);
+        // Update DOM elements
         this.updateStatElement('totalArticles', this.statisticsCounters.totalArticles);
-        this.updateStatElement('verifiedArticles', this.statisticsCounters.verifiedArticles);
-        this.updateStatElement('indexedArticles', this.statisticsCounters.indexedArticles);
+        this.updateStatElement('totalVerified', this.statisticsCounters.verifiedArticles);
+        
+        // Calculate and update accuracy from prediction metrics
+        if (this.predictionMetrics?.basic_metrics) {
+            const accuracy = (this.predictionMetrics.basic_metrics.accuracy * 100).toFixed(1);
+            this.updateStatElement('totalAccuracy', `${accuracy}%`);
+        } else {
+            const accuracy = this.statisticsCounters.totalArticles > 0 ? 
+                (this.statisticsCounters.verifiedArticles / this.statisticsCounters.totalArticles * 100).toFixed(1) : 0;
+            this.updateStatElement('totalAccuracy', `${accuracy}%`);
+        }
         
         // Calculate percentages
         const verificationRate = this.statisticsCounters.totalArticles > 0 ? 
@@ -109,18 +145,21 @@ export const StatisticsManagerMixin = {
             article.verified === 1 || article.verified === true
         );
         
-        // Count by fake news prediction
+        // Count by fake news prediction - handle multiple field names
         this.statisticsCounters.fakeNews = verifiedArticles.filter(article => 
-            article.fake_news_prediction === 1 || article.fake_news_prediction === 'FAKE'
+            article.fake_news_prediction === 1 || article.fake_news_prediction === 'FAKE' ||
+            article.prediction === 'FAKE' || article.prediction === 1
         ).length;
         
         this.statisticsCounters.realNews = verifiedArticles.filter(article => 
-            article.fake_news_prediction === 0 || article.fake_news_prediction === 'REAL'
+            article.fake_news_prediction === 0 || article.fake_news_prediction === 'REAL' ||
+            article.prediction === 'REAL' || article.prediction === 0
         ).length;
         
-        // Count political news
+        // Count political news - handle multiple field names
         this.statisticsCounters.politicalNews = verifiedArticles.filter(article => 
-            article.political_news_prediction === 1 || article.political_news_prediction === 'POLITICAL'
+            article.political_news_prediction === 1 || article.political_news_prediction === 'POLITICAL' ||
+            article.political_prediction === 'POLITICAL' || article.political_prediction === 1
         ).length;
         
         // Update DOM
@@ -148,9 +187,12 @@ export const StatisticsManagerMixin = {
             return;
         }
         
-        // Calculate average confidence
+        // Calculate average confidence - handle multiple field names
         const totalConfidence = verifiedArticles.reduce((sum, article) => {
-            const confidence = parseFloat(article.fake_news_confidence) || 0;
+            const confidence = parseFloat(
+                article.fake_news_confidence || article.confidence || 
+                article.prediction_confidence || 0
+            );
             return sum + confidence;
         }, 0);
         
@@ -158,16 +200,29 @@ export const StatisticsManagerMixin = {
         this.updateStatElement('averageConfidence', `${this.statisticsCounters.averageConfidence.toFixed(1)}%`);
         
         // Confidence distribution
-        const highConfidence = verifiedArticles.filter(article => 
-            parseFloat(article.fake_news_confidence) >= 95
-        ).length;
-        const mediumConfidence = verifiedArticles.filter(article => {
-            const conf = parseFloat(article.fake_news_confidence);
-            return conf >= 75 && conf < 95;
+        const highConfidence = verifiedArticles.filter(article => {
+            const confidence = parseFloat(
+                article.fake_news_confidence || article.confidence || 
+                article.prediction_confidence || 0
+            );
+            return confidence >= 95;
         }).length;
-        const lowConfidence = verifiedArticles.filter(article => 
-            parseFloat(article.fake_news_confidence) < 75
-        ).length;
+        
+        const mediumConfidence = verifiedArticles.filter(article => {
+            const confidence = parseFloat(
+                article.fake_news_confidence || article.confidence || 
+                article.prediction_confidence || 0
+            );
+            return confidence >= 75 && confidence < 95;
+        }).length;
+        
+        const lowConfidence = verifiedArticles.filter(article => {
+            const confidence = parseFloat(
+                article.fake_news_confidence || article.confidence || 
+                article.prediction_confidence || 0
+            );
+            return confidence < 75;
+        }).length;
         
         this.updateStatElement('highConfidenceCount', highConfidence);
         this.updateStatElement('mediumConfidenceCount', mediumConfidence);
@@ -179,13 +234,15 @@ export const StatisticsManagerMixin = {
      */
     updateCategoryStats() {
         const indexedArticles = this.articleQueue.filter(article => 
-            article.is_news === 1 || article.is_news === true
+            article.is_news === 1 || article.is_news === true || article.isNews === true
         );
         
         // Count by news categories
         const categoryStats = {};
         indexedArticles.forEach(article => {
-            const category = article.category || 'Uncategorized';
+            // Try multiple possible category field names
+            const category = article.category || article.news_category || 
+                           article.predicted_category || 'Uncategorized';
             categoryStats[category] = (categoryStats[category] || 0) + 1;
         });
         
@@ -220,14 +277,100 @@ export const StatisticsManagerMixin = {
             month: new Date(now.getFullYear(), now.getMonth(), 1)
         };
         
+        // Count articles for each time period
         Object.entries(ranges).forEach(([period, startDate]) => {
             const articlesInPeriod = this.articleQueue.filter(article => {
-                const articleDate = new Date(article.created_at || article.published_at || '');
-                return articleDate >= startDate;
+                // Use multiple timestamp fields to find article date
+                const articleDate = new Date(
+                    article.found_at || article.foundAt || 
+                    article.created_at || article.published_at || 
+                    article.added_at || ''
+                );
+                return articleDate >= startDate && !isNaN(articleDate.getTime());
             });
             
-            this.updateStatElement(`articles${period.charAt(0).toUpperCase() + period.slice(1)}`, articlesInPeriod.length);
+            const verifiedInPeriod = articlesInPeriod.filter(article => 
+                article.verified === 1 || article.verified === true
+            );
+            
+            // Update based on period
+            if (period === 'today') {
+                this.updateStatElement('todayFound', articlesInPeriod.length);
+                this.updateStatElement('todayVerified', verifiedInPeriod.length);
+                
+                const successRate = articlesInPeriod.length > 0 ? 
+                    (verifiedInPeriod.length / articlesInPeriod.length * 100).toFixed(1) : 0;
+                this.updateStatElement('todaySuccessRate', `${successRate}%`);
+            } else if (period === 'week') {
+                this.updateStatElement('weekFound', articlesInPeriod.length);
+                this.updateStatElement('weekVerified', verifiedInPeriod.length);
+                
+                const avgPerDay = (articlesInPeriod.length / 7).toFixed(1);
+                this.updateStatElement('weekAverage', avgPerDay);
+            }
         });
+    },
+    
+    /**
+     * Update top performing websites
+     */
+    updateTopWebsites() {
+        const topWebsitesEl = document.getElementById('topWebsites');
+        if (!topWebsitesEl) return;
+        
+        // Use domain groups from backend if available
+        const domainGroups = this.trackerData?.domain_groups || [];
+        
+        if (domainGroups.length === 0) {
+            topWebsitesEl.innerHTML = `
+                <div class="text-center text-gray-500">
+                    <i class="bi bi-bar-chart text-2xl mb-2 opacity-50"></i>
+                    <p class="text-sm">No data available yet.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Take top 5 performing websites
+        const topSites = domainGroups.slice(0, 5);
+        
+        topWebsitesEl.innerHTML = `
+            <div class="space-y-3">
+                ${topSites.map((group, index) => {
+                    const totalArticles = group.total_articles || 0;
+                    const verifiedArticles = group.verified_articles || 0;
+                    const successRate = totalArticles > 0 ? 
+                        (verifiedArticles / totalArticles * 100).toFixed(1) : 0;
+                    
+                    // Determine badge color based on ranking
+                    const badgeColors = [
+                        'bg-yellow-500', // 1st place - gold
+                        'bg-gray-400',   // 2nd place - silver  
+                        'bg-yellow-600', // 3rd place - bronze
+                        'bg-blue-500',   // 4th place - blue
+                        'bg-green-500'   // 5th place - green
+                    ];
+                    
+                    return `
+                        <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow">
+                            <div class="flex items-center space-x-3">
+                                <div class="flex items-center justify-center w-6 h-6 rounded-full ${badgeColors[index]} text-white text-xs font-bold">
+                                    ${index + 1}
+                                </div>
+                                <div>
+                                    <div class="font-medium text-gray-900">${group.display_name || group.domain}</div>
+                                    <div class="text-xs text-gray-500">${group.website_count} website${group.website_count !== 1 ? 's' : ''}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm font-semibold text-gray-900">${totalArticles}</div>
+                                <div class="text-xs text-gray-500">${successRate}% verified</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
     },
     
     /**
@@ -318,7 +461,10 @@ export const StatisticsManagerMixin = {
         };
         
         verifiedArticles.forEach(article => {
-            const confidence = parseFloat(article.fake_news_confidence) || 0;
+            const confidence = parseFloat(
+                article.fake_news_confidence || article.confidence || 
+                article.prediction_confidence || 0
+            );
             if (confidence >= 95) buckets['Very High (95-100%)']++;
             else if (confidence >= 85) buckets['High (85-94%)']++;
             else if (confidence >= 75) buckets['Medium (75-84%)']++;
@@ -366,8 +512,13 @@ export const StatisticsManagerMixin = {
             const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
             
             return this.articleQueue.filter(article => {
-                const articleDate = new Date(article.created_at || article.published_at || '');
-                return articleDate >= startOfDay && articleDate < endOfDay;
+                // Use multiple timestamp fields to find article date
+                const articleDate = new Date(
+                    article.found_at || article.foundAt || 
+                    article.created_at || article.published_at || 
+                    article.added_at || ''
+                );
+                return articleDate >= startOfDay && articleDate < endOfDay && !isNaN(articleDate.getTime());
             }).length;
         });
         
@@ -399,7 +550,7 @@ export const StatisticsManagerMixin = {
         if (!chartEl) return;
         
         const indexedArticles = this.articleQueue.filter(article => 
-            article.is_news === 1 || article.is_news === true
+            article.is_news === 1 || article.is_news === true || article.isNews === true
         );
         
         if (indexedArticles.length === 0) {
@@ -410,7 +561,9 @@ export const StatisticsManagerMixin = {
         // Count categories
         const categoryStats = {};
         indexedArticles.forEach(article => {
-            const category = article.category || 'Uncategorized';
+            // Try multiple possible category field names
+            const category = article.category || article.news_category || 
+                           article.predicted_category || 'Uncategorized';
             categoryStats[category] = (categoryStats[category] || 0) + 1;
         });
         
@@ -558,5 +711,24 @@ export const StatisticsManagerMixin = {
         localStorage.setItem('newsTracker.statisticsPrefs', JSON.stringify(this.statisticsPrefs));
         this.updateTimelineStats();
         this.renderTimelineChart();
+    },
+    
+    /**
+     * Show error message
+     */
+    showError(message) {
+        console.error(message);
+        // Create a temporary error notification
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+        errorDiv.textContent = message;
+        document.body.appendChild(errorDiv);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            if (errorDiv.parentNode) {
+                errorDiv.parentNode.removeChild(errorDiv);
+            }
+        }, 5000);
     }
 };

@@ -17,7 +17,12 @@ const Config = {
         philippineNewsCategories: '/philippine-news-categories',
         philippineNewsSources: '/philippine-news-sources',
         getCrawlHistory: '/get-crawl-history',
-        urlFeedback: '/url-classifier-feedback'
+        urlFeedback: '/url-classifier-feedback',
+        // RSS Feed endpoints
+        rssFeeds: '/api/rss-feeds',
+        rssFeedArticles: '/api/rss-feed/articles',
+        rssFeedParse: '/api/rss-feed/parse',
+        rssFeedAnalyze: '/api/rss-feed/analyze'
     },
     
     // UI update intervals

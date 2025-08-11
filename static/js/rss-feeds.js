@@ -94,58 +94,111 @@ class RSSFeedAnalyzer {
 
         this.elements.predefinedFeeds.innerHTML = '';
 
-        Object.entries(feeds).forEach(([key, feed]) => {
+        feeds.forEach((feed) => {
             const feedCard = document.createElement('div');
             feedCard.className = `feed-card p-4 border border-gray-200 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md ${feed.active ? 'bg-blue-50 border-blue-300' : 'bg-white'}`;
-            feedCard.setAttribute('data-feed-key', key);
+            feedCard.setAttribute('data-feed-id', feed.id);
 
             feedCard.innerHTML = `
                 <div class="flex items-center justify-between mb-2">
                     <h3 class="font-semibold text-gray-800">${feed.name}</h3>
-                    <input type="checkbox" class="feed-checkbox w-5 h-5 text-blue-600 rounded focus:ring-blue-500" 
-                           ${feed.active ? 'checked' : ''} data-feed-key="${key}">
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" class="feed-checkbox w-5 h-5 text-blue-600 rounded focus:ring-blue-500" 
+                               ${feed.active ? 'checked' : ''} data-feed-id="${feed.id}">
+                        <button class="edit-feed-btn text-gray-500 hover:text-gray-700" data-feed-id="${feed.id}">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                    </div>
                 </div>
-                <p class="text-sm text-gray-600 mb-2">${feed.category}</p>
-                <p class="text-xs text-gray-500 break-all">${feed.url}</p>
-                <div class="mt-3 flex items-center justify-between">
+                <p class="text-sm text-gray-600 mb-2">
+                    <span class="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">${feed.category}</span>
+                </p>
+                <p class="text-xs text-gray-500 mb-2">${feed.description || 'No description'}</p>
+                <p class="text-xs text-gray-400 break-all mb-3">${feed.url}</p>
+                <div class="flex items-center justify-between">
                     <button class="test-feed-btn text-blue-600 hover:text-blue-800 text-sm font-medium" 
-                            data-feed-url="${feed.url}">
+                            data-feed-id="${feed.id}" data-feed-url="${feed.url}">
                         <i class="bi bi-play-circle mr-1"></i>Test Feed
                     </button>
-                    <span class="text-xs px-2 py-1 rounded-full ${feed.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}">
-                        ${feed.active ? 'Active' : 'Inactive'}
-                    </span>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs px-2 py-1 rounded-full ${feed.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}">
+                            ${feed.active ? 'Active' : 'Inactive'}
+                        </span>
+                        ${feed.last_fetched ? `<span class="text-xs text-gray-400">Last: ${new Date(feed.last_fetched).toLocaleDateString()}</span>` : ''}
+                    </div>
                 </div>
+                ${feed.error_count > 0 ? `
+                    <div class="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                        <i class="bi bi-exclamation-triangle mr-1"></i>
+                        ${feed.error_count} error(s). Last: ${feed.last_error || 'Unknown error'}
+                    </div>
+                ` : ''}
             `;
 
             // Bind events for this card
             const checkbox = feedCard.querySelector('.feed-checkbox');
-            checkbox.addEventListener('change', (e) => this.toggleFeedSelection(key, e.target.checked));
+            checkbox.addEventListener('change', (e) => this.toggleFeedSelection(feed.id, e.target.checked));
 
             const testBtn = feedCard.querySelector('.test-feed-btn');
             testBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.testFeed(feed.url, feed.name);
+                e.preventDefault();
+                this.testSingleFeed(feed.id, feed.url);
+            });
+
+            const editBtn = feedCard.querySelector('.edit-feed-btn');
+            editBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.editFeed(feed);
             });
 
             this.elements.predefinedFeeds.appendChild(feedCard);
-
-            // Initialize selected feeds
-            if (feed.active) {
-                this.state.selectedFeeds.add(key);
-            }
         });
+
+        // Update feed statistics
+        this.updateFeedStats(feeds);
     }
 
-    toggleFeedSelection(feedKey, selected) {
+    updateFeedStats(feeds) {
+        const totalFeeds = feeds.length;
+        const activeFeeds = feeds.filter(feed => feed.active).length;
+        const recentlyFetched = feeds.filter(feed => feed.last_fetched).length;
+        
+        // Add stats display if it doesn't exist
+        let statsDiv = document.getElementById('feedStats');
+        if (!statsDiv) {
+            statsDiv = document.createElement('div');
+            statsDiv.id = 'feedStats';
+            statsDiv.className = 'mb-4 p-3 bg-gray-50 rounded-lg';
+            this.elements.predefinedFeeds.parentNode.insertBefore(statsDiv, this.elements.predefinedFeeds);
+        }
+        
+        statsDiv.innerHTML = `
+            <div class="grid grid-cols-3 gap-4 text-center">
+                <div>
+                    <div class="text-2xl font-bold text-blue-600">${totalFeeds}</div>
+                    <div class="text-sm text-gray-600">Total Feeds</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-green-600">${activeFeeds}</div>
+                    <div class="text-sm text-gray-600">Active Feeds</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-purple-600">${recentlyFetched}</div>
+                    <div class="text-sm text-gray-600">Recently Fetched</div>
+                </div>
+            </div>
+        `;
+    }
+
+    toggleFeedSelection(feedId, selected) {
         if (selected) {
-            this.state.selectedFeeds.add(feedKey);
+            this.state.selectedFeeds.add(feedId);
         } else {
-            this.state.selectedFeeds.delete(feedKey);
+            this.state.selectedFeeds.delete(feedId);
         }
 
         // Update UI
-        const feedCard = document.querySelector(`[data-feed-key="${feedKey}"]`);
+        const feedCard = document.querySelector(`[data-feed-id="${feedId}"]`);
         if (feedCard) {
             if (selected) {
                 feedCard.classList.add('bg-blue-50', 'border-blue-300');
@@ -231,7 +284,115 @@ class RSSFeedAnalyzer {
         this.showModal('Feed Test Results', content);
     }
 
-    addCustomFeed() {
+    editFeed(feed) {
+        // Create a simple modal for editing feed
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+            <div class="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+                <h3 class="text-lg font-semibold mb-4">Edit RSS Feed</h3>
+                <form id="editFeedForm">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                        <input type="text" id="editFeedName" class="w-full p-2 border border-gray-300 rounded-md" value="${feed.name}">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">URL</label>
+                        <input type="url" id="editFeedUrl" class="w-full p-2 border border-gray-300 rounded-md" value="${feed.url}">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                        <input type="text" id="editFeedCategory" class="w-full p-2 border border-gray-300 rounded-md" value="${feed.category}">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea id="editFeedDescription" class="w-full p-2 border border-gray-300 rounded-md" rows="3">${feed.description || ''}</textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="editFeedActive" class="mr-2" ${feed.active ? 'checked' : ''}>
+                            <span class="text-sm font-medium text-gray-700">Active</span>
+                        </label>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancelEdit" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+                        <button type="button" id="deleteFeed" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Delete</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Save</button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Bind events
+        modal.querySelector('#cancelEdit').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+
+        modal.querySelector('#deleteFeed').addEventListener('click', async () => {
+            if (confirm('Are you sure you want to delete this RSS feed?')) {
+                await this.deleteFeed(feed.id);
+                document.body.removeChild(modal);
+            }
+        });
+
+        modal.querySelector('#editFeedForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.updateFeed(feed.id, {
+                name: modal.querySelector('#editFeedName').value,
+                url: modal.querySelector('#editFeedUrl').value,
+                category: modal.querySelector('#editFeedCategory').value,
+                description: modal.querySelector('#editFeedDescription').value,
+                active: modal.querySelector('#editFeedActive').checked
+            });
+            document.body.removeChild(modal);
+        });
+    }
+
+    async updateFeed(feedId, feedData) {
+        try {
+            const response = await fetch(`/api/rss-feeds/${feedId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(feedData)
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                this.showSuccess('RSS feed updated successfully');
+                this.loadPredefinedFeeds(); // Refresh the feeds
+            } else {
+                this.showError(`Failed to update feed: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Error updating feed:', error);
+            this.showError('Network error updating feed');
+        }
+    }
+
+    async deleteFeed(feedId) {
+        try {
+            const response = await fetch(`/api/rss-feeds/${feedId}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                this.showSuccess('RSS feed deleted successfully');
+                this.loadPredefinedFeeds(); // Refresh the feeds
+            } else {
+                this.showError(`Failed to delete feed: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Error deleting feed:', error);
+            this.showError('Network error deleting feed');
+        }
+    }
+
+     addCustomFeed() {
         const url = this.elements.customFeedUrl?.value.trim();
         if (!url) {
             this.showError('Please enter a valid RSS feed URL');
@@ -255,98 +416,61 @@ class RSSFeedAnalyzer {
             return;
         }
 
-        const limit = parseInt(this.elements.articleLimit?.value) || null;
-        const hoursBack = parseInt(this.elements.timeFilter?.value) || null;
+        const limit = parseInt(this.elements.articleLimit?.value) || 20;
+        const hoursBack = parseInt(this.elements.timeFilter?.value) || 24;
 
         this.showLoading('Fetching Articles', 'Downloading articles from RSS feeds...');
         this.updateProgress(10);
 
         try {
-            // Get selected feed URLs
-            const feedUrls = await this.getSelectedFeedUrls();
-            const allArticles = [];
-            const performanceData = [];
-            let completedFeeds = 0;
-            let totalProcessingTime = 0;
-
-            for (const feedData of feedUrls) {
-                try {
-                    const response = await fetch('/api/rss-feed/articles', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            feed_url: feedData.url,
-                            limit: limit,
-                            hours_back: hoursBack
-                        })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        // Add feed source to each article
-                        data.articles.forEach(article => {
-                            article.feed_source = feedData.name;
-                            article.feed_category = feedData.category;
-                        });
-                        allArticles.push(...data.articles);
-
-                        // Collect performance data
-                        if (data.performance) {
-                            performanceData.push({
-                                feed_name: feedData.name,
-                                processing_time: data.performance.processing_time,
-                                articles_count: data.performance.articles_fetched
-                            });
-                            totalProcessingTime += data.performance.processing_time;
-                        }
-                    } else {
-                        console.error(`Failed to fetch from ${feedData.name}:`, data.error);
-                    }
-
-                    completedFeeds++;
-                    this.updateProgress(10 + (completedFeeds / feedUrls.length) * 80);
-
-                } catch (error) {
-                    console.error(`Error fetching from ${feedData.name}:`, error);
-                }
-            }
-
-            this.hideLoading();
-
-            if (allArticles.length === 0) {
-                this.showError('No articles were fetched from the selected feeds');
-                return;
-            }
-
-            // Remove duplicates based on URL
-            const uniqueArticles = this.removeDuplicateArticles(allArticles);
-
-            // Sort by publication date (newest first)
-            uniqueArticles.sort((a, b) => {
-                const dateA = new Date(a.published_date || 0);
-                const dateB = new Date(b.published_date || 0);
-                return dateB - dateA;
+            // Use batch fetch for better performance
+            const response = await fetch('/api/rss-feed/batch-articles', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    feed_ids: Array.from(this.state.selectedFeeds),
+                    limit_per_feed: Math.ceil(limit / this.state.selectedFeeds.size),
+                    hours_back: hoursBack
+                })
             });
 
-            this.state.fetchedArticles = uniqueArticles;
-            
-            // Store performance metrics for display
-            this.state.performanceMetrics = {
-                total_processing_time: totalProcessingTime,
-                total_articles: uniqueArticles.length,
-                feed_sources: performanceData.map(p => p.feed_name).join(', '),
-                articles_per_second: totalProcessingTime > 0 ? (uniqueArticles.length / totalProcessingTime).toFixed(2) : 'N/A'
-            };
+            this.updateProgress(60);
+            const data = await response.json();
 
-            this.displayFetchedArticles();
-            this.elements.analyzeArticlesBtn.disabled = false;
+            if (data.success) {
+                // Store performance metrics
+                this.state.performanceMetrics = {
+                    total_processing_time: data.performance.total_processing_time,
+                    feed_sources: data.performance.feed_sources,
+                    articles_per_second: data.performance.articles_per_second,
+                    successful_feeds: data.performance.successful_feeds,
+                    failed_feeds: data.performance.failed_feeds
+                };
 
+                // Remove duplicates and limit total articles
+                let articles = this.removeDuplicateArticles(data.articles);
+                if (limit && articles.length > limit) {
+                    articles = articles.slice(0, limit);
+                }
+
+                this.state.fetchedArticles = articles;
+                this.updateProgress(100);
+                
+                setTimeout(() => {
+                    this.hideLoading();
+                    this.displayFetchedArticles();
+                    this.showSuccess(`Successfully fetched ${articles.length} articles from ${this.state.selectedFeeds.size} RSS feeds`);
+                }, 500);
+            } else {
+                this.hideLoading();
+                this.showError(`Failed to fetch articles: ${data.error}`);
+            }
         } catch (error) {
+            console.error('Error fetching articles:', error);
             this.hideLoading();
-            this.showError(`Failed to fetch articles: ${error.message}`);
+            this.showError('Network error while fetching articles');
         }
     }
 
@@ -358,14 +482,15 @@ class RSSFeedAnalyzer {
             throw new Error('Failed to get feed data');
         }
 
-        return Array.from(this.state.selectedFeeds).map(key => {
-            const feed = data.feeds[key];
-            return {
+        return Array.from(this.state.selectedFeeds).map(feedId => {
+            const feed = data.feeds.find(f => f.id === feedId);
+            return feed ? {
+                id: feed.id,
                 name: feed.name,
                 url: feed.url,
                 category: feed.category
-            };
-        });
+            } : null;
+        }).filter(feed => feed !== null);
     }
 
     removeDuplicateArticles(articles) {
@@ -810,6 +935,10 @@ class RSSFeedAnalyzer {
         setTimeout(() => {
             this.elements.errorDisplay?.classList.add('hidden');
         }, 10000);
+    }
+
+    showSuccess(message) {
+        this.showToast(message, 'success');
     }
 
     showModal(title, content) {

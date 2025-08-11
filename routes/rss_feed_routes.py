@@ -12,6 +12,8 @@ from urllib.parse import urljoin, urlparse
 import time
 import html
 import re
+import sqlite3
+import os
 
 # Create blueprint
 rss_feed_bp = Blueprint('rss_feed', __name__)
@@ -19,49 +21,563 @@ rss_feed_bp = Blueprint('rss_feed', __name__)
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Default RSS feeds
-DEFAULT_RSS_FEEDS = {
-    'pna': {
+# Database file path
+RSS_DATABASE_FILE = 'rss_feeds.db'
+
+# Philippine RSS feeds - comprehensive list
+DEFAULT_RSS_FEEDS = [
+    {
         'name': 'Philippine News Agency',
         'url': 'https://syndication.pna.gov.ph/rss',
         'category': 'Government',
+        'description': 'Official news agency of the Philippines',
         'active': True
     },
-    'inquirer': {
+    {
         'name': 'Philippine Daily Inquirer',
         'url': 'https://newsinfo.inquirer.net/rss',
         'category': 'News',
-        'active': False
+        'description': 'Leading Filipino-language daily newspaper',
+        'active': True
     },
-    'rappler': {
+    {
         'name': 'Rappler',
         'url': 'https://www.rappler.com/rss',
         'category': 'News',
+        'description': 'Digital news platform',
+        'active': True
+    },
+    {
+        'name': 'Philippine Star - Headlines',
+        'url': 'https://www.philstar.com/rss/headlines',
+        'category': 'Headlines',
+        'description': 'Philippine Star headlines feed',
+        'active': True
+    },
+    {
+        'name': 'Philippine Star - Nation',
+        'url': 'https://www.philstar.com/rss/nation',
+        'category': 'Politics',
+        'description': 'Philippine Star nation news',
         'active': False
     },
-    'philstar': {
-        'name': 'Philippine Star',
-        'url': 'https://www.philstar.com/rss/headlines',
+    {
+        'name': 'ABS-CBN News',
+        'url': 'https://news.abs-cbn.com/rss',
         'category': 'News',
+        'description': 'ABS-CBN News RSS feed',
+        'active': True
+    },
+    {
+        'name': 'GMA News',
+        'url': 'https://www.gmanetwork.com/news/rss/',
+        'category': 'News',
+        'description': 'GMA Network news RSS feed',
+        'active': True
+    },
+    {
+        'name': 'Manila Bulletin',
+        'url': 'https://mb.com.ph/rss',
+        'category': 'News',
+        'description': 'Manila Bulletin RSS feed',
+        'active': True
+    },
+    {
+        'name': 'BusinessWorld',
+        'url': 'https://www.bworldonline.com/feed/',
+        'category': 'Business',
+        'description': 'BusinessWorld RSS feed',
+        'active': False
+    },
+    {
+        'name': 'Philippine Star - Business',
+        'url': 'https://www.philstar.com/rss/business',
+        'category': 'Business',
+        'description': 'Philippine Star business news',
+        'active': False
+    },
+    {
+        'name': 'Malaya Business Insight',
+        'url': 'https://malaya.com.ph/feed/',
+        'category': 'Business',
+        'description': 'Malaya Business Insight RSS feed',
+        'active': False
+    },
+    {
+        'name': 'Interaksyon',
+        'url': 'https://interaksyon.philstar.com/feed/',
+        'category': 'News',
+        'description': 'Interaksyon news RSS feed',
+        'active': False
+    },
+    {
+        'name': 'Sunstar Philippines',
+        'url': 'https://www.sunstar.com.ph/api/v1/collections/home.rss',
+        'category': 'Regional',
+        'description': 'Sunstar regional news',
+        'active': False
+    },
+    {
+        'name': 'One News PH',
+        'url': 'https://www.onenews.ph/rss',
+        'category': 'News',
+        'description': 'One News Philippines RSS feed',
         'active': False
     }
-}
+]
+
+class RSSFeedDatabase:
+    """SQLite database manager for RSS feeds"""
+    
+    def __init__(self, db_path=RSS_DATABASE_FILE):
+        self.db_path = db_path
+        self.init_database()
+    
+    def init_database(self):
+        """Initialize the RSS feeds database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Create RSS feeds table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS rss_feeds (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    url TEXT UNIQUE NOT NULL,
+                    category TEXT DEFAULT 'News',
+                    description TEXT,
+                    active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_fetched TIMESTAMP,
+                    fetch_count INTEGER DEFAULT 0,
+                    error_count INTEGER DEFAULT 0,
+                    last_error TEXT
+                )
+            ''')
+            
+            # Create RSS articles table for caching
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS rss_articles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    feed_id INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    url TEXT UNIQUE NOT NULL,
+                    description TEXT,
+                    published_date TIMESTAMP,
+                    author TEXT,
+                    categories TEXT,
+                    images TEXT,
+                    source_domain TEXT,
+                    word_count INTEGER DEFAULT 0,
+                    content_hash TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (feed_id) REFERENCES rss_feeds (id)
+                )
+            ''')
+            
+            # Create RSS fetch logs table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS rss_fetch_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    feed_id INTEGER NOT NULL,
+                    fetch_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    articles_found INTEGER DEFAULT 0,
+                    success BOOLEAN DEFAULT TRUE,
+                    processing_time REAL DEFAULT 0.0,
+                    error_message TEXT,
+                    FOREIGN KEY (feed_id) REFERENCES rss_feeds (id)
+                )
+            ''')
+            
+            # Create indexes for performance
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_rss_feeds_active ON rss_feeds(active)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_rss_feeds_category ON rss_feeds(category)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_rss_articles_feed ON rss_articles(feed_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_rss_articles_url ON rss_articles(url)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_rss_articles_published ON rss_articles(published_date)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_rss_fetch_logs_feed ON rss_fetch_logs(feed_id)')
+            
+            conn.commit()
+            
+            # Insert default feeds if table is empty
+            cursor.execute('SELECT COUNT(*) FROM rss_feeds')
+            if cursor.fetchone()[0] == 0:
+                self._populate_default_feeds(cursor)
+                conn.commit()
+            
+            conn.close()
+            logger.info("RSS feeds database initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize RSS feeds database: {e}")
+            raise
+    
+    def _populate_default_feeds(self, cursor):
+        """Populate database with default RSS feeds"""
+        for feed in DEFAULT_RSS_FEEDS:
+            cursor.execute('''
+                INSERT INTO rss_feeds (name, url, category, description, active)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (feed['name'], feed['url'], feed['category'], 
+                  feed['description'], feed['active']))
+    
+    def get_all_feeds(self, active_only=False):
+        """Get all RSS feeds from database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            if active_only:
+                cursor.execute('SELECT * FROM rss_feeds WHERE active = 1 ORDER BY name')
+            else:
+                cursor.execute('SELECT * FROM rss_feeds ORDER BY name')
+            
+            feeds = [dict(row) for row in cursor.fetchall()]
+            conn.close()
+            
+            return feeds
+            
+        except Exception as e:
+            logger.error(f"Error getting RSS feeds: {e}")
+            return []
+    
+    def get_feed_by_id(self, feed_id):
+        """Get RSS feed by ID"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT * FROM rss_feeds WHERE id = ?', (feed_id,))
+            feed = cursor.fetchone()
+            conn.close()
+            
+            return dict(feed) if feed else None
+            
+        except Exception as e:
+            logger.error(f"Error getting RSS feed by ID {feed_id}: {e}")
+            return None
+    
+    def add_feed(self, name, url, category='News', description='', active=True):
+        """Add new RSS feed to database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO rss_feeds (name, url, category, description, active)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, url, category, description, active))
+            
+            feed_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            
+            return feed_id
+            
+        except sqlite3.IntegrityError:
+            logger.warning(f"RSS feed URL already exists: {url}")
+            return None
+        except Exception as e:
+            logger.error(f"Error adding RSS feed: {e}")
+            return None
+    
+    def update_feed(self, feed_id, **kwargs):
+        """Update RSS feed in database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Build dynamic update query
+            set_clauses = []
+            values = []
+            
+            for key, value in kwargs.items():
+                if key in ['name', 'url', 'category', 'description', 'active']:
+                    set_clauses.append(f"{key} = ?")
+                    values.append(value)
+            
+            if set_clauses:
+                set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+                values.append(feed_id)
+                
+                query = f"UPDATE rss_feeds SET {', '.join(set_clauses)} WHERE id = ?"
+                cursor.execute(query, values)
+                
+                conn.commit()
+            
+            conn.close()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating RSS feed {feed_id}: {e}")
+            return False
+    
+    def delete_feed(self, feed_id):
+        """Delete RSS feed and related data"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Delete related articles and logs
+            cursor.execute('DELETE FROM rss_articles WHERE feed_id = ?', (feed_id,))
+            cursor.execute('DELETE FROM rss_fetch_logs WHERE feed_id = ?', (feed_id,))
+            cursor.execute('DELETE FROM rss_feeds WHERE id = ?', (feed_id,))
+            
+            conn.commit()
+            conn.close()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting RSS feed {feed_id}: {e}")
+            return False
+    
+    def log_fetch(self, feed_id, articles_found, success, processing_time, error_message=None):
+        """Log RSS fetch attempt"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO rss_fetch_logs (feed_id, articles_found, success, processing_time, error_message)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (feed_id, articles_found, success, processing_time, error_message))
+            
+            # Update feed stats
+            if success:
+                cursor.execute('''
+                    UPDATE rss_feeds 
+                    SET last_fetched = CURRENT_TIMESTAMP, 
+                        fetch_count = fetch_count + 1,
+                        last_error = NULL
+                    WHERE id = ?
+                ''', (feed_id,))
+            else:
+                cursor.execute('''
+                    UPDATE rss_feeds 
+                    SET error_count = error_count + 1,
+                        last_error = ?
+                    WHERE id = ?
+                ''', (error_message, feed_id))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logger.error(f"Error logging RSS fetch for feed {feed_id}: {e}")
+
+# Initialize database
+rss_db = RSSFeedDatabase()
 
 @rss_feed_bp.route('/rss-feeds')
 def rss_feeds_page():
     """Render the RSS feeds management page"""
     return render_template('rss_feeds.html')
 
+@rss_feed_bp.route('/api/rss-feeds/stats', methods=['GET'])
+def get_rss_feeds_stats():
+    """Get RSS feeds statistics"""
+    try:
+        conn = sqlite3.connect(rss_db.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get basic stats
+        cursor.execute('SELECT COUNT(*) as total_feeds FROM rss_feeds')
+        total_feeds = cursor.fetchone()['total_feeds']
+        
+        cursor.execute('SELECT COUNT(*) as active_feeds FROM rss_feeds WHERE active = 1')
+        active_feeds = cursor.fetchone()['active_feeds']
+        
+        cursor.execute('SELECT COUNT(*) as total_articles FROM rss_articles')
+        total_articles = cursor.fetchone()['total_articles']
+        
+        # Get recent fetch statistics
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as total_fetches,
+                SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_fetches,
+                AVG(processing_time) as avg_processing_time,
+                SUM(articles_found) as total_articles_found
+            FROM rss_fetch_logs 
+            WHERE fetch_time > datetime('now', '-24 hours')
+        ''')
+        recent_stats = dict(cursor.fetchone())
+        
+        # Get top performing feeds
+        cursor.execute('''
+            SELECT 
+                f.name,
+                f.url,
+                COUNT(l.id) as fetch_count,
+                AVG(l.processing_time) as avg_time,
+                SUM(l.articles_found) as total_articles
+            FROM rss_feeds f
+            LEFT JOIN rss_fetch_logs l ON f.id = l.feed_id
+            WHERE l.fetch_time > datetime('now', '-7 days')
+            GROUP BY f.id, f.name, f.url
+            ORDER BY total_articles DESC
+            LIMIT 5
+        ''')
+        top_feeds = [dict(row) for row in cursor.fetchall()]
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_feeds': total_feeds,
+                'active_feeds': active_feeds,
+                'total_articles': total_articles,
+                'recent_24h': recent_stats,
+                'top_feeds': top_feeds
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting RSS feeds stats: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@rss_feed_bp.route('/api/rss-feeds/<int:feed_id>/logs', methods=['GET'])
+def get_feed_logs(feed_id):
+    """Get fetch logs for a specific RSS feed"""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        
+        conn = sqlite3.connect(rss_db.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT * FROM rss_fetch_logs 
+            WHERE feed_id = ? 
+            ORDER BY fetch_time DESC 
+            LIMIT ?
+        ''', (feed_id, limit))
+        
+        logs = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'logs': logs
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting RSS feed logs for feed {feed_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @rss_feed_bp.route('/api/rss-feeds', methods=['GET'])
 def get_rss_feeds():
     """Get list of available RSS feeds"""
     try:
+        active_only = request.args.get('active_only', 'false').lower() == 'true'
+        feeds = rss_db.get_all_feeds(active_only=active_only)
+        
         return jsonify({
             'success': True,
-            'feeds': DEFAULT_RSS_FEEDS
+            'feeds': feeds,
+            'total_count': len(feeds)
         })
     except Exception as e:
         logger.error(f"Error getting RSS feeds: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@rss_feed_bp.route('/api/rss-feeds', methods=['POST'])
+def add_rss_feed():
+    """Add new RSS feed"""
+    try:
+        data = request.get_json()
+        name = data.get('name')
+        url = data.get('url')
+        category = data.get('category', 'News')
+        description = data.get('description', '')
+        active = data.get('active', True)
+        
+        if not name or not url:
+            return jsonify({
+                'success': False,
+                'error': 'Name and URL are required'
+            }), 400
+        
+        feed_id = rss_db.add_feed(name, url, category, description, active)
+        
+        if feed_id:
+            return jsonify({
+                'success': True,
+                'message': 'RSS feed added successfully',
+                'feed_id': feed_id
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to add RSS feed (URL may already exist)'
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Error adding RSS feed: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@rss_feed_bp.route('/api/rss-feeds/<int:feed_id>', methods=['PUT'])
+def update_rss_feed(feed_id):
+    """Update RSS feed"""
+    try:
+        data = request.get_json()
+        
+        # Remove id and timestamps from update data
+        update_data = {k: v for k, v in data.items() 
+                      if k not in ['id', 'created_at', 'updated_at', 'last_fetched']}
+        
+        if rss_db.update_feed(feed_id, **update_data):
+            return jsonify({
+                'success': True,
+                'message': 'RSS feed updated successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to update RSS feed'
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Error updating RSS feed {feed_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@rss_feed_bp.route('/api/rss-feeds/<int:feed_id>', methods=['DELETE'])
+def delete_rss_feed(feed_id):
+    """Delete RSS feed"""
+    try:
+        if rss_db.delete_feed(feed_id):
+            return jsonify({
+                'success': True,
+                'message': 'RSS feed deleted successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to delete RSS feed'
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Error deleting RSS feed {feed_id}: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -73,13 +589,23 @@ def fetch_rss_articles():
     try:
         data = request.get_json()
         feed_url = data.get('feed_url')
+        feed_id = data.get('feed_id')
         limit = data.get('limit', 20)
         hours_back = data.get('hours_back', 24)
         
-        if not feed_url:
+        # Get feed info from database if feed_id provided
+        if feed_id:
+            feed_info = rss_db.get_feed_by_id(feed_id)
+            if not feed_info:
+                return jsonify({
+                    'success': False,
+                    'error': 'RSS feed not found in database'
+                }), 404
+            feed_url = feed_info['url']
+        elif not feed_url:
             return jsonify({
                 'success': False,
-                'error': 'RSS feed URL is required'
+                'error': 'RSS feed URL or feed ID is required'
             }), 400
         
         # Start timing
@@ -87,6 +613,17 @@ def fetch_rss_articles():
         
         # Parse RSS feed
         feed_data = parse_rss_feed(feed_url)
+        processing_time = time.time() - start_time
+        
+        # Log the fetch attempt if we have a feed_id
+        if feed_id:
+            rss_db.log_fetch(
+                feed_id=feed_id,
+                articles_found=len(feed_data.get('articles', [])) if feed_data['success'] else 0,
+                success=feed_data['success'],
+                processing_time=processing_time,
+                error_message=feed_data.get('error') if not feed_data['success'] else None
+            )
         
         if not feed_data['success']:
             return jsonify(feed_data), 400
@@ -116,12 +653,12 @@ def fetch_rss_articles():
             feed_data['articles'] = feed_data['articles'][:limit]
         
         # Add performance metrics
-        processing_time = time.time() - start_time
         feed_data['performance'] = {
             'processing_time': processing_time,
             'articles_fetched': len(feed_data['articles']),
             'feed_title': feed_data.get('feed_info', {}).get('title', 'Unknown'),
-            'feed_url': feed_url
+            'feed_url': feed_url,
+            'feed_id': feed_id
         }
         
         return jsonify(feed_data)
@@ -131,6 +668,66 @@ def fetch_rss_articles():
         return jsonify({
             'success': False,
             'error': f'Failed to fetch RSS articles: {str(e)}'
+        }), 500
+
+@rss_feed_bp.route('/api/rss-feed/batch-articles', methods=['POST'])
+def fetch_batch_rss_articles():
+    """Fetch articles from multiple RSS feeds"""
+    try:
+        data = request.get_json()
+        feed_ids = data.get('feed_ids', [])
+        limit_per_feed = data.get('limit_per_feed', 10)
+        hours_back = data.get('hours_back', 24)
+        
+        if not feed_ids:
+            # Get all active feeds
+            active_feeds = rss_db.get_all_feeds(active_only=True)
+            feed_ids = [feed['id'] for feed in active_feeds]
+        
+        all_articles = []
+        performance_data = {
+            'total_processing_time': 0,
+            'feed_sources': 0,
+            'articles_per_second': 0,
+            'successful_feeds': 0,
+            'failed_feeds': 0
+        }
+        
+        for feed_id in feed_ids:
+            try:
+                # Fetch articles for this feed
+                response = fetch_rss_articles()
+                if response[1] == 200:  # Success
+                    feed_data = response[0].get_json()
+                    if feed_data['success']:
+                        all_articles.extend(feed_data['articles'])
+                        performance_data['total_processing_time'] += feed_data['performance']['processing_time']
+                        performance_data['successful_feeds'] += 1
+                    else:
+                        performance_data['failed_feeds'] += 1
+                else:
+                    performance_data['failed_feeds'] += 1
+                    
+            except Exception as e:
+                logger.error(f"Error fetching from feed {feed_id}: {e}")
+                performance_data['failed_feeds'] += 1
+        
+        performance_data['feed_sources'] = len(feed_ids)
+        if performance_data['total_processing_time'] > 0:
+            performance_data['articles_per_second'] = len(all_articles) / performance_data['total_processing_time']
+        
+        return jsonify({
+            'success': True,
+            'articles': all_articles,
+            'total_articles': len(all_articles),
+            'performance': performance_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching batch RSS articles: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Failed to fetch batch RSS articles: {str(e)}'
         }), 500
 
 @rss_feed_bp.route('/api/rss-feed/parse', methods=['POST'])

@@ -39,12 +39,16 @@
                         <i class="bi bi-search mr-2"></i>
                         Philippine News Search
                     </a>
+                    <a href="{{ url_for('rss_feed.rss_feeds_page') }}" class="nav-link {% if request.endpoint == 'rss_feed.rss_feeds_page' %}bg-orange-700{% else %}bg-orange-600 hover:bg-orange-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                        <i class="bi bi-rss mr-2"></i>
+                        RSS Feeds
+                    </a>
                     <a href="{{ url_for('url_classifier.url_classifier_page') }}" class="nav-link {% if request.endpoint == 'url_classifier.url_classifier_page' %}bg-purple-700{% else %}bg-purple-600 hover:bg-purple-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
                         <i class="bi bi-robot mr-2"></i>
                         URL Classifier (RL)
                     </a>
-                    <a href="{{ url_for('news_tracker_page') }}" class="nav-link {% if request.endpoint == 'news_tracker_page' %}bg-orange-700{% else %}bg-orange-600 hover:bg-orange-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                        <i class="bi bi-rss mr-2"></i>
+                    <a href="{{ url_for('news_tracker_page') }}" class="nav-link {% if request.endpoint == 'news_tracker_page' %}bg-indigo-700{% else %}bg-indigo-600 hover:bg-indigo-700{% endif %} text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                        <i class="bi bi-bar-chart mr-2"></i>
                         News Tracker
                     </a>
                 </div>

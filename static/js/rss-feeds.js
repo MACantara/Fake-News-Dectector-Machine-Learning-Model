@@ -265,7 +265,9 @@ class RSSFeedAnalyzer {
             // Get selected feed URLs
             const feedUrls = await this.getSelectedFeedUrls();
             const allArticles = [];
+            const performanceData = [];
             let completedFeeds = 0;
+            let totalProcessingTime = 0;
 
             for (const feedData of feedUrls) {
                 try {
@@ -290,6 +292,16 @@ class RSSFeedAnalyzer {
                             article.feed_category = feedData.category;
                         });
                         allArticles.push(...data.articles);
+
+                        // Collect performance data
+                        if (data.performance) {
+                            performanceData.push({
+                                feed_name: feedData.name,
+                                processing_time: data.performance.processing_time,
+                                articles_count: data.performance.articles_fetched
+                            });
+                            totalProcessingTime += data.performance.processing_time;
+                        }
                     } else {
                         console.error(`Failed to fetch from ${feedData.name}:`, data.error);
                     }
@@ -320,6 +332,15 @@ class RSSFeedAnalyzer {
             });
 
             this.state.fetchedArticles = uniqueArticles;
+            
+            // Store performance metrics for display
+            this.state.performanceMetrics = {
+                total_processing_time: totalProcessingTime,
+                total_articles: uniqueArticles.length,
+                feed_sources: performanceData.map(p => p.feed_name).join(', '),
+                articles_per_second: totalProcessingTime > 0 ? (uniqueArticles.length / totalProcessingTime).toFixed(2) : 'N/A'
+            };
+
             this.displayFetchedArticles();
             this.elements.analyzeArticlesBtn.disabled = false;
 
@@ -707,6 +728,22 @@ class RSSFeedAnalyzer {
         if (this.elements.successfulCount) {
             this.elements.successfulCount.textContent = this.state.fetchedArticles.length;
         }
+        
+        // Update performance metrics if available
+        if (this.state.performanceMetrics) {
+            const metrics = this.state.performanceMetrics;
+            
+            if (this.elements.processingTime) {
+                this.elements.processingTime.textContent = `${metrics.total_processing_time.toFixed(2)}s`;
+            }
+            if (this.elements.feedSource) {
+                this.elements.feedSource.textContent = metrics.feed_sources;
+            }
+            if (this.elements.articlesPerSecond) {
+                this.elements.articlesPerSecond.textContent = metrics.articles_per_second;
+            }
+        }
+        
         this.elements.resultsSummary?.classList.remove('hidden');
     }
 

@@ -24,6 +24,7 @@ class PhilippineNewsSearch {
         this.cacheElements();
         this.bindEvents();
         this.checkModelStatus();
+        this.loadNewsSources(); // Load sources from tracked websites
         
         console.log('Philippine News Search initialized successfully');
     }
@@ -141,6 +142,34 @@ class PhilippineNewsSearch {
         }
     }
 
+    // Load news sources from tracked websites
+    async loadNewsSources() {
+        if (!this.elements.searchSource) return;
+
+        try {
+            const response = await Utils.http.get('/philippine-news-sources');
+            
+            if (response.success && response.sources) {
+                // Clear existing options except "All Sources"
+                this.elements.searchSource.innerHTML = '<option value="">All Sources</option>';
+                
+                // Add sources from tracked websites
+                response.sources.forEach(source => {
+                    const option = document.createElement('option');
+                    option.value = source.source;
+                    option.textContent = `${source.name} (${source.count})`;
+                    this.elements.searchSource.appendChild(option);
+                });
+                
+                console.log(`Loaded ${response.sources.length} news sources from tracked websites`);
+            } else {
+                console.warn('Failed to load news sources, using defaults');
+            }
+        } catch (error) {
+            console.error('Error loading news sources:', error);
+        }
+    }
+
     // Update search button state
     updateSearchButton() {
         if (!this.elements.performSearchBtn) return;
@@ -180,7 +209,6 @@ class PhilippineNewsSearch {
             
             const searchData = {
                 query: query,
-                category: this.elements.searchCategory?.value || '',
                 source: this.elements.searchSource?.value || '',
                 page: page,
                 per_page: perPage

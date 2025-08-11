@@ -1239,7 +1239,18 @@ def get_special_domain_mappings():
         'tribune.net.ph': 'tribuneonline.org',
         'bworldonline.com': 'businessworld.com.ph',
         'pna.gov.ph': 'pna.gov.ph',
-        'philstar.com': 'philstar.com'
+        'philstar.com': 'philstar.com',
+        'inquirer.net': 'inquirer.net',
+        'rappler.com': 'rappler.com',
+        'manilabulletin.com.ph': 'manilabulletin.com.ph',
+        'businessworld.com.ph': 'businessworld.com.ph',
+        'manilatimes.net': 'manilatimes.net',
+        'interaksyon.com': 'philstar.com',  # Interaksyon is part of Philstar
+        'journal.com.ph': 'journal.com.ph',
+        'tempo.com.ph': 'tempo.com.ph',
+        'remate.ph': 'remate.ph',
+        'malaya.com.ph': 'malaya.com.ph',
+        'sunstar.com.ph': 'sunstar.com.ph'
     }
 
 def is_country_code_tld(parts):

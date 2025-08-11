@@ -412,15 +412,25 @@ def get_philippine_news_sources_route():
             conn.close()
             
             # Extract root domains and create source list
-            # Helper function to extract root domain
+            # Helper function to extract root domain (enhanced version matching news_tracker_routes.py)
             def extract_root_domain(domain):
-                """Extract root domain from a domain string, handling subdomains"""
+                """Extract root domain from a domain string, handling subdomains with advanced ccTLD support"""
                 if not domain:
                     return domain
                 
                 # Remove www. prefix if present
                 if domain.startswith('www.'):
                     domain = domain[4:]
+                
+                # Handle special domain mappings first
+                special_domains = get_special_domain_mappings()
+                if domain in special_domains:
+                    return special_domains[domain]
+                
+                # Check if any special domain is a subdomain of this domain
+                for key, value in special_domains.items():
+                    if domain.endswith('.' + key) or domain == key:
+                        return value
                 
                 # Split domain into parts
                 parts = domain.split('.')
@@ -429,31 +439,107 @@ def get_philippine_news_sources_route():
                 if len(parts) <= 2:
                     return domain
                 
-                # For domains with more than 2 parts, we need to determine the root domain
-                # Common patterns:
-                # - example.com.ph -> example.com.ph
-                # - subdomain.example.com -> example.com
-                # - subdomain.example.com.ph -> example.com.ph
+                # Handle country code TLDs (ccTLDs) and second-level domains
+                if is_country_code_tld(parts):
+                    return extract_domain_with_cctld(parts)
                 
-                # Check for common two-part TLDs like .com.ph, .co.uk, etc.
-                two_part_tlds = {
+                # Handle standard domains
+                if len(parts) >= 2:
+                    # For domains like news.bbc.com, check if subdomain should be preserved
+                    if len(parts) >= 3 and should_preserve_subdomain(parts):
+                        return '.'.join(parts[-3:])
+                    return '.'.join(parts[-2:])
+                
+                return domain
+            
+            def get_special_domain_mappings():
+                """Map specific domains to their canonical grouping domain"""
+                return {
+                    'mb.com.ph': 'manilabulletin.com.ph',
+                    'businessmirror.com.ph': 'businessmirror.com.ph',
+                    'news.abs-cbn.com': 'abs-cbn.com',
+                    'news.gma.network': 'gmanetwork.com',
+                    'cnnphilippines.com': 'cnn.com',
+                    'news.yahoo.com': 'yahoo.com',
+                    'abscbn.com': 'abs-cbn.com',
+                    'gmanews.tv': 'gmanetwork.com',
+                    'manilastandard.net': 'manilastandardtoday.com',
+                    'tribune.net.ph': 'tribuneonline.org',
+                    'bworldonline.com': 'businessworld.com.ph',
+                    'pna.gov.ph': 'pna.gov.ph',
+                    'philstar.com': 'philstar.com',
+                    'inquirer.net': 'inquirer.net',
+                    'rappler.com': 'rappler.com',
+                    'manilabulletin.com.ph': 'manilabulletin.com.ph',
+                    'businessworld.com.ph': 'businessworld.com.ph',
+                    'manilatimes.net': 'manilatimes.net',
+                    'interaksyon.com': 'philstar.com',  # Interaksyon is part of Philstar
+                    'journal.com.ph': 'journal.com.ph',
+                    'tempo.com.ph': 'tempo.com.ph',
+                    'remate.ph': 'remate.ph',
+                    'malaya.com.ph': 'malaya.com.ph',
+                    'sunstar.com.ph': 'sunstar.com.ph'
+                }
+            
+            def is_country_code_tld(parts):
+                """Check if domain uses a country code TLD"""
+                if len(parts) < 3:
+                    return False
+                
+                cctlds = [
                     'com.ph', 'net.ph', 'org.ph', 'gov.ph', 'edu.ph', 'mil.ph',
                     'co.uk', 'org.uk', 'net.uk', 'gov.uk', 'ac.uk',
                     'co.jp', 'ne.jp', 'or.jp', 'go.jp', 'ac.jp',
                     'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au',
                     'co.nz', 'net.nz', 'org.nz', 'govt.nz',
-                    'com.sg', 'net.sg', 'org.sg', 'gov.sg', 'edu.sg'
-                }
+                    'com.sg', 'net.sg', 'org.sg', 'gov.sg', 'edu.sg',
+                    'com.my', 'net.my', 'org.my', 'gov.my', 'edu.my'
+                ]
                 
-                # Check if the last two parts form a known two-part TLD
-                if len(parts) >= 3:
-                    potential_tld = '.'.join(parts[-2:])
-                    if potential_tld in two_part_tlds:
-                        # Return domain.two-part-tld
-                        return '.'.join(parts[-3:]) if len(parts) >= 3 else domain
+                last_two_parts = '.'.join(parts[-2:])
+                return last_two_parts in cctlds
+            
+            def extract_domain_with_cctld(parts):
+                """Extract domain with country code TLD properly"""
+                if len(parts) == 3:
+                    # domain.com.ph
+                    return '.'.join(parts)
+                elif len(parts) >= 4:
+                    # subdomain.domain.com.ph
+                    # Check if subdomain should be preserved
+                    subdomain = parts[0]
+                    if should_preserve_subdomain_for_cctld(subdomain):
+                        return '.'.join(parts[-4:])
+                    return '.'.join(parts[-3:])
                 
-                # Default case: return last two parts (domain.tld)
-                return '.'.join(parts[-2:])
+                return '.'.join(parts)
+            
+            def should_preserve_subdomain(parts):
+                """Determine if subdomain should be preserved for standard domains"""
+                if len(parts) < 3:
+                    return False
+                
+                subdomain = parts[0]
+                preserve_subdomains = [
+                    'news', 'www', 'm', 'mobile', 'edition', 
+                    'international', 'cnn', 'bbc', 'sports'
+                ]
+                
+                # Don't preserve common news subdomains unless it's a major organization
+                if subdomain in preserve_subdomains:
+                    domain = '.'.join(parts[-2:])
+                    major_orgs = [
+                        'abs-cbn.com', 'gmanetwork.com', 'rappler.com',
+                        'cnn.com', 'bbc.com', 'reuters.com', 'nytimes.com'
+                    ]
+                    return domain in major_orgs
+                
+                return False
+            
+            def should_preserve_subdomain_for_cctld(subdomain):
+                """For ccTLD domains, be more conservative about preserving subdomains"""
+                preserve_subdomains = ['news', 'www']
+                return subdomain in preserve_subdomains
             
             domain_map = {}
             for url, name in websites:

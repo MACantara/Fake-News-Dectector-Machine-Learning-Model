@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}RSS Feed Analysis - News Analyzer{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">
+                <i class="bi bi-rss text-orange-600 mr-3"></i>
+                RSS Feed News Analysis
+            </h1>
+            <p class="text-lg text-gray-600 max-w-3xl mx-auto">
+                Fetch and analyze news articles from RSS feeds using AI-powered fake news detection and political classification
+            </p>
+        </div>
+
+        <!-- RSS Feed Selection -->
+        <div class="glass-effect rounded-xl p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6 flex items-center">
+                <i class="bi bi-list-ul text-blue-600 mr-3"></i>
+                RSS Feed Sources
+            </h2>
+            
+            <!-- Predefined Feeds -->
+            <div id="predefinedFeeds" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                <!-- Will be populated by JavaScript -->
+            </div>
+            
+            <!-- Custom Feed Input -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Custom RSS Feed</h3>
+                <div class="flex gap-4">
+                    <input type="url" id="customFeedUrl" placeholder="Enter RSS feed URL..." 
+                           class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <button id="addCustomFeedBtn" 
+                            class="bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200">
+                        <i class="bi bi-plus-circle mr-2"></i>Add Feed
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fetch Configuration -->
+        <div class="glass-effect rounded-xl p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6 flex items-center">
+                <i class="bi bi-gear text-purple-600 mr-3"></i>
+                Fetch Configuration
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Article Limit -->
+                <div>
+                    <label for="articleLimit" class="block text-sm font-medium text-gray-700 mb-2">
+                        Article Limit
+                    </label>
+                    <select id="articleLimit" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="10">10 articles</option>
+                        <option value="20" selected>20 articles</option>
+                        <option value="50">50 articles</option>
+                        <option value="100">100 articles</option>
+                        <option value="">All articles</option>
+                    </select>
+                </div>
+                
+                <!-- Time Filter -->
+                <div>
+                    <label for="timeFilter" class="block text-sm font-medium text-gray-700 mb-2">
+                        Time Filter
+                    </label>
+                    <select id="timeFilter" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="6">Last 6 hours</option>
+                        <option value="12">Last 12 hours</option>
+                        <option value="24" selected>Last 24 hours</option>
+                        <option value="48">Last 48 hours</option>
+                        <option value="">All time</option>
+                    </select>
+                </div>
+                
+                <!-- Analysis Type -->
+                <div>
+                    <label for="analysisType" class="block text-sm font-medium text-gray-700 mb-2">
+                        Analysis Type
+                    </label>
+                    <select id="analysisType" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="both" selected>Both (Fake News + Political)</option>
+                        <option value="fake_news">Fake News Detection Only</option>
+                        <option value="political">Political Classification Only</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap gap-4 mb-8">
+            <button id="fetchArticlesBtn" 
+                    class="bg-blue-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200">
+                <i class="bi bi-download mr-2"></i>Fetch Articles
+            </button>
+            
+            <button id="analyzeArticlesBtn" 
+                    class="bg-purple-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" 
+                    disabled>
+                <i class="bi bi-cpu mr-2"></i>Analyze Articles
+            </button>
+            
+            <button id="exportResultsBtn" 
+                    class="bg-green-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" 
+                    disabled>
+                <i class="bi bi-download mr-2"></i>Export Results
+            </button>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator" class="hidden glass-effect rounded-xl p-8 mb-8 text-center">
+            <div class="flex items-center justify-center mb-4">
+                <i class="bi bi-hourglass-split animate-spin text-4xl text-blue-600"></i>
+            </div>
+            <h3 id="loadingTitle" class="text-lg font-semibold text-gray-800 mb-2">Processing...</h3>
+            <p id="loadingMessage" class="text-gray-600">Please wait while we process your request</p>
+            <div class="mt-4">
+                <div class="bg-gray-200 rounded-full h-2">
+                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Summary -->
+        <div id="resultsSummary" class="hidden glass-effect rounded-xl p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6 flex items-center">
+                <i class="bi bi-bar-chart text-green-600 mr-3"></i>
+                Analysis Summary
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-blue-600 font-medium">Total Articles</p>
+                            <p id="totalArticlesCount" class="text-2xl font-bold text-blue-800">0</p>
+                        </div>
+                        <i class="bi bi-file-earmark-text text-3xl text-blue-600"></i>
+                    </div>
+                </div>
+                
+                <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-green-600 font-medium">Successful Analyses</p>
+                            <p id="successfulCount" class="text-2xl font-bold text-green-800">0</p>
+                        </div>
+                        <i class="bi bi-check-circle text-3xl text-green-600"></i>
+                    </div>
+                </div>
+                
+                <div id="fakeNewsSummary" class="bg-red-50 rounded-lg p-4 border border-red-200 hidden">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-red-600 font-medium">Fake News</p>
+                            <p id="fakeNewsCount" class="text-2xl font-bold text-red-800">0</p>
+                            <p id="fakeNewsPercentage" class="text-xs text-red-600">0%</p>
+                        </div>
+                        <i class="bi bi-exclamation-triangle text-3xl text-red-600"></i>
+                    </div>
+                </div>
+                
+                <div id="politicalSummary" class="bg-purple-50 rounded-lg p-4 border border-purple-200 hidden">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-purple-600 font-medium">Political News</p>
+                            <p id="politicalNewsCount" class="text-2xl font-bold text-purple-800">0</p>
+                            <p id="politicalNewsPercentage" class="text-xs text-purple-600">0%</p>
+                        </div>
+                        <i class="bi bi-building text-3xl text-purple-600"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Performance Metrics -->
+            <div id="performanceMetrics" class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                    <i class="bi bi-speedometer2 mr-2"></i>Performance Metrics
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                        <span class="text-gray-600">Processing Time:</span>
+                        <span id="processingTime" class="font-medium text-gray-800 ml-2">-</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600">Feed Source:</span>
+                        <span id="feedSource" class="font-medium text-gray-800 ml-2">-</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600">Articles Per Second:</span>
+                        <span id="articlesPerSecond" class="font-medium text-gray-800 ml-2">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Articles Grid -->
+        <div id="articlesContainer" class="hidden">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-semibold text-gray-800 flex items-center">
+                    <i class="bi bi-newspaper text-indigo-600 mr-3"></i>
+                    Articles
+                </h2>
+                
+                <!-- Filter and Sort Controls -->
+                <div class="flex gap-4">
+                    <select id="articleFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="all">All Articles</option>
+                        <option value="fake">Fake News Only</option>
+                        <option value="real">Real News Only</option>
+                        <option value="political">Political Only</option>
+                        <option value="non-political">Non-Political Only</option>
+                    </select>
+                    
+                    <select id="articleSort" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="confidence">Highest Confidence</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="articlesList" class="space-y-6">
+                <!-- Articles will be populated here -->
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="errorDisplay" class="hidden glass-effect rounded-xl p-6 border-l-4 border-red-500 bg-red-50">
+            <div class="flex items-center">
+                <i class="bi bi-exclamation-triangle text-red-600 text-2xl mr-4"></i>
+                <div>
+                    <h3 class="text-lg font-semibold text-red-800">Error</h3>
+                    <p id="errorMessage" class="text-red-700"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Article Detail Modal -->
+<div id="articleModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 id="modalTitle" class="text-2xl font-bold text-gray-800"></h2>
+                <button id="closeModalBtn" class="text-gray-500 hover:text-gray-700 text-2xl">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+            
+            <div id="modalContent" class="space-y-4">
+                <!-- Modal content will be populated here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/rss-feeds.js') }}"></script>
+{% endblock %}

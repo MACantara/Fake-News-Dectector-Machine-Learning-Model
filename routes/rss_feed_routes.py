@@ -40,8 +40,92 @@ DEFAULT_RSS_FEEDS = {
         'active': True
     },
     'philstar': {
-        'name': 'Philippine Star',
+        'name': 'Philippine Star Headlines',
         'url': 'https://www.philstar.com/rss/headlines',
+        'category': 'News',
+        'active': True
+    },
+    'philstar_nation': {
+        'name': 'Philippine Star Nation',
+        'url': 'https://www.philstar.com/rss/nation',
+        'category': 'National',
+        'active': True
+    },
+    'malaya': {
+        'name': 'Malaya Business Insight',
+        'url': 'https://malaya.com.ph/feed/',
+        'category': 'Business',
+        'active': True
+    },
+    'sunstar': {
+        'name': 'SunStar Philippines',
+        'url': 'https://www.sunstar.com.ph/api/v1/collections/home.rss',
+        'category': 'News',
+        'active': True
+    },
+    'interaksyon': {
+        'name': 'Interaksyon',
+        'url': 'https://interaksyon.philstar.com/feed/',
+        'category': 'News',
+        'active': True
+    },
+    'philstar_business': {
+        'name': 'Philippine Star Business',
+        'url': 'https://www.philstar.com/rss/business',
+        'category': 'Business',
+        'active': True
+    },
+    'bworld': {
+        'name': 'BusinessWorld Online',
+        'url': 'https://www.bworldonline.com/feed/',
+        'category': 'Business',
+        'active': True
+    },
+    'gma_news': {
+        'name': 'GMA News',
+        'url': 'https://data.gmanetwork.com/gno/rss/news/feed.xml',
+        'category': 'News',
+        'active': True
+    },
+    'gma_world': {
+        'name': 'GMA News World',
+        'url': 'https://data.gmanetwork.com/gno/rss/news/world/feed.xml',
+        'category': 'World',
+        'active': True
+    },
+    'gma_metro': {
+        'name': 'GMA News Metro Manila',
+        'url': 'https://data.gmanetwork.com/gno/rss/news/metro/feed.xml',
+        'category': 'Metro',
+        'active': True
+    },
+    'gma_nation': {
+        'name': 'GMA News Nation',
+        'url': 'https://data.gmanetwork.com/gno/rss/news/nation/feed.xml',
+        'category': 'National',
+        'active': True
+    },
+    'gma_regions': {
+        'name': 'GMA News Regions',
+        'url': 'https://data.gmanetwork.com/gno/rss/news/regions/feed.xml',
+        'category': 'Regional',
+        'active': True
+    },
+    'gma_special': {
+        'name': 'GMA News Special Reports',
+        'url': 'https://data.gmanetwork.com/gno/rss/news/specialreports/feed.xml',
+        'category': 'Special Reports',
+        'active': True
+    },
+    'manila_bulletin': {
+        'name': 'Manila Bulletin',
+        'url': 'https://mb.com.ph/rss',
+        'category': 'News',
+        'active': True
+    },
+    'rappler_feed': {
+        'name': 'Rappler Feed',
+        'url': 'https://www.rappler.com/feed/',
         'category': 'News',
         'active': True
     }

@@ -140,7 +140,7 @@ export class NewsTrackerBase {
             if (data.success) {
                 this.trackedWebsites = data.websites || [];
                 this.articleQueue = data.articles || [];
-                this.renderTrackedWebsites();
+                await this.renderTrackedWebsites();
                 this.renderArticleQueue();
                 this.updateCounts();
                 return true;
@@ -274,7 +274,8 @@ export class NewsTrackerBase {
     
     extractDomainName(url) {
         try {
-            const domain = new URL(url).hostname;
+            const domain = new URL(url).hostname.toLowerCase();
+            // Remove www. prefix and return clean domain
             return domain.replace(/^www\./, '');
         } catch (_) {
             return url;
@@ -323,7 +324,7 @@ export class NewsTrackerBase {
     /**
      * Abstract methods to be implemented by mixins
      */
-    renderTrackedWebsites() {
+    async renderTrackedWebsites() {
         throw new Error('renderTrackedWebsites must be implemented by website manager');
     }
     

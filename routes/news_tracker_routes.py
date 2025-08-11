@@ -991,6 +991,29 @@ def get_tracker_data():
         traceback.print_exc()
         return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
+@news_tracker_bp.route('/api/news-tracker/extract-domain', methods=['POST'])
+def extract_domain():
+    """Extract root domain using the same logic as the backend grouping"""
+    try:
+        data = request.get_json()
+        url = data.get('url', '').strip()
+        
+        if not url:
+            return jsonify({'success': False, 'error': 'URL is required'}), 400
+        
+        # Use the same extract_root_domain function from the backend
+        domain = extract_root_domain(url)
+        
+        return jsonify({
+            'success': True,
+            'domain': domain,
+            'original_url': url
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in extract_domain: {str(e)}")
+        return jsonify({'success': False, 'error': 'Failed to extract domain'}), 500
+
 @news_tracker_bp.route('/api/news-tracker/auto-index-high-confidence', methods=['POST'])
 def auto_index_high_confidence():
     """Auto-index high confidence articles in batches"""

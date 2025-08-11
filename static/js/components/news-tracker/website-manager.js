@@ -76,7 +76,7 @@ export const WebsiteManagerMixin = {
                 this.trackedWebsites.push(website);
                 
                 // Real-time UI updates
-                this.renderTrackedWebsites();
+                await this.renderTrackedWebsites();
                 this.updateCounts();
                 this.updateStatistics();
                 
@@ -121,7 +121,7 @@ export const WebsiteManagerMixin = {
                 this.trackedWebsites = this.trackedWebsites.filter(site => site.id !== websiteId);
                 
                 // Real-time UI updates
-                this.renderTrackedWebsites();
+                await this.renderTrackedWebsites();
                 this.updateCounts();
                 this.updateStatistics();
                 
@@ -144,7 +144,7 @@ export const WebsiteManagerMixin = {
     /**
      * Render tracked websites list
      */
-    renderTrackedWebsites() {
+    async renderTrackedWebsites() {
         const container = document.getElementById('trackedWebsitesList');
         if (!container) return;
         
@@ -160,7 +160,7 @@ export const WebsiteManagerMixin = {
         }
         
         if (this.websiteViewMode === 'grouped') {
-            this.renderGroupedWebsites(container);
+            await this.renderGroupedWebsites(container);
         } else {
             this.renderSimpleWebsiteList(container);
         }
@@ -169,8 +169,11 @@ export const WebsiteManagerMixin = {
     /**
      * Render websites grouped by domain
      */
-    renderGroupedWebsites(container) {
-        const grouped = this.groupWebsitesByDomain();
+    async renderGroupedWebsites(container) {
+        // Show loading while processing domains
+        container.innerHTML = '<div class="text-center text-gray-500 py-4"><i class="bi bi-hourglass-split animate-spin mr-2"></i>Processing domains...</div>';
+        
+        const grouped = await this.groupWebsitesByDomain();
         
         container.innerHTML = Object.entries(grouped).map(([domain, websites]) => {
             const isExpanded = this.isGroupExpanded(domain);
@@ -259,13 +262,20 @@ export const WebsiteManagerMixin = {
     },
     
     /**
-     * Group websites by domain
+     * Group websites by domain (async version)
      */
-    groupWebsitesByDomain() {
+    async groupWebsitesByDomain() {
         const grouped = {};
         
-        this.trackedWebsites.forEach(website => {
-            const domain = this.extractRootDomain(website.url);
+        // Process domains in parallel for better performance
+        const domainPromises = this.trackedWebsites.map(async (website) => {
+            const domain = await this.extractRootDomain(website.url);
+            return { website, domain };
+        });
+        
+        const results = await Promise.all(domainPromises);
+        
+        results.forEach(({ website, domain }) => {
             if (!grouped[domain]) {
                 grouped[domain] = [];
             }
@@ -276,27 +286,41 @@ export const WebsiteManagerMixin = {
     },
     
     /**
-     * Extract root domain for grouping
+     * Extract root domain for grouping using backend API
      */
-    extractRootDomain(url) {
+    async extractRootDomain(url) {
         try {
-            const parsed = new URL(url);
-            let hostname = parsed.hostname.replace('www.', '');
+            // Use backend API for consistent domain extraction
+            const response = await fetch('/api/news-tracker/extract-domain', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
             
-            // Handle special domain mappings
-            const specialMappings = {
-                'mb.com.ph': 'manilabulletin.com.ph',
-                'news.abs-cbn.com': 'abs-cbn.com',
-                'news.gma.network': 'gmanetwork.com',
-                'cnnphilippines.com': 'cnn.com'
-            };
-            
-            if (specialMappings[hostname]) {
-                return specialMappings[hostname];
+            if (response.ok) {
+                const data = await response.json();
+                return data.domain || this.fallbackExtractDomain(url);
             }
             
+            // Fallback to simple extraction if API fails
+            return this.fallbackExtractDomain(url);
+        } catch (error) {
+            console.warn('Backend domain extraction failed, using fallback:', error);
+            return this.fallbackExtractDomain(url);
+        }
+    },
+
+    /**
+     * Fallback domain extraction for when backend is unavailable
+     */
+    fallbackExtractDomain(url) {
+        try {
+            const parsed = new URL(url);
+            let hostname = parsed.hostname.toLowerCase();
+            hostname = hostname.replace(/^www\./, '');
             return hostname;
         } catch (error) {
+            console.error('Error extracting domain from URL:', url, error);
             return url;
         }
     },
@@ -306,14 +330,41 @@ export const WebsiteManagerMixin = {
      */
     getDomainDisplayName(domain) {
         const displayNames = {
+            // Major Philippine News Networks
+            'philstar.com': 'The Philippine Star',
             'manilabulletin.com.ph': 'Manila Bulletin',
             'abs-cbn.com': 'ABS-CBN News',
             'gmanetwork.com': 'GMA News',
             'cnn.com': 'CNN Philippines',
-            'philstar.com': 'The Philippine Star'
+            'rappler.com': 'Rappler',
+            'inquirer.net': 'Philippine Daily Inquirer',
+            
+            // Other Philippine News Sites
+            'malaya.com.ph': 'Malaya Business Insight',
+            'tempo.com.ph': 'Tempo',
+            'sunstar.com.ph': 'SunStar',
+            'journal.com.ph': 'The Manila Journal',
+            'bworldonline.com': 'BusinessWorld',
+            'pna.gov.ph': 'Philippine News Agency',
+            
+            // International
+            'reuters.com': 'Reuters',
+            'bbc.com': 'BBC News',
+            'cnn.com': 'CNN',
+            'apnews.com': 'Associated Press'
         };
         
-        return displayNames[domain] || domain.replace(/\.(com|org|net|gov|edu)(\.[a-z]{2})?$/i, '');
+        // Return custom display name if available
+        if (displayNames[domain]) {
+            return displayNames[domain];
+        }
+        
+        // Generate display name from domain
+        return domain
+            .replace(/\.(com|org|net|gov|edu)(\.[a-z]{2})?$/i, '')  // Remove TLD
+            .split('.')
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))  // Capitalize
+            .join(' ');
     },
     
     /**

@@ -16,7 +16,7 @@ from whoosh import index
 from whoosh.fields import Schema, TEXT, DATETIME, ID, KEYWORD, NUMERIC
 from whoosh.analysis import StemmingAnalyzer
 from whoosh.qparser import QueryParser, MultifieldParser
-from whoosh.query import And, Or, Term, Phrase
+from whoosh.query import And, Or, Term, Phrase, Wildcard
 from textblob import TextBlob
 from .utils import extract_advanced_content
 
@@ -650,7 +650,9 @@ class PhilippineNewsSearchIndex:
                 
                 # Source filter
                 if source:
-                    source_query = Term('source_domain', source)
+                    # Use wildcard search to match root domains
+                    # This will match any source_domain containing the root domain
+                    source_query = Wildcard('source_domain', f'*{source}*')
                     query_parts.append(source_query)
                 
                 # Combine queries

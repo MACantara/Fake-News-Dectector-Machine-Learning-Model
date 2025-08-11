@@ -560,13 +560,17 @@ class NewsAnalyzer {
         Utils.dom.setText(this.elements.totalArticlesCount, data.total_found);
         Utils.dom.setText(this.elements.analyzedWebsiteTitle, data.website_title || 'Unknown Website');
 
+        // Remove any existing classification method notifications to prevent piling up
+        const existingNotifications = this.elements.analyzedWebsiteTitle.parentNode.querySelectorAll('.classification-method-notification');
+        existingNotifications.forEach(notification => notification.remove());
+
         // Add classification method info if available
         if (data.classification_method) {
             const responseTimeText = data.responseTime ? 
                 `Response time: ${this.formatResponseTime(data.responseTime)}` : '';
             
             const summaryHtml = `
-                <div class="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
+                <div class="classification-method-notification mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
                     <div class="flex items-center space-x-2">
                         <i class="bi bi-link text-green-600"></i>
                         <span class="text-sm font-medium text-green-800">
@@ -584,7 +588,7 @@ class NewsAnalyzer {
             // Show response time even if no classification method
             const responseTimeText = `Response time: ${this.formatResponseTime(data.responseTime)}`;
             const summaryHtml = `
-                <div class="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
+                <div class="classification-method-notification mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
                     <div class="flex items-center space-x-2">
                         <i class="bi bi-clock text-blue-600"></i>
                         <span class="text-sm font-medium text-blue-800">
@@ -857,11 +861,15 @@ class NewsAnalyzer {
         Utils.dom.setText(this.elements.failedAnalysesCount, summary.failed_analyses);
         Utils.dom.setText(this.elements.analyzedWebsiteTitle, summary.website_title || 'Unknown Website');
 
+        // Remove any existing performance metrics notifications to prevent piling up
+        const existingMetrics = this.elements.analyzedWebsiteTitle.parentNode.querySelectorAll('.performance-metrics-notification');
+        existingMetrics.forEach(metric => metric.remove());
+
         // Add response time info if available
         if (data.responseTime) {
             const responseTimeText = `Analysis completed in ${this.formatResponseTime(data.responseTime)}`;
             const responseTimeHtml = `
-                <div class="mt-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                <div class="performance-metrics-notification mt-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
                     <div class="flex items-center space-x-2">
                         <i class="bi bi-clock text-purple-600"></i>
                         <span class="text-sm font-medium text-purple-800">

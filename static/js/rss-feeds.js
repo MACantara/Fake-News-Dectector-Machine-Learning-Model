@@ -152,10 +152,18 @@ class RSSFeedAnalyzer {
             });
 
             this.elements.predefinedFeeds.appendChild(feedCard);
+            
+            // Initialize selected feeds for active feeds
+            if (feed.active) {
+                this.state.selectedFeeds.add(feed.id);
+            }
         });
 
         // Update feed statistics
         this.updateFeedStats(feeds);
+        
+        // Update fetch button state after initializing selected feeds
+        this.updateFetchButtonState();
     }
 
     updateFeedStats(feeds) {

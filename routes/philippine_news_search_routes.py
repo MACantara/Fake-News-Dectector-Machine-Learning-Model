@@ -412,26 +412,66 @@ def get_philippine_news_sources_route():
             conn.close()
             
             # Extract root domains and create source list
+            # Helper function to extract root domain
+            def extract_root_domain(domain):
+                """Extract root domain from a domain string, handling subdomains"""
+                if not domain:
+                    return domain
+                
+                # Remove www. prefix if present
+                if domain.startswith('www.'):
+                    domain = domain[4:]
+                
+                # Split domain into parts
+                parts = domain.split('.')
+                
+                # If domain has 2 or fewer parts, return as is
+                if len(parts) <= 2:
+                    return domain
+                
+                # For domains with more than 2 parts, we need to determine the root domain
+                # Common patterns:
+                # - example.com.ph -> example.com.ph
+                # - subdomain.example.com -> example.com
+                # - subdomain.example.com.ph -> example.com.ph
+                
+                # Check for common two-part TLDs like .com.ph, .co.uk, etc.
+                two_part_tlds = {
+                    'com.ph', 'net.ph', 'org.ph', 'gov.ph', 'edu.ph', 'mil.ph',
+                    'co.uk', 'org.uk', 'net.uk', 'gov.uk', 'ac.uk',
+                    'co.jp', 'ne.jp', 'or.jp', 'go.jp', 'ac.jp',
+                    'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au',
+                    'co.nz', 'net.nz', 'org.nz', 'govt.nz',
+                    'com.sg', 'net.sg', 'org.sg', 'gov.sg', 'edu.sg'
+                }
+                
+                # Check if the last two parts form a known two-part TLD
+                if len(parts) >= 3:
+                    potential_tld = '.'.join(parts[-2:])
+                    if potential_tld in two_part_tlds:
+                        # Return domain.two-part-tld
+                        return '.'.join(parts[-3:]) if len(parts) >= 3 else domain
+                
+                # Default case: return last two parts (domain.tld)
+                return '.'.join(parts[-2:])
+            
             domain_map = {}
             for url, name in websites:
                 try:
                     parsed = urlparse(url)
-                    domain = parsed.netloc.lower()
+                    full_domain = parsed.netloc.lower()
+                    root_domain = extract_root_domain(full_domain)
                     
-                    # Remove www. prefix if present
-                    if domain.startswith('www.'):
-                        domain = domain[4:]
-                    
-                    # Use the website name as display name, domain as value
-                    if domain not in domain_map:
-                        domain_map[domain] = {
-                            'source': domain,
+                    # Use the website name as display name, root domain as value
+                    if root_domain not in domain_map:
+                        domain_map[root_domain] = {
+                            'source': root_domain,
                             'name': name,
                             'url': url,
                             'count': 1
                         }
                     else:
-                        domain_map[domain]['count'] += 1
+                        domain_map[root_domain]['count'] += 1
                 
                 except Exception as e:
                     continue

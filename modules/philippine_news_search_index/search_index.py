@@ -627,7 +627,7 @@ class PhilippineNewsSearchIndex:
         except Exception as e:
             print(f"Error updating indexing task {task_id}: {e}")
     
-    def search_articles(self, query, limit=20, offset=0, category=None, date_range=None, source=None):
+    def search_articles(self, query, limit=20, offset=0, date_range=None, source=None):
         """Search Philippine news articles with advanced filtering and pagination"""
         start_time = time.time()
         
@@ -648,11 +648,6 @@ class PhilippineNewsSearchIndex:
                     text_query = parser.parse(query)
                     query_parts.append(text_query)
                 
-                # Category filter
-                if category:
-                    category_query = Term('category', category)
-                    query_parts.append(category_query)
-                
                 # Source filter
                 if source:
                     source_query = Term('source_domain', source)
@@ -669,24 +664,32 @@ class PhilippineNewsSearchIndex:
                 
                 # Execute search with pagination
                 if final_query:
-                    # Get total count first (without limit)
-                    all_results = searcher.search(final_query, limit=None)
-                    total_count = len(all_results)
+                    # For accurate total count and better performance, let's use a different approach
+                    # Get all results first, then filter and paginate
+                    all_search_results = searcher.search(final_query, limit=None)
                     
-                    # Get paginated results using Whoosh's built-in pagination
-                    search_results = searcher.search(final_query, limit=limit + offset)
-                    
-                    # Apply offset manually by slicing since Whoosh doesn't have native offset
-                    paginated_results = search_results[offset:offset + limit] if offset < len(search_results) else []
-                    
-                    for result in paginated_results:
-                        # Safely access the id field with fallback
+                    # Filter out results without proper ID and convert to our format
+                    valid_results = []
+                    for result in all_search_results:
                         article_id = result.get('id')
                         if article_id is None:
-                            # Skip articles without id - this can happen if the index is inconsistent
-                            continue
+                            # Try to find the article ID from database using URL as fallback
+                            url = result.get('url', '')
+                            if url:
+                                try:
+                                    conn = sqlite3.connect(self.db_path)
+                                    cursor = conn.cursor()
+                                    cursor.execute('SELECT id FROM philippine_articles WHERE url = ?', (url,))
+                                    row = cursor.fetchone()
+                                    article_id = row[0] if row else None
+                                    conn.close()
+                                except:
+                                    article_id = None
                             
-                        results.append({
+                            if article_id is None:
+                                continue
+                        
+                        valid_results.append({
                             'id': article_id,
                             'url': result.get('url', ''),
                             'title': result.get('title', ''),
@@ -698,6 +701,12 @@ class PhilippineNewsSearchIndex:
                             'relevance_score': result.get('philippine_relevance_score', 0),
                             'score': result.score if hasattr(result, 'score') else 0
                         })
+                    
+                    # Now we have the accurate total count
+                    total_count = len(valid_results)
+                    
+                    # Apply pagination to the valid results
+                    results = valid_results[offset:offset + limit]
                 
                 searcher.close()
             
@@ -715,10 +724,6 @@ class PhilippineNewsSearchIndex:
                     search_term = f'%{query}%'
                     count_params.extend([search_term, search_term, search_term])
                 
-                if category:
-                    count_sql_parts.append('AND category = ?')
-                    count_params.append(category)
-                
                 if source:
                     count_sql_parts.append('AND source_domain LIKE ?')
                     count_params.append(f'%{source}%')
@@ -734,10 +739,6 @@ class PhilippineNewsSearchIndex:
                     sql_parts.append('AND (title LIKE ? OR content LIKE ? OR summary LIKE ?)')
                     search_term = f'%{query}%'
                     params.extend([search_term, search_term, search_term])
-                
-                if category:
-                    sql_parts.append('AND category = ?')
-                    params.append(category)
                 
                 if source:
                     sql_parts.append('AND source_domain LIKE ?')

@@ -147,21 +147,21 @@ class PhilippineNewsSearch {
         if (!this.elements.searchSource) return;
 
         try {
-            const response = await Utils.http.get('/philippine-news-sources');
+            const response = await Utils.http.get(Config.endpoints.philippineNewsSources);
             
-            if (response.success && response.sources) {
+            if (response.success && response.data && response.data.sources) {
                 // Clear existing options except "All Sources"
                 this.elements.searchSource.innerHTML = '<option value="">All Sources</option>';
                 
                 // Add sources from tracked websites
-                response.sources.forEach(source => {
+                response.data.sources.forEach(source => {
                     const option = document.createElement('option');
                     option.value = source.source;
                     option.textContent = `${source.name} (${source.count})`;
                     this.elements.searchSource.appendChild(option);
                 });
                 
-                console.log(`Loaded ${response.sources.length} news sources from tracked websites`);
+                console.log(`Loaded ${response.data.sources.length} news sources from tracked websites`);
             } else {
                 console.warn('Failed to load news sources, using defaults');
             }

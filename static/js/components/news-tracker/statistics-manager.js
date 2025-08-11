@@ -339,6 +339,7 @@ export const StatisticsManagerMixin = {
                 ${topSites.map((group, index) => {
                     const totalArticles = group.total_articles || 0;
                     const verifiedArticles = group.verified_articles || 0;
+                    const websiteCount = group.website_count || 0;
                     const successRate = totalArticles > 0 ? 
                         (verifiedArticles / totalArticles * 100).toFixed(1) : 0;
                     
@@ -359,7 +360,7 @@ export const StatisticsManagerMixin = {
                                 </div>
                                 <div>
                                     <div class="font-medium text-gray-900">${group.display_name || group.domain}</div>
-                                    <div class="text-xs text-gray-500">${group.website_count} website${group.website_count !== 1 ? 's' : ''}</div>
+                                    <div class="text-xs text-gray-500">${websiteCount} website${websiteCount !== 1 ? 's' : ''}</div>
                                 </div>
                             </div>
                             <div class="text-right">

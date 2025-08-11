@@ -893,6 +893,7 @@ def get_tracker_data():
     """Get all tracker data for the frontend with optimized queries"""
     try:
         user_session = session.get('session_id', 'default')
+        print(f"📊 Getting tracker data for session: {user_session}")  # Debug log
         
         with db_pool.get_connection() as conn:
             conn.row_factory = sqlite3.Row
@@ -929,6 +930,8 @@ def get_tracker_data():
                 
                 websites.append(website)
             
+            print(f"📊 Found {len(websites)} websites")  # Debug log
+            
             # Optimized query for articles with left join
             cursor.execute('''
                 SELECT a.*, w.name as site_name
@@ -956,11 +959,17 @@ def get_tracker_data():
                 
                 articles.append(article)
         
+        print(f"📊 Found {len(articles)} articles")  # Debug log
+        
         # Calculate basic prediction metrics for inclusion in response
         basic_metrics = calculate_comprehensive_metrics(user_session)
         
         # Group websites by domain for enhanced organization
         domain_groups = group_websites_by_domain(websites)
+        
+        print(f"📊 Created {len(domain_groups)} domain groups")  # Debug log
+        for group in domain_groups[:3]:  # Log first 3 groups
+            print(f"   Group: {group['domain']} - {group['website_count']} websites, {group['total_articles']} articles, {group['verified_articles']} verified")
         
         return jsonify({
             'success': True,
@@ -977,6 +986,9 @@ def get_tracker_data():
         })
         
     except Exception as e:
+        print(f"❌ Error in get_tracker_data: {str(e)}")  # Debug log
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 @news_tracker_bp.route('/api/news-tracker/auto-index-high-confidence', methods=['POST'])
@@ -1361,6 +1373,8 @@ def group_websites_by_domain(websites):
                 'display_name': website.get('displayName', root_domain),
                 'websites': [],
                 'total_articles': 0,
+                'verified_articles': 0,
+                'website_count': 0,
                 'active_count': 0,
                 'total_count': 0
             }
@@ -1368,6 +1382,8 @@ def group_websites_by_domain(websites):
         group = groups[root_domain]
         group['websites'].append(website)
         group['total_articles'] += website.get('article_count', 0)
+        group['verified_articles'] += website.get('verified_count', 0)
+        group['website_count'] += 1
         group['total_count'] += 1
         
         if website.get('status') == 'active':
